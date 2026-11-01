@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } from './call';
 import { alphaPlane as alpha, cleanFrame } from './frames';
-import { GAITS, bakeWalk, legBand, puppetSpecies } from './puppet';
+import { GAITS, bakeWalk, legBand, rigFor } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
@@ -197,7 +197,7 @@ async function readPack(): Promise<Prepared | null> {
   let strideFrac: number | undefined;
   let body: { bounce: number; pitch: number } | undefined;
   let rig: Rig = null;
-  const kind = puppetSpecies(pack.manifest.species);
+  const kind = rigFor(pack.manifest.species, pack.manifest.poses['walk']);
   if (kind) {
     const a = alpha(first);
     const band = a && legBand(a, first.naturalWidth, first.naturalHeight, 4);

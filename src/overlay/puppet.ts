@@ -9,6 +9,9 @@ export const puppetSpecies = (species?: string): 'dog' | 'cat' | null => {
   return /\b(cat|kitten|kitty)s?\b/.test(s) ? 'cat' : /\b(dog|puppy|pup)s?\b/.test(s) ? 'dog' : null;
 };
 
+/** Which leg rig replaces a pack's walk: none when the drawn walk was picked by a judge model (it reads better than any rig). */
+export const rigFor = (species: string | undefined, walk?: { judge?: string }): 'dog' | 'cat' | null => (walk?.judge ? null : puppetSpecies(species));
+
 export interface PuppetGait { frames: number; swing: number; lift: number; lowered: number; bounce: number; pitch: number; tail: { f: number; amp: number; lag: number } }
 export const GAITS: Record<'dog' | 'cat', PuppetGait> = {
   dog: { frames: 24, swing: 0.45, lift: 0.22, lowered: 1, bounce: 1.3, pitch: 1, tail: { f: 2, amp: 0.1, lag: 0.6 } },

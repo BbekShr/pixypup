@@ -45,6 +45,8 @@ export interface PoseDef {
   fps: number;
   /** Fraction (0..1) of the frame height, from the top, where the paws touch the floor. */
   footY: number;
+  /** The model that reviewed the drawn frames and picked them (walk only). A judged walk plays as drawn; an unjudged dog or cat walk is replaced by the baked leg rig. */
+  judge?: string;
 }
 
 export interface Personality {
