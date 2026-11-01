@@ -11,10 +11,23 @@ describe('redactSecrets', () => {
     ['password: swordfish', 'swordfish'],
     ['git clone https://bob:s3cret@github.com/x/y', 's3cret'],
     ['hash 0123456789abcdef0123456789abcdef0123', '0123456789abcdef0123456789abcdef'],
+    ['export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', 'wJalrXUtnFEMI'],
+    ['GITHUB_TOKEN=abc123def', 'abc123def'],
+    ['client_secret: abcd', 'abcd'],
+    ['access_token=abc', '=abc'],
+    ['STRIPE_KEY sk_live_abcdefgh12345678', 'abcdefgh12345678'],
+    ['jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig-part', 'eyJzdWIiOiIxIn0'],
+    ['Authorization: Basic dXNlcjpwYXNz', 'dXNlcjpwYXNz'],
+    ['password = "my pass phrase"', 'pass phrase'],
+    ['Cookie: session=deadbeefcafe', 'deadbeefcafe'],
   ])('redacts %s', (input, secret) => {
     const out = redactSecrets(input);
     expect(out).not.toContain(secret);
     expect(out).toContain('[redacted]');
+  });
+
+  it('leaves prose that only mentions Basic or a long path alone', () => {
+    for (const l of ['Basic usage example failed', 'FAIL src/components/settings/AdvancedOptions.test.tsx > renders']) expect(redactSecrets(l)).toBe(l);
   });
 
   it('leaves an ordinary vitest failure line unchanged', () => {
