@@ -28,7 +28,14 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
   let pendingKey: string | undefined;
   // Set when a pet was just made: the overlay hand-off waits until the window has shrunk away, so the old pet leaves as this one lands.
   let handoff: { x?: number } | null = null;
+  let handoffTimer: NodeJS.Timeout | undefined;
+  const centreX = (): number | undefined => {
+    if (!win || win.isDestroyed()) return undefined;
+    const b = win.getBounds();
+    return b.x + b.width / 2 - (o.getOverlay()?.getBounds().x ?? 0);
+  };
   const sendHandoff = (): void => {
+    clearTimeout(handoffTimer);
     if (!handoff) return;
     o.getOverlay()?.webContents.send(IPC.packChanged, handoff);
     handoff = null;
@@ -156,6 +163,12 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
         console.warn('PixyPup: pet created but settings could not be saved');
       }
       handoff = {};
+      // A reopened window may never reach the reveal; the new pet must not stay hidden behind that.
+      handoffTimer = setTimeout(() => {
+        const x = centreX();
+        if (handoff && x !== undefined) handoff.x = x;
+        sendHandoff();
+      }, 8000);
       if (!win || win.isDestroyed()) sendHandoff();
       result = { ok: true, name: a.name, ...(idle ? { idle } : {}) };
     } catch (err) {
@@ -189,10 +202,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
       });
       win.setAlwaysOnTop(true, 'floating');
       win.on('close', () => {
-        if (handoff && win) {
-          const b = win.getBounds();
-          handoff.x = b.x + b.width / 2 - (o.getOverlay()?.getBounds().x ?? 0);
-        }
+        const x = centreX();
+        if (handoff && x !== undefined) handoff.x = x;
       });
       win.on('closed', () => {
         win = null;

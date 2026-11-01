@@ -1,7 +1,7 @@
 import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
-import { dropLeft, handoffNext, handoffStart, trotTarget, TROT_SPEEDUP, type Handoff } from './handoff';
+import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
 import { DISPLAY_H, displayWidth, footOffset } from './layout';
 import { BLINK_MS, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
@@ -106,6 +106,7 @@ let menuCalls = 0;
 let greet: string | null = null; // new pet's name: barked as a greeting on landing
 let pendingSwap: { pack: Prepared; cx: number | undefined } | null = null; // a pet change that arrived mid-drag
 let handoff: Handoff | null = null;
+let queuedCmd: string | null = null; // a menu command that arrived mid-hand-off
 let incoming: { pack: Prepared; cx: number | undefined } | null = null; // the new pet, waiting for the old one to leave
 let shownSrc = '';
 let walked = 0; // distance walked, drives the stride-synced frame and bob
@@ -127,12 +128,14 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
 
 function enter(prev: PetState): void {
   // brief dip so the frame swap reads as a crossfade
-  img.style.transition = 'none';
-  img.style.opacity = '0.4';
-  requestAnimationFrame(() => {
-    img.style.transition = 'opacity 120ms';
-    img.style.opacity = '1';
-  });
+  if (!calm) {
+    img.style.transition = 'none';
+    img.style.opacity = '0.4';
+    requestAnimationFrame(() => {
+      img.style.transition = 'opacity 120ms';
+      img.style.opacity = '1';
+    });
+  }
   if (prev === 'sleep') { zs.forEach((z) => z.remove()); zs = []; }
   if (state === 'sleep') {
     for (let i = 0; i < 3; i++) {
@@ -141,6 +144,7 @@ function enter(prev: PetState): void {
       z.style.cssText = 'position:absolute;left:0;top:0;font:700 16px sans-serif;color:#555;pointer-events:none';
       fx.append(z);
       zs.push(z);
+      if (calm) { z.style.transform = `translate(${4 + i * 6}px,${-6 - i * 10}px)`; continue; }
       z.animate(
         [{ opacity: 0, transform: 'translate(0,0)' }, { opacity: 1, offset: 0.3 }, { opacity: 0, transform: 'translate(14px,-34px)' }],
         { duration: 2700, delay: i * 900, iterations: Infinity },
@@ -272,7 +276,7 @@ img.addEventListener('contextmenu', (e) => {
   window.pixy.showMenu();
 });
 img.addEventListener('pointerdown', (e) => {
-  if (dragging || handoff === 'trotOff' || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
+  if (dragging || handoffBusy(handoff) || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
   dragging = true;
   falling = false;
   lift = Math.min(0, lift);
@@ -309,7 +313,11 @@ img.addEventListener('pointerup', finish);
 img.addEventListener('pointercancel', finish);
 img.addEventListener('lostpointercapture', finish);
 
-function command(cmd: string): void {
+function command(raw: string): void {
+  const r = routeCommand(handoff, raw, queuedCmd);
+  queuedCmd = r.queued;
+  if (!r.now) return;
+  const cmd = r.now;
   lastInteraction = performance.now();
   if (cmd === 'sit' || cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');
@@ -324,7 +332,7 @@ window.pixy.onCommand(command);
 // Old pet trots off the nearest edge at double speed; dropIn() then fires on arrival. Reduced motion: crossfade swap.
 function swapPets(pack: Prepared, cx: number | undefined): void {
   if (dragging) { pendingSwap = { pack, cx }; return; }
-  incoming = { pack, cx };
+  incoming = { pack, cx: validCx(cx, window.innerWidth, x + W / 2) };
   handoff = handoffStart(calm);
   greet = null;
   falling = false;
@@ -338,6 +346,7 @@ function swapPets(pack: Prepared, cx: number | undefined): void {
     applyPack(n.pack);
     x = home = dropLeft(n.cx, W, window.innerWidth);
     setState('idle', { ms: 10_000 });
+    img.style.transition = 'opacity 300ms';
     img.style.opacity = '1';
     land(n.pack.name);
   }, 220);
@@ -357,7 +366,12 @@ function land(name: string): void {
   lastInteraction = performance.now();
   setState('bark'); // enter() skips its own "Woof!" while a greeting is pending
   sayHi(name);
-  setTimeout(() => { if (handoff) handoff = handoffNext(handoff, 'greeted'); }, 3600);
+  setTimeout(() => {
+    if (handoff) handoff = handoffNext(handoff, 'greeted');
+    const r = flushCommand(handoff, queuedCmd);
+    queuedCmd = r.queued;
+    if (r.now) command(r.now);
+  }, 3600);
 }
 function sayHi(name: string): void {
   const b = document.createElement('div');

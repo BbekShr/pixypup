@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dropLeft, handoffNext, handoffStart, trotTarget } from './handoff';
+import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx } from './handoff';
 
 describe('pet hand-off', () => {
   it('runs trotOff, drop, greet, wander in order', () => {
@@ -26,5 +26,30 @@ describe('pet hand-off', () => {
     expect(dropLeft(5, 120, 1440)).toBe(0);
     expect(dropLeft(1439, 120, 1440)).toBe(1320);
     expect(dropLeft(undefined, 120, 1440)).toBe(660);
+  });
+});
+
+describe('hand-off is atomic', () => {
+  it('holds a command during trotOff and drop, last one wins, and applies it after the greeting', () => {
+    let q: string | null = null;
+    for (const p of ['trotOff', 'drop'] as const) {
+      expect(handoffBusy(p)).toBe(true);
+      const r = routeCommand(p, 'stay', q);
+      expect(r.now).toBeNull();
+      q = routeCommand(p, 'sit', r.queued).queued;
+      expect(flushCommand(p, q)).toEqual({ now: null, queued: 'sit' });
+    }
+    expect(flushCommand('greet', q)).toEqual({ now: 'sit', queued: null });
+  });
+  it('runs commands straight away outside the busy phases', () => {
+    expect(routeCommand('wander', 'bed', null)).toEqual({ now: 'bed', queued: null });
+    expect(routeCommand(null, 'bed', null).now).toBe('bed');
+    expect(handoffBusy('greet')).toBe(false);
+  });
+  it('ignores a hand-off x that is off this overlay', () => {
+    expect(validCx(700, 1440, 300)).toBe(700);
+    expect(validCx(-400, 1440, 300)).toBe(300);
+    expect(validCx(2900, 1440, 300)).toBe(300);
+    expect(validCx(undefined, 1440, 300)).toBe(300);
   });
 });

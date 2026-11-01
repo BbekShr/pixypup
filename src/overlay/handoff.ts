@@ -22,3 +22,18 @@ export const trotTarget = (x: number, w: number, screenW: number): number =>
 /** Left edge for a sprite centred on cx, kept on screen. */
 export const dropLeft = (cx: number | undefined, w: number, screenW: number): number =>
   Math.min(Math.max(0, (cx ?? screenW / 2) - w / 2), Math.max(0, screenW - w));
+
+/** While the old pet leaves and the new one falls, nothing may touch the pet: a stray command or grab would wedge the swap. */
+export const handoffBusy = (p: Handoff | null): boolean => p === 'trotOff' || p === 'drop';
+
+/** A command during the busy phases is held (the last one wins) and applied once the hand-off is over. */
+export function routeCommand(p: Handoff | null, cmd: string, queued: string | null): { now: string | null; queued: string | null } {
+  return handoffBusy(p) ? { now: null, queued: cmd } : { now: cmd, queued };
+}
+
+export const flushCommand = (p: Handoff | null, queued: string | null): { now: string | null; queued: string | null } =>
+  handoffBusy(p) || !queued ? { now: null, queued } : { now: queued, queued: null };
+
+/** The window's x only counts if it is on this overlay (a second display would put it elsewhere); else stay where the pet is. */
+export const validCx = (cx: number | undefined, screenW: number, fallback: number): number =>
+  cx !== undefined && cx >= 0 && cx <= screenW ? cx : fallback;
