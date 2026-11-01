@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixypup.dev/contracts/behavior-decision.schema.json",
+  "title": "BehaviorDecision",
+  "type": "object",
+  "required": ["action", "durationMs", "reason"],
+  "additionalProperties": false,
+  "properties": {
+    "action": { "enum": ["walk_to", "sniff", "bark", "hide", "idle", "sleep", "sit", "roll"] },
+    "target": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+    },
+    "durationMs": { "type": "number" },
+    "reason": { "type": "string" }
+  }
+}

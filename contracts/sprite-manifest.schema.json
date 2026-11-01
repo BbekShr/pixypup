@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixypup.dev/contracts/sprite-manifest.schema.json",
+  "title": "SpriteManifest",
+  "type": "object",
+  "required": ["pet", "species", "poses"],
+  "additionalProperties": false,
+  "properties": {
+    "pet": { "type": "string" },
+    "species": { "enum": ["dog", "cat"] },
+    "poses": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["frames", "fps", "footY"],
+        "additionalProperties": false,
+        "properties": {
+          "frames": { "type": "array", "items": { "type": "string" } },
+          "fps": { "type": "number" },
+          "footY": { "type": "number" }
+        }
+      }
+    }
+  }
+}
