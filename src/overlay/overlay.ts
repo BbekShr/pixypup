@@ -6,6 +6,7 @@ import { behaviorBusy, hideSpot, parseBehavior, peekOutX, routeBehavior, SNIFF_M
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
+import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
 import { BLINK_MS, MAX_SPEED, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
@@ -18,6 +19,7 @@ declare global {
       onCommand(cb: (cmd: string) => void): void;
       onBehavior(cb: (b: unknown) => void): void;
       onDebug(cb: (d: unknown) => void): void;
+      onVoice(cb: (m: unknown) => void): void;
       onPackChanged(cb: (h: { x?: number }) => void): void;
       getPack(): Promise<Pack | null>;
       showMenu(): void;
@@ -650,6 +652,50 @@ function showMark(p: { x: number; y: number }): void {
 }
 window.pixy.onBehavior(onBehavior);
 window.pixy.onDebug(createDebugPanel(calm));
+
+// The "listening…" pill rides with the head like a speech bubble. Partial text is a transcript: textContent only.
+let pill: HTMLDivElement | null = null;
+let pillText: HTMLSpanElement;
+let pillTimer: ReturnType<typeof setTimeout> | undefined;
+function showPill(text: string, dot: boolean, ms?: number): void {
+  if (!pill) {
+    pill = document.createElement('div');
+    pill.className = 'hi';
+    const d = document.createElement('span');
+    d.style.cssText = 'display:inline-block;width:8px;height:8px;margin-right:8px;border-radius:50%;background:var(--blush);vertical-align:middle';
+    if (!calm) d.animate([{ opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 1200, iterations: Infinity });
+    pillText = document.createElement('span');
+    pill.append(d, pillText);
+    pill.style.transform = 'translate(-50%,-100%)';
+    fx.append(pill);
+  }
+  pillText.textContent = text;
+  (pill.firstElementChild as HTMLElement).style.display = dot ? 'inline-block' : 'none';
+  clearTimeout(pillTimer);
+  if (ms) pillTimer = setTimeout(hidePill, ms);
+}
+function hidePill(): void {
+  clearTimeout(pillTimer);
+  pill?.remove();
+  pill = null;
+}
+window.pixy.onVoice((raw) => {
+  const m = parseVoice(raw);
+  if (!m) return;
+  if (m.kind === 'listening') {
+    showPill('listening…', true);
+    if (!busyNow()) perkAt = performance.now();
+  } else if (m.kind === 'partial') showPill(m.text || 'listening…', true);
+  else if (m.kind === 'thinking') showPill('…', false);
+  else if (m.kind === 'huh') {
+    showPill('?', false, 1200);
+    if (!calm && !busyNow()) wg = { at: performance.now(), dur: WIGGLE_MS, cycles: 1 };
+  } else if (m.kind === 'nokey') showPill(NEEDS_KEY, false, 5000);
+  else if (m.kind === 'error') {
+    hidePill();
+    say("I didn't catch that", 2500);
+  } else hidePill();
+});
 
 // Old pet trots off the nearest edge at double speed; dropIn() then fires on arrival. Reduced motion: crossfade swap.
 function swapPets(pack: Prepared, cx: number | undefined): void {

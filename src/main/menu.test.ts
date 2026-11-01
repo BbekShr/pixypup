@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem, type MenuState } from './menu';
 
-const base: MenuState = { stay: false, snoozed: false, size: 'medium', energy: 'normal', hideInShares: false, screenAware: false, openAtLogin: false, name: 'Pakkun' };
+const base: MenuState = { stay: false, snoozed: false, size: 'medium', energy: 'normal', hideInShares: false, screenAware: false, voice: false, openAtLogin: false, name: 'Pakkun' };
 const labels = (t: MenuItem[]): string[] => t.map((i) => ('type' in i ? '-' : i.label));
 const find = (t: MenuItem[], l: string): MenuItem | undefined => t.find((i) => 'label' in i && i.label === l);
 const sub = (t: MenuItem[], label: string): MenuItem[] => {
@@ -11,7 +11,7 @@ const sub = (t: MenuItem[], label: string): MenuItem[] => {
 
 describe('petMenuTemplate', () => {
   it('has the agreed order, tricks first and Quit last', () => {
-    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Show what Pakkun sees', 'Open at login', 'Make a new pet…', '-', 'Quit PixyPup']);
+    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Make a new pet…', '-', 'Quit PixyPup']);
     expect(petMenuTemplate(base).at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
   });
   it('maps the tricks to overlay command strings', () => {
@@ -45,6 +45,11 @@ describe('petMenuTemplate', () => {
   });
   it('an admin-locked notice-my-screen item is unchecked, disabled and says why', () => {
     expect(find(petMenuTemplate({ ...base, screenAware: true, screenLocked: true }), 'Notice my screen (set by your organisation)')).toEqual({ label: 'Notice my screen (set by your organisation)', command: 'screen:off', checked: false, enabled: false });
+  });
+  it('listen-for-my-voice is an off-by-default checkbox whose on goes through the explainer; admin lock disables it', () => {
+    expect(find(petMenuTemplate(base), 'Listen for my voice')).toEqual({ label: 'Listen for my voice', command: 'voice:on', checked: false });
+    expect(find(petMenuTemplate({ ...base, voice: true }), 'Listen for my voice')).toMatchObject({ command: 'voice:off', checked: true });
+    expect(find(petMenuTemplate({ ...base, voice: true, voiceLocked: true }), 'Listen for my voice (set by your organisation)')).toEqual({ label: 'Listen for my voice (set by your organisation)', command: 'voice:off', checked: false, enabled: false });
   });
   it('an admin-locked hide item is a checked, disabled entry that says why', () => {
     const t = petMenuTemplate({ ...base, hideInShares: true, hideLocked: true });

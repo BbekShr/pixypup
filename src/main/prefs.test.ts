@@ -59,6 +59,9 @@ describe('sizeScale / parsePrefs / commandToPatch', () => {
     expect(commandToPatch('screen:yes', n)).toEqual({ screenAware: true });
     expect(commandToPatch('screen:off', n)).toEqual({ screenAware: false });
     expect(commandToPatch('screen:on', n)).toBeNull(); // on must go through the explainer
+    expect(commandToPatch('voice:yes', n)).toEqual({ voice: true });
+    expect(commandToPatch('voice:off', n)).toEqual({ voice: false });
+    expect(commandToPatch('voice:on', n)).toBeNull(); // voice:on alone never enables
     expect(commandToPatch('login:off', n)).toEqual({ openAtLogin: false });
     expect(commandToPatch('wake', n)).toEqual({ snoozeUntil: null });
     expect(commandToPatch('snooze:1h', n)).toEqual({ snoozeUntil: n.getTime() + 3_600_000 });

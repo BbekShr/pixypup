@@ -1,14 +1,18 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { execFile } from 'node:child_process';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openClient } from '../api/gate';
+import { openVoice, type Transcription } from '../api/voice';
 import { sniffBubble } from '../api/sniff-bubble';
 import { createDecider } from '../screen/decide';
 import { makeRun } from '../screen/helper';
 import { createScreenReader } from '../screen/reader';
 import { fakeReader } from './fake-screen';
 import { helperPath } from './helper-path';
+import { fakeMicPcm, setupMic } from './mic';
+import { createVoiceSession, type VoiceUi } from './voice-session';
+import { shouldRegister, syncShortcut } from '../voice/listen';
 import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
@@ -17,7 +21,7 @@ import { commandToPatch, isSnoozed, type Energy, type Prefs } from './prefs';
 import { startScreenLoop } from './screen-loop';
 import { setupScreenExplainer } from './screen-explainer';
 import { getApiKey } from './secrets';
-import { hideLockedByAdmin, loadSettings, saveSettings } from './settings';
+import { hideLockedByAdmin, loadSettings, saveSettings, voiceLockedByAdmin } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 let win: BrowserWindow | null = null;
@@ -94,6 +98,9 @@ let packEnergy: Energy | undefined; // the loaded pet's own personality.energy
 let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
+let voiceExplainer: ReturnType<typeof setupScreenExplainer>;
+let voice: ReturnType<typeof createVoiceSession>;
+let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech model when there is no key
 
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
 const prefs = (s = snoozed()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergy ?? 'normal', snoozed: s });
@@ -110,6 +117,8 @@ function sync(): void {
   clearTimeout(wakeTimer);
   // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
   if (s) wakeTimer = setTimeout(sync, Math.min(MAX_TIMER, Math.max(0, (settings.snoozeUntil ?? 0) - Date.now()) + 50));
+  syncShortcut(globalShortcut, shouldRegister(settings, s), () => voice.press());
+  if (!shouldRegister(settings, s)) voice.abort();
   tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
   tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: settings.petName }), run)));
 }
@@ -132,6 +141,13 @@ function run(cmd: string): void {
     if (!settings.adminDisableScreenAware) void screenExplainer.ask(settings.petName).then((yes) => { if (yes) run('screen:yes'); });
     return;
   }
+  if (cmd === 'voice:on') {
+    // Same consent rule as the screen: nothing listens, and macOS is never asked for the mic, before "Turn it on".
+    if (!voiceLockedByAdmin()) void voiceExplainer.ask(settings.petName).then((yes) => { if (yes) run('voice:yes'); });
+    return;
+  }
+  if (!app.isPackaged && cmd === 'voice:listen') return voice.press(); // dev hook: globalShortcut can't be pressed over CDP
+  if (!app.isPackaged && cmd.startsWith('voice:fake:')) { fakeTranscript = cmd.slice(11); return; }
   const patch = commandToPatch(cmd, new Date());
   if (patch) {
     try {
@@ -175,11 +191,33 @@ function startScreenAwareLoop(): void {
   });
 }
 
+function startVoice(): void {
+  const tell = (m: VoiceUi): void => { win?.webContents.send(IPC.voice, m); };
+  const mic = setupMic({ onChunk: (b) => voice.chunk(b), fake: app.isPackaged ? undefined : fakeMicPcm(process.env['PIXY_FAKE_MIC']) });
+  voice = createVoiceSession({
+    allowed: () => shouldRegister(settings, snoozed()),
+    key: () => (fakeTranscript !== undefined ? 'fake' : getApiKey()),
+    petName: () => settings.petName,
+    open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, opts)),
+    mic,
+    ui: tell,
+    command: (c) => win?.webContents.send(IPC.command, c),
+    heard: (text) => { if (debugOn) win?.webContents.send(IPC.debug, { on: true, name: settings.petName, heard: text }); },
+  });
+}
+
+/** Dev only: answers with a fixed transcript once the audio ends, like a real PUSH_TO_TALK session. */
+async function fakeVoice(text: string, onTranscript: (t: { text: string; final: boolean }) => void): Promise<Transcription> {
+  return { push: () => undefined, close: () => undefined, end: async () => { onTranscript({ text, final: true }); } };
+}
+
 app.dock?.hide();
 
 void app.whenReady().then(async () => {
   onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
+  voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });
+  startVoice();
   ipcMain.handle(IPC.getPack, async () => {
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
@@ -202,7 +240,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on(IPC.showMenu, () => {
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, openAtLogin: loginOn(), debug: debugOn, name: settings.petName }), run);
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, name: settings.petName }), run);
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });
@@ -218,4 +256,5 @@ void app.whenReady().then(async () => {
   if (!settings.onboarded && !userPet) setTimeout(() => onboarding.open(false), 1500);
 });
 
+app.on('will-quit', () => { voice?.abort(); globalShortcut.unregisterAll(); });
 app.on('window-all-closed', () => app.quit());
