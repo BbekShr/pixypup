@@ -14,9 +14,11 @@
 
 ### [🌐 See PixyPup in action](https://bbekshr.github.io/pixypup/) · [⬇️ Download](https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg) · [🛠️ Build it](#build)
 
-<img src="docs/pack-sheet.png" alt="Ten 3D poses of Pakkun, drawn from one photo: standing, blinking, walking, sitting, sleeping, barking, rolling" width="100%">
+<img src="docs/pack-sheet.png" alt="Fourteen 3D poses of Pakkun, drawn from one photo: standing, blinking, an 8-frame walk, sitting, sleeping, barking, rolling" width="100%">
 
-<sub>☝️ All ten poses, drawn by Meta's models from <b>one</b> photo. No 3D artist was harmed.</sub>
+<sub>☝️ All fourteen poses (including the 8-frame walk), drawn by Meta's models from <b>one</b> photo. No 3D artist was harmed.</sub>
+
+**Try it in 30 seconds:** open the [live site](https://bbekshr.github.io/pixypup/), pick Pakkun, Mochi or Kuma under the desk demo, then break a test and watch them sniff it out. No download, no key.
 
 </div>
 
@@ -50,9 +52,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute and 
 ## 🐾 Meet the pack
 
 <div align="center">
-<img src="assets/pets/Pakkun/sit.png" width="120" alt="Pakkun the golden retriever, sitting proudly">
-<img src="assets/pets/Mochi/sit.png" width="120" alt="Mochi the cat, sitting with perfect posture">
-<img src="assets/pets/Kuma/sit.png" width="120" alt="Kuma the red Shiba Inu, sitting and smiling">
+<img src="docs/pack-trio.png" width="560" alt="Pakkun the golden retriever, Mochi the cat and Kuma the red Shiba Inu, sitting side by side">
 <br><sub><b>Pakkun</b> (good boy) · <b>Mochi</b> (unbothered) · <b>Kuma</b> (full of opinions)</sub>
 </div>
 

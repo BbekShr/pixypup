@@ -7,7 +7,10 @@
 <meta name="description" content="One photo of your dog or cat becomes a 3D companion on your Mac with PixyPup. It walks, does tricks, sniffs your failing tests. Built with Meta SAM 3.1, Muse Image, Muse Spark and Voice Transcribe.">
 <meta property="og:title" content="PixyPup · your pet, on your Mac">
 <meta property="og:description" content="One photo in. One very good pup out. He walks your desktop, does tricks, and sniffs out your failing tests.">
-<meta property="og:image" content="https://bbekshr.github.io/pixypup/pack-sheet.png">
+<meta property="og:image" content="https://bbekshr.github.io/pixypup/pack-trio.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://bbekshr.github.io/pixypup/pack-trio.png">
 <link rel="icon" href="img/pakkun/idle_0.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -107,7 +110,10 @@ nav ul a:hover { opacity: 1; }
 .controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
 .chip { border: 0; background: #fff; padding: 10px 18px; border-radius: 999px; font: 800 14px "Nunito"; color: var(--ink); cursor: pointer; box-shadow: var(--shadow); transition: transform .25s var(--pop), background .2s; }
 .chip:hover { transform: translateY(-2px); background: #FFF1E6; }
-.chip.on { background: var(--honey); }
+.chip.on, .chip[aria-pressed="true"] { background: var(--honey); }
+.chip.pick { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px 6px 8px; }
+.chip.pick img { width: 28px; height: 28px; border-radius: 50%; background: #FFF1E6; object-fit: cover; object-position: 75% 20%; }
+.chip.pick:focus-visible, .chip:focus-visible { outline: 3px solid var(--blush-deep); outline-offset: 2px; }
 @media (max-width: 640px) { .desk { height: 380px; } .pet { width: 116px; height: 125px; } .bubble { bottom: 132px; } .dock-badge { display: none; } .term { width: 86%; left: 7%; } .desk-hint { display: none; } }
 
 /* marquee of poses */
@@ -242,7 +248,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
   <p class="small-link"><a href="https://github.com/BbekShr/pixypup/releases">all releases</a></p>
 
   <div class="desk" id="desk" aria-label="Interactive demo: Pakkun walking on a pretend desktop">
-    <div class="menubar"><span>🐾</span><span>Finder</span><span style="opacity:.6">File</span><span style="opacity:.6">Edit</span><span class="spacer"></span><img src="img/pakkun/idle_0.png" alt=""><span id="clock">9:41</span></div>
+    <div class="menubar"><span>🐾</span><span>Finder</span><span style="opacity:.6">File</span><span style="opacity:.6">Edit</span><span class="spacer"></span><img id="menuPet" src="img/pakkun/idle_0.png" alt=""><span id="clock">9:41</span></div>
     <div class="term" id="term">
       <div class="bar"><i></i><i></i><i></i></div>
       <pre id="termText"><span class="dim">~/app $</span> npm test</pre>
@@ -253,7 +259,12 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
       <div class="bubble" id="bubble">Woof!</div>
       <img id="petImg" src="img/pakkun/idle_0.png" alt="Pakkun, a cream golden retriever pup">
     </div>
-    <div class="desk-hint">psst… click him 🐾</div>
+    <div class="desk-hint">psst… click <span id="himher">him</span> 🐾</div>
+  </div>
+  <div class="controls" id="picker" role="group" aria-label="Choose a pet">
+    <button class="chip pick" data-pet="0" aria-pressed="true"><img src="img/pakkun/idle_0.png" alt="">Pakkun</button>
+    <button class="chip pick" data-pet="1" aria-pressed="false"><img src="img/mochi/idle_0.png" alt="">Mochi</button>
+    <button class="chip pick" data-pet="2" aria-pressed="false"><img src="img/kuma/idle_0.png" alt="">Kuma</button>
   </div>
   <div class="controls" role="group" aria-label="Try a reaction">
     <button class="chip" data-act="fail">🧪 Break a test</button>
@@ -416,7 +427,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
       <div class="mini model reveal"><b>Muse Wonder</b><p>Watches the drawn walk cycles and picks the most natural one, so he trots instead of shuffling.</p><p style="margin-top:10px"><code>muse-wonder-1.0</code></p></div>
       <div class="mini model reveal"><b>Voice Transcribe</b><p>Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space.</p><p style="margin-top:10px"><code>muse-voice-transcribe-1.0</code></p></div>
     </div>
-    <img class="shot reveal" style="margin-top:48px" src="pack-sheet.png" alt="Ten Pakkun poses generated from one photo: standing, blinking, walking, sitting, sleeping, barking, rolling" loading="lazy">
+    <img class="shot reveal" style="margin-top:48px" src="pack-sheet.png" alt="Fourteen Pakkun poses generated from one photo: standing, blinking, an 8-frame walk, sitting, sleeping, barking, rolling" loading="lazy">
   </div>
 </section>
 
@@ -446,11 +457,17 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
 document.documentElement.classList.add("js");
 (() => {
   const P = 'img/pakkun/';
-  const PETS = [{ d: P, poses: ['sit', 'bark', 'roll'] }, { d: 'img/mochi/', poses: ['sit', 'bark'] }, { d: 'img/kuma/', poses: ['sit', 'bark'] }];
+  // every pet's manifest has all of these poses, so tricks need no fallback
+  const POSES = ['sit', 'bark', 'roll'];
+  const PETS = [
+    { n: 'Pakkun', d: P, poses: POSES, as: 'a cream golden retriever pup', pr: 'him', say: 'Woof woof!', hi: 'Woof!' },
+    { n: 'Mochi', d: 'img/mochi/', poses: POSES, as: 'a cat', pr: 'her', say: 'Mrrp~ mew!', hi: 'Mew!' },
+    { n: 'Kuma', d: 'img/kuma/', poses: POSES, as: 'a red shiba inu pup', pr: 'him', say: 'Woof woof!', hi: 'Woof!' },
+  ];
+  let cur = PETS[0];
   const F = { idle: 'idle_0', blink: 'idle_blink', sit: 'sit', bark: 'bark', roll: 'roll', sleep: 'sleep', walk: [0, 1, 2, 3, 4, 5, 6, 7].map(i => 'side_' + i) };
-  PETS.slice(1).forEach(q => ['sit', 'bark', ...F.walk].forEach(n => { new Image().src = q.d + n + '.png'; }));
   const all = ['idle_0', 'idle_blink', 'sit', 'bark', 'roll', 'sleep', ...F.walk];
-  all.forEach(n => { new Image().src = P + n + '.png'; });
+  PETS.forEach(q => all.forEach(n => { new Image().src = q.d + n + '.png'; }));
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // the app's own walk maths (js/puppet.js, built from src/overlay/stride.ts + motion.ts): drawn frames, one per measured stride of distance walked
@@ -474,16 +491,18 @@ document.documentElement.classList.add("js");
 
   // pose marquee
   const track = document.getElementById('track');
-  const strip = ['idle_0', 'side_1', 'sit', 'bark', 'side_3', 'roll', 'sleep', 'idle_blink', 'side_2'];
-  [...strip, ...strip].forEach(n => { const i = new Image(); i.src = P + n + '.png'; i.alt = ''; track.append(i); });
+  // neighbours are always different pets; stepping the pose by 2 (mod 9) shuffles all nine poses deterministically
+  const strip = ['idle_0', 'side_1', 'sit', 'bark', 'side_3', 'roll', 'sleep', 'idle_blink', 'side_5'];
+  const parade = Array.from({ length: 27 }, (_, k) => PETS[k % 3].d + strip[(Math.floor(k / 3) * 2 + (k % 3) * 3) % 9] + '.png');
+  [...parade, ...parade].forEach(src => { const i = new Image(); i.src = src; i.alt = ''; track.append(i); });
 
   // the pet
   const desk = document.getElementById('desk'), pet = document.getElementById('pet'), img = document.getElementById('petImg'), bubble = document.getElementById('bubble');
   const term = document.getElementById('term'), termText = document.getElementById('termText'), badge = document.getElementById('badge');
   let x = 60, dir = 1, target = 400, mode = 'walk', until = 0, frame = 0, lastStep = 0, walked = 0, speed = 70, trick = 'sit', bubbleTimer;
   const TRICKS = { sit: 'bark', bark: 'roll', roll: 'sit' };
-  const LINES = { sit: 'Sitting pretty!', bark: 'Woof woof!', roll: 'Belly rubs?' };
-  const set = n => { const s = n.includes('/') ? n : P + n + '.png'; if (!img.src.endsWith(s)) img.src = s; };
+  const LINES = () => ({ sit: 'Sitting pretty!', bark: cur.say, roll: 'Belly rubs?' });
+  const set = n => { const s = n.includes('/') ? n : cur.d + n + '.png'; if (!img.src.endsWith(s)) img.src = s; };
   const say = (t, ms = 1800) => { bubble.textContent = t; bubble.classList.add('show'); clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => bubble.classList.remove('show'), ms); };
   const W = () => desk.clientWidth - pet.clientWidth;
   const pick = () => { target = 20 + Math.random() * (W() - 40); };
@@ -503,7 +522,7 @@ document.documentElement.classList.add("js");
         dir = Math.sign(d);
         const mv = Math.min(Math.abs(d), speed * dt / 1000);
         x += dir * mv; walked += mv;
-        if (rigs[P]) set(rigSrc(rigs[P], walked, pet.clientWidth, pet.clientHeight));
+        if (rigs[cur.d]) set(rigSrc(rigs[cur.d], walked, pet.clientWidth, pet.clientHeight));
         else if (now - lastStep > 125) { frame = (frame + 1) % 8; lastStep = now; set(F.walk[frame]); }
       }
     } else if (now > until) {
@@ -520,7 +539,7 @@ document.documentElement.classList.add("js");
 
   function doTrick() {
     pet.classList.remove('wiggle'); void pet.offsetWidth; pet.classList.add('wiggle');
-    hold(trick, 1700); say(LINES[trick]); hearts(2);
+    hold(trick, 1700); say(LINES()[trick]); hearts(2);
     trick = TRICKS[trick];
   }
   function hearts(n) {
@@ -572,8 +591,25 @@ document.documentElement.classList.add("js");
   const tickClock = () => { clock.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
   tickClock(); setInterval(tickClock, 30000);
 
+  // pet picker: remembered if storage works, the page is fine without it
+  const picks = [...document.querySelectorAll('[data-pet]')];
+  const setPet = (i, greet) => {
+    cur = PETS[i];
+    picks.forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.pet === i)));
+    img.alt = cur.n + ', ' + cur.as; pet.setAttribute('aria-label', cur.n + '. Click for a trick');
+    document.getElementById('himher').textContent = cur.pr; bubble.textContent = cur.hi;
+    document.getElementById('menuPet').src = cur.d + 'idle_0.png';
+    desk.setAttribute('aria-label', 'Interactive demo: ' + cur.n + ' walking on a pretend desktop');
+    set(F.idle);
+    try { localStorage.setItem('pixypup-pet', i); } catch (e) { /* private mode: fine */ }
+    if (greet) say('Hi, I\'m ' + cur.n + '!', 2200);
+  };
+  picks.forEach(b => b.addEventListener('click', () => { mode = 'walk'; pet.onArrive = null; pick(); setPet(+b.dataset.pet, true); }));
+  let saved = 0; try { saved = +localStorage.getItem('pixypup-pet') || 0; } catch (e) { /* no storage */ }
+  if (saved > 0 && saved < PETS.length) setPet(saved);
+
   if (reduce) { set(F.sit); pet.style.transform = `translateX(${W() / 2}px)`; }
-  else { pick(); requestAnimationFrame(tick); setTimeout(() => say('Hi, I\'m Pakkun!', 2200), 900); }
+  else { pick(); requestAnimationFrame(tick); setTimeout(() => say('Hi, I\'m ' + cur.n + '!', 2200), 900); }
 
   // overload
   const btn = document.getElementById('overloadBtn');
