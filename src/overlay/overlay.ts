@@ -6,6 +6,7 @@ import { behaviorBusy, hideSpot, parseBehavior, peekOutX, routeBehavior, SNIFF_M
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { displayWidth, footOffset } from './layout';
+import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
 import { BLINK_MS, MAX_SPEED, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
@@ -135,7 +136,18 @@ let lifeUntil = 0;
 let lifeKind: 'look' | 'tilt' = 'look';
 let lifeTilt = 0;
 let blinkAt = stateAt + blinkDelay(Math.random());
-let blinkUntil = 0;
+let blinkAt0 = -1e9; // when the current blink began
+let blinkDouble = false;
+let hovering = false;
+let hoverSide = 1; // which side of the pet the cursor is on
+let tilt = 0;
+let perkAt = -1e9;
+let wg = { at: -1e9, dur: WIGGLE_MS, cycles: 3 };
+let stretchAt = -1e9;
+let yawn = false; // the idle dwell is the yawn; when it ends the pet falls asleep
+let samples: Sample[] = [];
+let petAt = -1e9;
+let clickTimer: ReturnType<typeof setTimeout> | undefined;
 let last = stateAt;
 let stay = false; // menu toggle: no wander targets, idle/sit/sleep only
 let menuCalls = 0;
@@ -160,6 +172,7 @@ const en = (): ReturnType<typeof energyParams> => energyParams(prefs.energy);
 function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced?: PetState): void {
   const now = performance.now();
   const prev = state;
+  yawn = false;
   state = forced ?? resolveWalk(next(state, ev), stay, o.target !== undefined);
   stateAt = now;
   const dwell = o.ms ?? dwellMs(state, Math.random(), en());
@@ -169,6 +182,19 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
     target = o.target ?? pickTarget(x, window.innerWidth - W, home, Math.random(), Math.random());
   }
   if (state !== prev) enter(prev);
+}
+
+// The energy model's pick; a nap starts with a yawn.
+function timeout(from: PetState, now: number): void {
+  const ev = onTimeout(from, Math.random(), now - lastInteraction, en());
+  if (ev === 'sleep' && !calm) startYawn();
+  else setState(ev, ev === 'sit' ? { ms: 4000 } : {});
+}
+
+function startYawn(): void {
+  setState('idle', { ms: YAWN_MS });
+  yawn = true;
+  if (quiet(performance.now(), speakingUntil)) say('~', YAWN_MS);
 }
 
 function enter(prev: PetState): void {
@@ -181,7 +207,11 @@ function enter(prev: PetState): void {
       img.style.opacity = '1';
     });
   }
-  if (prev === 'sleep') { zs.forEach((z) => z.remove()); zs = []; }
+  if (prev === 'sleep') {
+    zs.forEach((z) => z.remove());
+    zs = [];
+    if (state !== 'drag') stretchAt = performance.now();
+  }
   if (state === 'sleep') {
     for (let i = 0; i < 3; i++) {
       const z = document.createElement('span');
@@ -248,8 +278,7 @@ function frame(now: number): void {
     } else if (rem < 1 && act) {
       actArrive(now);
     } else if (rem < 1) {
-      const ev = onTimeout('walk', Math.random(), now - lastInteraction, en());
-      setState(ev, ev === 'sit' ? { ms: 4000 } : {});
+      timeout('walk', now);
     } else if (want !== dir) {
       dir = want;
       turnUntil = now + TURN_MS;
@@ -260,8 +289,8 @@ function frame(now: number): void {
       walked += step;
     }
   } else if (!act && deadline !== null && now >= deadline) {
-    const ev = onTimeout(state, Math.random(), now - lastInteraction, en());
-    setState(ev, ev === 'sit' ? { ms: 4000 } : {});
+    if (yawn) setState('sleep');
+    else timeout(state, now);
   }
 
   if (now >= sayAt && canSpeak(state, act !== null || (handoff !== null && handoff !== 'wander') ||dragging || falling || now < speakingUntil || greet !== null) && speakLine()) sayAt = nextSayAt(now, Math.random(), chatty);
@@ -274,7 +303,8 @@ function frame(now: number): void {
     lifeAt = now + 3000 + Math.random() * 3000;
   }
   if (state === 'idle' && now >= blinkAt) {
-    blinkUntil = now + BLINK_MS;
+    blinkAt0 = now;
+    blinkDouble = Math.random() < DOUBLE_BLINK_CHANCE;
     blinkAt = now + blinkDelay(Math.random());
   }
   const life = state === 'idle' && now < lifeUntil;
@@ -283,7 +313,7 @@ function frame(now: number): void {
 
   const stride = STRIDE * W;
   const walking = state === 'walk' && !turning && !falling;
-  const blinking = state === 'idle' && now < blinkUntil && !!poses['blink'];
+  const blinking = state === 'idle' && !yawn && blinkShut(now - blinkAt0, BLINK_MS, blinkDouble) && !!poses['blink'];
   const pose = poses[blinking ? 'blink' : walking ? 'walk' : state === 'drag' || state === 'walk' || falling ? 'idle' : state] ?? poses['idle']!;
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const src = pose.srcs[i]!;
@@ -317,6 +347,15 @@ function frame(now: number): void {
     rot = rollAngle(age);
   }
   if (turning) { sx = 1.06; sy = 0.92; }
+  if (!calm) {
+    const ok = hovering && microOk();
+    tilt += ((ok ? HOVER_TILT_DEG * hoverSide : 0) - tilt) * Math.min(1, dt * 12);
+    rot += tilt + wiggle(now - wg.at, wg.dur, wg.cycles);
+    const p = perkPulse(now - perkAt);
+    const st = stretch(now - stretchAt);
+    sx *= p * st.sx;
+    sy *= p * st.sy * (yawn ? yawnSy(age) : 1);
+  }
   if (now - landAt < 180) sy *= squash(now - landAt, 0.15, 180);
   const flip = facing * (life && lifeKind === 'look' ? -1 : 1);
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
@@ -326,9 +365,50 @@ function frame(now: number): void {
   raf = requestAnimationFrame(frame);
 }
 
-img.addEventListener('mouseenter', () => window.pixy.setClickThrough(false));
+img.addEventListener('mouseenter', (e) => {
+  window.pixy.setClickThrough(false);
+  hoverSide = e.clientX >= x + W / 2 ? 1 : -1;
+  if (!microOk()) return;
+  hovering = true;
+  face(hoverSide);
+  perkAt = performance.now();
+});
 img.addEventListener('mouseleave', () => {
+  hovering = false;
+  samples = [];
   if (!dragging) window.pixy.setClickThrough(true);
+});
+
+// Calm, idle, nobody else has the pet: only then do the little reactions run.
+const microOk = (): boolean => !calm && !busyNow() && !dragging && !act && !yawn && (state === 'idle' || state === 'sit');
+
+function heart(): void {
+  const h = document.createElement('div');
+  h.textContent = '\u2665';
+  h.style.cssText = 'position:absolute;left:0;top:0;font:700 14px var(--font);color:var(--blush);pointer-events:none';
+  fx.append(h);
+  const dx = (Math.random() - 0.5) * 24;
+  h.animate(
+    [{ opacity: 0, transform: `translate(${dx}px,6px) scale(.5)` }, { opacity: 1, offset: 0.2 }, { opacity: 0, transform: `translate(${dx * 1.5}px,-34px) scale(1)` }],
+    { duration: 900, easing: 'ease-out' },
+  ).onfinish = () => h.remove();
+}
+
+function pet(now: number): void {
+  petAt = now;
+  samples = [];
+  lastInteraction = now;
+  wg = { at: now, dur: WIGGLE_MS, cycles: 3 };
+  const n = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < n; i++) setTimeout(heart, i * 160);
+  if (Math.random() < 0.3 && quiet(now, speakingUntil)) speakLine();
+}
+img.addEventListener('pointermove', (e) => {
+  if (dragging || !microOk()) return;
+  const now = performance.now();
+  samples.push({ x: e.clientX, t: now });
+  if (samples.length > 40) samples.shift();
+  if (now - petAt > 1500 && detectPetting(samples)) pet(now);
 });
 
 let dragging = false;
@@ -348,6 +428,7 @@ img.addEventListener('contextmenu', (e) => {
 img.addEventListener('pointerdown', (e) => {
   if (dragging || handoffBusy(handoff) || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
   dragging = true;
+  hovering = false;
   if (act && !(act.kind === 'hide' && (act.phase === 'go' || act.phase === 'away'))) act = null; // hiding survives a poke; anything else yields
   falling = false;
   lift = Math.min(0, lift);
@@ -378,9 +459,21 @@ function finish(e: PointerEvent): void {
   if (img.hasPointerCapture(e.pointerId)) img.releasePointerCapture(e.pointerId);
   const click = e.type === 'pointerup' && isClick(Math.hypot(e.clientX - downX, e.clientY - downY), performance.now() - downAt);
   home = x;
-  lineOnBark = click && clickSays(lines.length > 0, Math.random());
-  setState(click ? 'click' : 'dragEnd', {}, release(preDrag, click, stay));
-  lineOnBark = false;
+  const forced = release(preDrag, click, stay);
+  const go = (): void => {
+    if (click && preDrag === 'sleep' && !calm) stretchAt = performance.now();
+    lineOnBark = click && clickSays(lines.length > 0, Math.random());
+    setState(click ? 'click' : 'dragEnd', {}, forced);
+    lineOnBark = false;
+  };
+  if (click && !calm && lift === 0) {
+    // wiggle and a heart first, then the trick; any other takeover of the pet cancels it
+    const now = performance.now();
+    wg = { at: now, dur: CLICK_WIGGLE_MS, cycles: 2 };
+    heart();
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => { if (state === 'drag' && !dragging && !resting) go(); }, CLICK_WIGGLE_MS);
+  } else go();
   if (lift < 0) { falling = true; vy = 0; }
   if (act?.kind === 'hide') { act.phase = 'go'; setState('walk', { target: act.spot }); } // poked out of hiding: go back
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
@@ -618,8 +711,9 @@ function say(text: string, ms: number): void {
   speakingUntil = performance.now() + ms;
   fx.append(b);
   b.animate(
-    [{ opacity: 0, transform: 'translate(-50%,-100%) scale(.6)' }, { opacity: 1, transform: 'translate(-50%,-100%) scale(1)', offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-8px)' }],
-    { duration: ms, fill: 'backwards', easing: 'cubic-bezier(.34,1.56,.64,1)' },
+    // the pop easing belongs on the first segment only: as a whole-animation easing it overshoots and fades the bubble out in under a second
+    [{ opacity: 0, transform: 'translate(-50%,-100%) scale(.6)', easing: 'cubic-bezier(.34,1.56,.64,1)' }, { opacity: 1, transform: 'translate(-50%,-100%) scale(1)', offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-8px)' }],
+    { duration: ms, fill: 'backwards' },
   ).onfinish = () => b.remove();
 }
 window.pixy.onPackChanged((h) => {
@@ -631,5 +725,5 @@ raf = requestAnimationFrame(frame);
 import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command, yawn: startYawn }) });
 }
