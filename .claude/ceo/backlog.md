@@ -9,7 +9,6 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 
 ## Needs a human
 <!-- decisions, deploys, migrations, secrets: with the exact command or question -->
-- Create the public GitHub repo (hackathon rule) so org PRs and CI have a remote: `gh repo create BbekShr/pixypup --public --source . --push`.
 - Run the pose test with your key and photos and record the 6-vs-4 pose call in `docs/POSE-TEST.md`: `npm run pose-test` (needs `MODEL_API_KEY` exported, photos in `assets/photos/`).
 - Read the Official Rules on the participants page; fill the TODO lines in `docs/HACKATHON.md` (platform, video cap, pre-existing-code rule).
 
@@ -32,7 +31,7 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 | F10 | P1 | Ad-hoc signed .dmg | pixypup-app-engineer | open | `npm run dist` builds an ad-hoc signed dmg; electron-builder `files` ships `assets/placeholder/**` only (never `assets/photos/`); app launches from /Applications after right-click → Open; README install steps |  |
 | F11 | P1 | Demo staging script | pixypup-app-engineer | open | `scripts/stage-demo.sh` opens a Terminal with a failing vitest fixture, a stand-in Slack badge, and a Zoom window, then resets; all three reactions fire twice in a row | Wed; rehearsed with the maintainer |
 | F12 | P1 | Debug panel for the video | pixypup-app-engineer | open | Toggleable panel shows the latest SAM boxes (drawn on the overlay at screen coords) and the Muse Spark/rule decision JSON with its reason; off by default | Gap: the video outline needs it but the original plan had no task for it |
-| P1 | P1 | CI runs the verification bar on every PR | pixypup-app-engineer | open | GitHub Actions on macos-latest runs typecheck, lint, test, build on PRs to main | Blocked: needs the public GitHub repo (maintainer's call) and touches protected `.github/workflows/**` |
+| P1 | P1 | CI runs the verification bar on every PR | pixypup-app-engineer | open | GitHub Actions on macos-latest runs typecheck, lint, test, build on PRs to main | Repo is live at https://github.com/BbekShr/pixypup (2026-10-31). Touches protected `.github/workflows/**`: the human reviews the PR |
 | P2 | P0 | Enforce the network-off promise in code | pixypup-ai-engineer | open | `MetaClient` can only be constructed through a gate that takes the merged settings and throws when screen-aware and voice are both off; a test proves default settings produce no fetch | Rule today lives in docs only (layer 4) |
 | P3 | P2 | Ban disk writes from src/screen | pixypup-app-engineer | open | ESLint `no-restricted-imports` bans `node:fs`/`fs`/`sharp` `toFile` in `src/screen/**` | Gate file edit: needs the human (`ALLOW_GATE_EDITS`) |
 | P4 | P2 | Re-enable the renderer sandbox | pixypup-app-engineer | open | Preload built as CommonJS so `sandbox: true` works; overlay still walks and drags (CDP evidence) | `src/main/main.ts:29` sets `sandbox: false` for the ESM preload |
