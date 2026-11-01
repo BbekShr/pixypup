@@ -12,7 +12,7 @@ import { cleanFrame } from './frames';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
 import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
-import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
+import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
 
 declare global {
   interface Window {
@@ -48,6 +48,7 @@ const CELEBRATE_MS = 2600;
 const HINT_SHOW_MS = 11000;
 const MARK_MS = 2600;
 
+const WAIT_FIDGET_MS = 10_000; // a held sit perks an ear this often
 const TURN_MS = 300; // a hop-turn: crouch, hop, land
 const TURN_HOP = 0.07; // of H
 type Fidget = 'look' | 'tilt' | 'sniff' | 'wag';
@@ -264,6 +265,8 @@ let samples: Sample[] = [];
 let petAt = -1e9;
 let clickTimer: ReturnType<typeof setTimeout> | undefined;
 let last = stateAt;
+let heldSit = false; // a commanded sit (menu or voice) is holding; any other state change releases it
+let waitAt = 0; // next "waiting" ear perk while held
 let calling = false; // trotting to the pointer after "come here"
 let frontUntil = 0; // greeting the caller: the front view, if the pack has one
 let stay = false; // menu toggle: no wander targets, idle/sit/sleep only
@@ -293,6 +296,7 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
   const prev = state;
   yawn = false;
   calling = false;
+  heldSit = false;
   state = forced ?? resolveWalk(next(state, ev), stay, o.target !== undefined);
   stateAt = now;
   lifeUntil = 0;
@@ -308,9 +312,13 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
 
 // The energy model's pick; a nap starts with a yawn.
 function timeout(from: PetState, now: number): void {
+  const wasHeld = heldSit;
   const ev = onTimeout(from, Math.random(), now - lastInteraction, en());
   if (ev === 'sleep' && !calm) startYawn();
-  else setState(ev, ev === 'sit' ? { ms: 4000 } : {});
+  else {
+    setState(ev, ev === 'sit' ? { ms: 4000 } : {});
+    if (wasHeld && !calm) stretchAt = now; // gets up with a stretch, then wanders
+  }
 }
 
 function startYawn(): void {
@@ -432,8 +440,12 @@ function frame(now: number): void {
 
   // idle life every 3-6 s: look the other way, tilt the head, sniff the floor or wag (sitting: tilt only)
   const upright = state === 'idle' || state === 'sit';
+  if (heldSit && state === 'sit' && !act && now >= waitAt) {
+    waitAt = now + WAIT_FIDGET_MS + Math.random() * 2000;
+    if (!calm) perkAt = now;
+  }
   if (upright && !act && !yawn && now >= lifeAt) {
-    const kinds: Fidget[] = state === 'sit' ? ['tilt'] : ['look', 'tilt', 'sniff', ...(wagOk ? ['wag' as const] : [])];
+    const kinds: Fidget[] = state === 'sit' ? (heldSit ? ['tilt', 'look'] : ['tilt']) : ['look', 'tilt', 'sniff', ...(wagOk ? ['wag' as const] : [])];
     lifeKind = kinds[Math.floor(Math.random() * kinds.length)]!;
     lifeTilt = Math.random() < 0.5 ? -4 : 4;
     lifeStart = now;
@@ -723,13 +735,20 @@ function command(raw: string): void {
   if (act?.kind === 'hide') return;
   if (act?.kind === 'sniff' || commandMustWait({ falling, dragging, turning: state === 'walk' && performance.now() < turnUntil })) { queuedCmd = cmd; return; } // waits for the sniff, the fall, the hand or the hop-turn to finish
   lastInteraction = performance.now();
-  if (cmd === 'sit' || cmd === 'roll' || cmd === 'bark') setState(cmd);
+  if (cmd === 'sit') {
+    setState('sit', { ms: sitHoldMs(en(), stay) });
+    heldSit = true;
+    waitAt = performance.now() + WAIT_FIDGET_MS;
+  } else if (cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');
   else if (isCome(cmd)) come(comeX(cmd));
   else if (cmd === 'stay') {
     stay = true;
     if (state === 'walk') setState('idle');
-  } else if (cmd === 'wander') stay = false;
+  } else if (cmd === 'wander') {
+    stay = false;
+    if (heldSit) setState('idle'); // the hold had no timeout; this releases it
+  }
 }
 window.pixy.onCommand(command);
 
