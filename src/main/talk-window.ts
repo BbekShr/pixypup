@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, screen } from 'electron';
-import { devRendererUrl } from './dev-url.js';
+import { devRendererUrl } from './dev-url';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openClient } from '../api/gate';

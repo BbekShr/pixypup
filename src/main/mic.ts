@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, session } from 'electron';
-import { devRendererUrl } from './dev-url.js';
+import { devRendererUrl } from './dev-url';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
