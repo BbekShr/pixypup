@@ -3,13 +3,13 @@ import type { Personality, PetFact } from '../../contracts/types';
 export interface Progress { kind: 'cutout' | 'pose'; name: string; url: string }
 
 /** The one pet-making run in flight. `id` is its token: events from any other run are ignored. */
-export interface Run { id: number; name: string; species: 'dog' | 'cat'; progress: Progress[]; personality?: Personality; facts?: PetFact[]; failed?: string[] }
+export interface Run { id: number; name: string; species: string; progress: Progress[]; personality?: Personality; facts?: PetFact[]; failed?: string[] }
 export interface Runs { current: Run | null; last: number }
 
 export const noRuns: Runs = { current: null, last: 0 };
 
 /** null = busy: a second create while one is running must not start or disturb it. */
-export function startRun(r: Runs, name: string, species: 'dog' | 'cat'): { runs: Runs; id: number } | null {
+export function startRun(r: Runs, name: string, species: string): { runs: Runs; id: number } | null {
   if (r.current) return null;
   const id = r.last + 1;
   return { id, runs: { last: id, current: { id, name, species, progress: [] } } };

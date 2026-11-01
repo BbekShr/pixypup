@@ -4,7 +4,7 @@ import { copyLines, nextCopy, ribbonFraction } from './birth';
 import sitUrl from '../../assets/pets/Pakkun/sit.png';
 import type { CreateResult, FactView, Personality, PhotoResult, Progress } from '../main/onboarding-preload';
 import type { Run } from '../main/run-state';
-import { advance, initialFlow, type Code, type Flow, type FlowEvent } from './flow';
+import { advance, initialFlow, speciesIssue, type Code, type Flow, type FlowEvent } from './flow';
 
 declare global {
   interface Window {
@@ -17,7 +17,7 @@ declare global {
       devPhoto(): Promise<PhotoResult>;
       saveKey(key: string): Promise<boolean>;
       openKeyPage(): void;
-      createPet(name: string, species: 'dog' | 'cat'): Promise<CreateResult>;
+      createPet(name: string, species: string): Promise<CreateResult>;
       onProgress(cb: (p: Progress) => void): void;
       onPersonality(cb: (p: Personality) => void): void;
       onFacts(cb: (f: FactView[]) => void): void;
@@ -45,7 +45,7 @@ const SAY: Record<Code | 'type' | 'size' | 'missing' | 'unreadable', string> = {
 };
 
 let flow: Flow = initialFlow(false, new URLSearchParams(location.search).get('from') === 'menu');
-let species: 'dog' | 'cat' = 'dog';
+let species = 'dog';
 let petName = '';
 let idleUrl = '';
 let hasCutout = false;
@@ -258,13 +258,25 @@ for (const t of ['dragover', 'drop']) window.addEventListener(t, (e) => e.preven
 
 nameEl.addEventListener('input', () => { ($('named') as HTMLButtonElement).disabled = nameEl.value.trim() === ''; });
 nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('named').click(); });
-document.querySelectorAll<HTMLElement>('.pill').forEach((p) => p.addEventListener('click', () => {
-  species = p.dataset['species'] === 'cat' ? 'cat' : 'dog';
-  document.querySelectorAll('.pill').forEach((q) => { q.classList.toggle('on', q === p); q.setAttribute('aria-checked', String(q === p)); });
+const speciesEl = $<HTMLInputElement>('species');
+const speciesErr = $('speciesErr');
+const checkSpecies = (): boolean => {
+  const issue = speciesIssue(speciesEl.value);
+  speciesErr.textContent = issue ?? '';
+  speciesEl.setAttribute('aria-invalid', String(issue !== null));
+  return issue === null;
+};
+speciesEl.addEventListener('input', checkSpecies);
+speciesEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('named').click(); });
+document.querySelectorAll<HTMLElement>('.chip').forEach((c) => c.addEventListener('click', () => {
+  speciesEl.value = c.textContent ?? '';
+  checkSpecies();
 }));
 $('named').addEventListener('click', () => {
   petName = nameEl.value.trim();
-  if (petName) go({ t: 'named' });
+  if (!petName || !checkSpecies()) return;
+  species = speciesEl.value.trim();
+  go({ t: 'named' });
 });
 
 keyEl.addEventListener('input', () => { ($('savekey') as HTMLButtonElement).disabled = !/^\S{8,512}$/.test(keyEl.value.trim()); });

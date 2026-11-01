@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('pixyOb', {
   devPhoto: (): Promise<PhotoResult> => ipcRenderer.invoke(IPC.obDevPhoto),
   saveKey: (key: string): Promise<boolean> => ipcRenderer.invoke(IPC.obSaveKey, key),
   openKeyPage: (): void => ipcRenderer.send(IPC.obOpenKeyPage),
-  createPet: (name: string, species: 'dog' | 'cat'): Promise<CreateResult> => ipcRenderer.invoke(IPC.createPet, { name, species }),
+  createPet: (name: string, species: string): Promise<CreateResult> => ipcRenderer.invoke(IPC.createPet, { name, species }),
   onProgress: (cb: (p: Progress) => void): void => {
     ipcRenderer.on(IPC.obProgress, (_e, p: Progress) => cb(p));
   },

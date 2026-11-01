@@ -43,9 +43,11 @@
           <img class="thumb" id="thumb" alt="Your photo" />
           <h1>What's their name?</h1>
           <input id="name" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Milo" aria-label="Pet name" />
-          <div class="pills" role="radiogroup" aria-label="Dog or cat">
-            <button class="pill on" role="radio" aria-checked="true" data-species="dog">Dog</button>
-            <button class="pill" role="radio" aria-checked="false" data-species="cat">Cat</button>
+          <h2 class="ask">What are they?</h2>
+          <input id="species" type="text" maxlength="30" autocomplete="off" spellcheck="false" value="Dog" placeholder="husky, monarch butterfly…" aria-label="What kind of pet" aria-describedby="speciesErr" />
+          <p class="small err" id="speciesErr" role="alert"></p>
+          <div class="chips" aria-label="Quick picks">
+            <button class="chip" type="button">Dog</button><button class="chip" type="button">Cat</button><button class="chip" type="button">Bird</button><button class="chip" type="button">Butterfly</button><button class="chip" type="button">Rabbit</button><button class="chip" type="button">Fish</button><button class="chip" type="button">Snake</button>
           </div>
           <div class="actions">
             <button class="btn ghost" data-back>Back</button>

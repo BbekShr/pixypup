@@ -77,9 +77,11 @@ describe('checkPhoto', () => {
 });
 
 describe('checkCreateArgs / checkKey', () => {
-  it('trims and bounds the name, requires dog|cat', () => {
-    expect(checkCreateArgs({ name: ' Milo ', species: 'cat' })).toEqual({ name: 'Milo', species: 'cat' });
-    for (const bad of [{ name: '', species: 'dog' }, { name: ' ', species: 'dog' }, { name: 'x'.repeat(25), species: 'dog' }, { name: 'a\nb', species: 'dog' }, { name: 'a', species: 'fish' }, { name: 3, species: 'dog' }, null, 'x'])
+  it('trims and bounds the name, takes any sane species text', () => {
+    expect(checkCreateArgs({ name: ' Milo ', species: ' cat ' })).toEqual({ name: 'Milo', species: 'cat' });
+    expect(checkCreateArgs({ name: 'Bo', species: 'husky' })).toEqual({ name: 'Bo', species: 'husky' });
+    expect(checkCreateArgs({ name: 'Bo', species: 'monarch butterfly' })).toEqual({ name: 'Bo', species: 'monarch butterfly' });
+    for (const bad of [{ name: '', species: 'dog' }, { name: ' ', species: 'dog' }, { name: 'x'.repeat(25), species: 'dog' }, { name: 'a\nb', species: 'dog' }, { name: 'a', species: '<script>' }, { name: 'a', species: '' }, { name: 'a', species: '  ' }, { name: 'a', species: 'x'.repeat(31) }, { name: 'a', species: 5 }, { name: 3, species: 'dog' }, null, 'x'])
       expect(checkCreateArgs(bad)).toBeNull();
     expect(checkCreateArgs({ name: 'x'.repeat(24), species: 'dog' })).not.toBeNull();
   });

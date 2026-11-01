@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { MetaApiError } from '../api/meta-client';
 import { NoPetFoundError, readPhoto } from '../api/pose-pipeline';
+import { SPECIES_RE } from '../api/profile-defaults';
 
 export const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
 export const PHOTO_EXTS = ['jpg', 'jpeg', 'png', 'heic', 'webp'];
@@ -49,13 +50,14 @@ export async function loadPhoto(path: unknown): Promise<{ ok: true; buf: Buffer 
   }
 }
 
-export function checkCreateArgs(a: unknown): { name: string; species: 'dog' | 'cat' } | null {
+export function checkCreateArgs(a: unknown): { name: string; species: string } | null {
   if (typeof a !== 'object' || a === null) return null;
   const { name, species } = a as Record<string, unknown>;
-  if (typeof name !== 'string' || (species !== 'dog' && species !== 'cat')) return null;
+  if (typeof name !== 'string' || typeof species !== 'string') return null;
   const n = name.trim();
+  const sp = species.trim();
   const control = [...n].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
-  return n.length >= 1 && n.length <= 24 && !control ? { name: n, species } : null;
+  return n.length >= 1 && n.length <= 24 && !control && SPECIES_RE.test(sp) ? { name: n, species: sp } : null;
 }
 
 export const checkKey = (k: unknown): k is string => typeof k === 'string' && /^\S{8,512}$/.test(k);

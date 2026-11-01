@@ -99,6 +99,7 @@ function toNative(items: MenuItem[], run: (cmd: string) => void): MenuItemConstr
 
 let settings = loadSettings(); // TODO(F1): feed settings to feature gates
 let packEnergy: Energy | undefined; // the loaded pet's own personality.energy
+let packSpecies: string | undefined; // the loaded pet's species, so Spark's lines suit it
 let packPetName: string | undefined; // the loaded pet's display name, boosted as a speech keyword
 /** What the user called their pet (manifest), not the folder slug in settings. */
 const displayName = (): string => packPetName ?? settings.petName;
@@ -192,7 +193,7 @@ function startScreenAwareLoop(): void {
   const spark = async (input: { failureLine: string }, signal?: AbortSignal): Promise<{ bubble: string } | null> => {
     try {
       const key = getApiKey();
-      return key ? await sniffBubble(openClient('screen', loadSettings(), key), input.failureLine, signal) : null;
+      return key ? await sniffBubble(openClient('screen', loadSettings(), key), input.failureLine, signal, packSpecies) : null;
     } catch {
       return null;
     }
@@ -219,7 +220,7 @@ function askHint(): Promise<string | null> {
     const key = getApiKey();
     if (!key) return fakeScreen ? 'Rehearsal hint: add(2, 2) returns 4, but the test in demo/math.test.ts expects 5.' : null;
     try {
-      return (await fixHint(openClient('screen', loadSettings(), key), f, AbortSignal.timeout(15_000)))?.hint ?? null;
+      return (await fixHint(openClient('screen', loadSettings(), key), f, AbortSignal.timeout(15_000), packSpecies))?.hint ?? null;
     } catch {
       return null;
     }
@@ -263,6 +264,7 @@ void app.whenReady().then(async () => {
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
     const pack = dir && (await loadPack(dir));
     packPetName = pack ? pack.manifest.pet : undefined;
+    packSpecies = pack ? pack.manifest.species : undefined;
     const e = pack ? pack.manifest.personality?.energy : undefined;
     if (e !== packEnergy) {
       packEnergy = e;
