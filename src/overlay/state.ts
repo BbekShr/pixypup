@@ -26,6 +26,11 @@ export function dwellMs(state: PetState, rand: number, p: EnergyParams = NORMAL)
   }
 }
 
+export const SIT_HOLD_MS = 60_000;
+
+/** A commanded sit holds like a trained dog: about a minute, longer for a sleepy pet, shorter for a playful one. "Stay" holds until released. */
+export const sitHoldMs = (p: EnergyParams, stay: boolean): number => (stay ? Infinity : SIT_HOLD_MS * p.dwell);
+
 export function onTimeout(state: PetState, rand: number, sinceInteractionMs: number, p: EnergyParams = NORMAL): PetEvent {
   if (state === 'sleep') return 'sleep';
   if (state === 'drag') return 'dragStart';

@@ -8,7 +8,7 @@ import type { MetaClient } from './meta-client.js';
 export type { Personality, PetFact };
 
 const BAD_TEXT = /https?:|www\.|@|\p{Extended_Pictographic}/u;
-const clean = (v: unknown, max: number): string | null => {
+export const clean = (v: unknown, max: number): string | null => {
   if (typeof v !== 'string') return null;
   const s = v.trim().replace(/\s+/g, ' ');
   return s && s.length <= max && !BAD_TEXT.test(s) ? s : null;

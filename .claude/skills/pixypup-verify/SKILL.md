@@ -23,6 +23,7 @@ and attach the evidence.
 
 - Free the ports first: `lsof -ti tcp:9222 -ti tcp:5173` must print nothing; if it does, it's another checkout: stop and report, don't kill it.
 - Start (Bash with `run_in_background`): `npx electron-vite dev --remoteDebuggingPort 9222 > <scratch>/dev.log 2>&1`
+- If the maintainer may be running the app, or the check needs no Meta call: `env -u MODEL_API_KEY npx electron-vite dev --remoteDebuggingPort 9333 -- --user-data-dir=<scratch>/userdata` with a `settings.json` of `{"onboarded": true}` already in that dir. Otherwise first-launch onboarding opens on the maintainer's screen, and a pet made there runs the real pipeline on the key (2026-11-01 husky). Check that 5173, 5174 and 9333 are free first.
 - Ready when `curl -s http://127.0.0.1:9222/json` lists a page whose `url` contains `/overlay/index.html` (poll up to ~20 s), and `<scratch>/dev.log` shows `starting electron app` with no `Error`.
 - This checkout: `lsof -ti tcp:5173 | head -1 | xargs -I{} lsof -a -p {} -d cwd -Fn` prints this worktree's path.
 

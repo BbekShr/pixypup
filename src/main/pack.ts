@@ -14,6 +14,20 @@ export const MAX_FRAME_BYTES = 2 * 1024 * 1024;
 /** Frames and pet names become path segments; the renderer must never steer them out of the pack dir. */
 export const isPlainName = (n: string): boolean => n !== '' && n !== '.' && !/[/\\]|\.\./.test(n);
 
+/**
+ * A walk whose frames are all the same bytes (a failed sheet that fell back to one image) is no walk: drop it so the
+ * overlay improvises a bound. A real cycle, even `[c0, idle, c1, idle]`, has at least two distinct frames.
+ */
+export function dropStaticWalk(manifest: SpriteManifest, bytesByFile: Record<string, Buffer | undefined>): SpriteManifest {
+  const walk = manifest.poses['walk'];
+  if (!walk) return manifest;
+  const keys = new Set(walk.frames.map((f) => bytesByFile[f]?.toString('base64')));
+  if (keys.size > 1 || keys.has(undefined)) return manifest;
+  const poses = { ...manifest.poses };
+  delete poses['walk'];
+  return { ...manifest, poses };
+}
+
 export async function loadPack(dir: string): Promise<Pack | null> {
   try {
     const raw: unknown = JSON.parse(await readFile(join(dir, 'sprite-manifest.json'), 'utf8'));
@@ -24,13 +38,16 @@ export async function loadPack(dir: string): Promise<Pack | null> {
     if (poses.some((p) => !(p.footY > 0 && p.footY <= 1) || !Number.isFinite(p.fps) || p.fps < 0)) return null;
     const names = new Set(poses.flatMap((p) => p.frames));
     if (names.size > MAX_FRAMES) return null;
-    const frames: Record<string, string> = {};
+    const bytes: Record<string, Buffer> = {};
     for (const n of names) {
       if (!isPlainName(n) || !n.endsWith('.png')) return null;
       if ((await stat(join(dir, n))).size > MAX_FRAME_BYTES) return null;
-      frames[n] = `data:image/png;base64,${(await readFile(join(dir, n))).toString('base64')}`;
+      bytes[n] = await readFile(join(dir, n));
     }
-    return { manifest, frames };
+    const final = dropStaticWalk(manifest, bytes);
+    const frames: Record<string, string> = {};
+    for (const n of new Set(Object.values(final.poses).flatMap((p) => p.frames))) frames[n] = `data:image/png;base64,${bytes[n]!.toString('base64')}`;
+    return { manifest: final, frames };
   } catch {
     return null;
   }

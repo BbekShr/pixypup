@@ -1,8 +1,9 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { MAX_FRAME_BYTES, loadPack, pickPackDir } from './pack';
+import { MAX_FRAME_BYTES, dropStaticWalk, loadPack, pickPackDir } from './pack';
 
 const manifest = (frame: string) =>
   JSON.stringify({ pet: 'P', species: 'dog', poses: { idle: { frames: [frame], fps: 2, footY: 0.99 } } });
@@ -65,6 +66,39 @@ describe('loadPack', () => {
     expect(await loadPack(await mk(many))).toBeNull();
     expect(await loadPack(await mk(pose({}), { 'a.png': 'x'.repeat(MAX_FRAME_BYTES + 1) }))).toBeNull();
     expect(await loadPack(await mk(pose({}), { 'a.png': 'x'.repeat(MAX_FRAME_BYTES) }))).not.toBeNull();
+  });
+});
+
+describe('dropStaticWalk', () => {
+  const husky = fileURLToPath(new URL('./__fixtures__/husky', import.meta.url));
+  const pakkun = join(process.cwd(), 'assets/pets/Pakkun');
+
+  it('removes the husky walk, whose four frames are one image, and ships no walk frames', async () => {
+    const m = JSON.parse(await readFile(join(husky, 'sprite-manifest.json'), 'utf8'));
+    const bytes = Object.fromEntries(await Promise.all(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png'].map(async (n) => [n, await readFile(join(husky, n))] as const)));
+    expect(dropStaticWalk(m, bytes).poses['walk']).toBeUndefined();
+  });
+  it('loads the husky pack without a walk', async () => {
+    const husk = await mkdtemp(join(tmpdir(), 'husky-'));
+    for (const n of ['sprite-manifest.json', 'idle_0.png', 'side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']) await copyFile(join(husky, n), join(husk, n));
+    const m = JSON.parse(await readFile(join(husk, 'sprite-manifest.json'), 'utf8'));
+    m.poses = { idle: m.poses.idle, walk: m.poses.walk }; // the other poses' files are not in the fixture
+    await writeFile(join(husk, 'sprite-manifest.json'), JSON.stringify(m));
+    const p = await loadPack(husk);
+    expect(p?.manifest.poses['walk']).toBeUndefined();
+    expect(Object.keys(p?.frames ?? {})).toEqual(['idle_0.png']);
+  });
+  it('keeps a real four-frame walk (Pakkun)', async () => {
+    const p = await loadPack(pakkun);
+    expect(p?.manifest.poses['walk']?.frames).toHaveLength(4);
+    expect(p?.frames['side_3.png']).toBeDefined();
+  });
+  it('keeps a [c0, idle, c1, idle] cycle and drops one whose frames all equal idle', () => {
+    const pose = { fps: 8, footY: 1 };
+    const m = (frames: string[]) => ({ pet: 'P', species: 'dog' as const, poses: { idle: { frames: ['i.png'], ...pose }, walk: { frames, ...pose } } });
+    const bytes = { 'i.png': Buffer.from('i'), 'a.png': Buffer.from('a'), 'b.png': Buffer.from('b'), 'same.png': Buffer.from('i') };
+    expect(dropStaticWalk(m(['a.png', 'i.png', 'b.png', 'i.png']), bytes).poses['walk']).toBeDefined();
+    expect(dropStaticWalk(m(['same.png', 'i.png']), bytes).poses['walk']).toBeUndefined();
   });
 });
 

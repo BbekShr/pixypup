@@ -9,12 +9,17 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
-import type { PetFact, Personality, SpriteManifest } from '../../contracts/types.js';
+import type { MotionProfile, PetFact, Personality, SpriteManifest } from '../../contracts/types.js';
 import { validateManifest } from './manifest.js';
 import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
+import { motionProfile } from './motion-profile.js';
 import { breedFacts, meetPet } from './personality.js';
+import { posesFor, styleFor } from './pose-prompts.js';
+import { defaultProfile } from './profile-defaults.js';
 import { largest, maskAt, segment } from './sam.js';
+import { sliceComponents } from './slice-components.js';
+import { isStaticSheet } from './static-sheet.js';
 
 export { validateManifest };
 
@@ -22,55 +27,26 @@ export const MAGENTA = { r: 255, g: 0, b: 255 };
 const TARGET_HEIGHT = 256;
 const MARGIN = 2;
 
-export const STYLE =
-  'Render the exact same pet from the reference photo as a cute 3D animated-movie character, ' +
-  'Pixar-style: soft volumetric fur, gentle studio lighting with soft highlights, subtle ambient occlusion, ' +
-  'slightly stylised proportions (big expressive glossy eyes, rounded body), same breed, same fur colour and markings. ' +
-  'Full body visible, centred, nothing cropped. Thin clean white outline around the silhouette. ' +
-  'Solid flat pure magenta background (#FF00FF) filling the whole canvas, no gradient, ' +
-  'no ground shadow, no reflections, no props, no text. ' +
-  'Keep the same soft ears (same shape and how they hang), same face shape and same collar as the reference; ' +
-  'do not change the breed or ear shape. ' +
-  'Leave a clear margin of empty background on all four sides so nothing touches the canvas edge.';
-
-// idle_0 is generated first and fed back as a second reference so every other pose copies its character design.
-// A strict side profile: a 3/4 view with the head turned to the camera hides the legs, so no walk reads from it.
-// Earlier wording ("side view", "passing (legs under body)") came back 3/4 with a crouched hop for the passing frames.
-const SHEET =
-  "A horizontal sprite sheet of exactly 4 frames of this same character walking, drawn in strict side profile facing right: " +
-  "the camera is level and perpendicular to the body, we see the pet's left side, only one eye visible, " +
-  'the head points right in the walking direction and does not look at the camera. All four legs clearly visible and separated. ' +
-  'Frame 1: left front leg reaching forward and right hind leg reaching back. ' +
-  'Frame 2: legs passing under the body, one front paw slightly lifted, body at the same height as frame 1, back level, ' +
-  'not crouching, not jumping. Frame 3: right front leg forward and left hind leg back. Frame 4: legs passing under the body again. ' +
-  'Same size, same body height and same head position in every frame; only the legs move. ' +
-  'Evenly spaced in 4 equal columns with wide magenta gaps between frames.';
-
-// The sheet is one request so the four frames come out as one coherent cycle (separate calls copied each other).
-// idle_blink is a pure edit of the idle image: no STYLE prefix, it would invite a redraw.
-export const POSES: Record<string, string> = {
-  idle_0: 'Pose: standing on all four legs, side view facing right, tail relaxed.',
-  walk_sheet: SHEET,
-  sit: 'Pose: sitting upright facing the viewer, front paws together.',
-  sleep: 'Pose: curled up asleep lying down, eyes closed, side view.',
-  bark: 'Pose: barking happily, side view facing right, mouth open, ears perked.',
-  roll: 'Pose: rolling over on its back, belly up, paws in the air, playful.',
-  idle_blink:
-    'Edit this exact image: gently close the eyes in a blink. Change nothing else: same pose, same framing, ' +
-    'same size, same position, same lighting, same magenta background.',
-};
+export const STYLE = styleFor(defaultProfile('dog'));
+/** The dog prompts, for scripts and tests; a pack draws from its own profile (posesFor). */
+export const POSES = posesFor(defaultProfile('dog'));
 
 // Profile walk frames sit on their own, wider canvas (see layoutFrames); old packs' walk_0..3 are 3/4 view.
-export const SIDE_FRAMES = ['side_0', 'side_1', 'side_2', 'side_3'];
-const WALK_FRAMES = SIDE_FRAMES;
-const SIDE = new Set(SIDE_FRAMES);
-const POSE_NAMES = ['idle_0', ...WALK_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
+// 8 on the full 2x4 phase sheet (side_0 is the right-front contact, then down, pass, up, then the left side), 4 on the fallback.
+export const SIDE_FRAMES = Array.from({ length: 8 }, (_, i) => `side_${i}`);
+const WALK_ROWS = 2;
+// Front, front 3/4, side, back 3/4, back: the identity turnaround, sliced from one sheet.
+export const TURN_FRAMES = ['turn_front', 'turn_front34', 'turn_side', 'turn_back34', 'turn_back'];
+// Side and turn frames each share one scale and one wider canvas; every other pose is sized on its own.
+const group = (n: string) => (n.startsWith('side_') ? 's' : n.startsWith('turn_') ? 't' : 'm');
+const POSE_NAMES = ['idle_0', ...SIDE_FRAMES, ...TURN_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
 // Lying poses are sized by width, everything else by height.
 const LYING = new Set(['sleep', 'roll']);
 const BLINK_MIN_IOU = 0.85;
 
 export type PipelineEvent =
   | { stage: 'cutout'; png: Buffer }
+  | { stage: 'profile'; profile: MotionProfile }
   | { stage: 'pose'; name: string; png: Buffer; index: number; total: number; fallback?: boolean }
   | { stage: 'pose-failed'; name: string; error: string }
   | { stage: 'personality'; personality: Personality }
@@ -81,11 +57,11 @@ export interface PackOptions {
   client: MetaClient;
   photo: Buffer;
   petName: string;
-  species: 'dog' | 'cat';
+  species: string;
   outDir: string;
   onProgress?: (e: PipelineEvent) => void;
   /** Per-pose request timeout and retry back-off (x3 after HTTP 429); tests shrink these. */
-  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number };
+  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number; profileMs?: number };
 }
 
 export class NoPetFoundError extends Error {
@@ -248,12 +224,16 @@ export async function layoutFrames(
   const refMeta = await sharp(ref.png).metadata();
   const s = TARGET_HEIGHT / refMeta.height;
   const scaled: Record<string, { buf: Buffer; w: number; h: number }> = {};
-  const sides = Object.keys(keyed).filter((n) => SIDE.has(n));
-  const sideMax = Math.max(1, ...(await Promise.all(sides.map(async (n) => (await sharp((keyed[n] as KeyedFrame).png).metadata()).height))));
+  const maxH: Record<string, number> = {};
+  for (const [n, f] of Object.entries(keyed)) {
+    const g = group(n);
+    if (g !== 'm') maxH[g] = Math.max(maxH[g] ?? 1, (await sharp(f.png).metadata()).height);
+  }
   for (const [name, f] of Object.entries(keyed)) {
     const { width, height } = await sharp(f.png).metadata();
-    let k = SIDE.has(name) ? TARGET_HEIGHT / sideMax : LYING.has(name) ? (1.1 * refMeta.width * s) / width : TARGET_HEIGHT / height;
-    if (f.rawHeight && ref.rawHeight && !SIDE.has(name)) {
+    const g = group(name);
+    let k = g !== 'm' ? TARGET_HEIGHT / (maxH[g] as number) : LYING.has(name) ? (1.1 * refMeta.width * s) / width : TARGET_HEIGHT / height;
+    if (f.rawHeight && ref.rawHeight && g === 'm') {
       const est = (s * ref.rawHeight) / f.rawHeight;
       k = Math.min(1.6 * est, Math.max(0.6 * est, k));
     }
@@ -261,13 +241,14 @@ export async function layoutFrames(
     const h = Math.max(1, Math.round(height * k));
     scaled[name] = { buf: await sharp(f.png).resize(w, h).png().toBuffer(), w, h };
   }
-  const widest = (side: boolean) => Math.max(...Object.entries(scaled).filter(([n]) => SIDE.has(n) === side).map(([, f]) => f.w));
-  const width = widest(false);
-  const sideWidth = sides.length ? widest(true) : width;
+  const widest = (g: string) => Math.max(...Object.entries(scaled).filter(([n]) => group(n) === g).map(([, f]) => f.w));
+  const widths: Record<string, number> = { m: widest('m') };
+  for (const g of Object.keys(maxH)) widths[g] = widest(g);
+  const width = widths['m'] as number;
   const height = Math.max(...Object.values(scaled).map((f) => f.h)) + MARGIN;
   const frames: Record<string, Buffer> = {};
   for (const [name, f] of Object.entries(scaled)) {
-    const w = SIDE.has(name) ? sideWidth : width;
+    const w = widths[group(name)] as number;
     frames[name] = await sharp({
       create: { width: w, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
     })
@@ -326,18 +307,52 @@ export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0:
   return runs.every((r) => Math.abs(r.x1 - r.x0 + 1 - median) <= 0.35 * median) ? runs : null;
 }
 
-/** Cut a keyed walk sheet into its 4 frames, each trimmed to its own alpha rows. Throws on a bad sheet. */
-export async function sheetFrames(k: Keyed): Promise<KeyedFrame[]> {
+/** Cut a keyed sheet into n frames in reading order (`rows` > 1: a grid). By connected components, else by columns when bodies are merged. Throws on a bad sheet. */
+export async function sheetFrames(k: Keyed, n = 4, rows = 1): Promise<KeyedFrame[]> {
   const { data, info } = await sharp(k.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const runs = sliceSheet(data, info.width, info.height, WALK_FRAMES.length);
+  const raw = (c: { data: Buffer; width: number; height: number }) =>
+    sharp(c.data, { raw: { width: c.width, height: c.height, channels: 4 } }).png().toBuffer();
+  const crops = sliceComponents(data, info.width, info.height, n, rows);
+  if (crops) return Promise.all(crops.map(async (c) => ({ png: await raw(c) })));
+  const bands = rows === 1 ? [data] : rowBands(data, info.width, info.height, rows);
+  if (!bands) throw new BadOutputError('bad sheet');
+  const cols = n / rows;
+  return (await Promise.all(bands.map((band) => cutColumns(band, info.width, band.length / 4 / info.width, cols)))).flat();
+}
+
+/** Split a grid sheet into row bands at the emptiest pixel row near each row boundary; null when no row is empty enough. */
+function rowBands(rgba: Buffer, w: number, h: number, rows: number): Buffer[] | null {
+  const count: number[] = [];
+  for (let y = 0; y < h; y++) {
+    let c = 0;
+    for (let x = 0; x < w; x++) if ((rgba[(y * w + x) * 4 + 3] as number) >= 32) c++;
+    count.push(c);
+  }
+  const max = Math.max(...count);
+  const cuts = [0];
+  for (let r = 1; r < rows; r++) {
+    const mid = Math.round((r * h) / rows);
+    const span = Math.round((0.15 * h) / rows);
+    let best = mid;
+    for (let y = mid - span; y <= mid + span; y++) if ((count[y] as number) < (count[best] as number)) best = y;
+    if ((count[best] as number) > 0.05 * max) return null;
+    cuts.push(best);
+  }
+  cuts.push(h);
+  return cuts.slice(0, -1).map((y0, i) => rgba.subarray(y0 * w * 4, (cuts[i + 1] as number) * w * 4));
+}
+
+/** The column cut: each frame trimmed to its own alpha rows. */
+async function cutColumns(data: Buffer, width: number, height: number, n: number): Promise<KeyedFrame[]> {
+  const runs = sliceSheet(data, width, height, n);
   if (!runs) throw new BadOutputError('bad sheet');
   return Promise.all(
     runs.map(async (r) => {
-      const slice = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
-        .extract({ left: r.x0, top: 0, width: r.x1 - r.x0 + 1, height: info.height })
+      const slice = await sharp(data, { raw: { width, height, channels: 4 } })
+        .extract({ left: r.x0, top: 0, width: r.x1 - r.x0 + 1, height })
         .raw()
         .toBuffer({ resolveWithObject: true });
-      let y0 = info.height;
+      let y0 = height;
       let y1 = -1;
       for (let i = 3; i < slice.data.length; i += 4) {
         if ((slice.data[i] as number) === 0) continue;
@@ -345,7 +360,7 @@ export async function sheetFrames(k: Keyed): Promise<KeyedFrame[]> {
         y0 = Math.min(y0, y);
         y1 = Math.max(y1, y);
       }
-      const png = await sharp(slice.data, { raw: { width: slice.info.width, height: info.height, channels: 4 } })
+      const png = await sharp(slice.data, { raw: { width: slice.info.width, height, channels: 4 } })
         .extract({ left: 0, top: y0, width: slice.info.width, height: y1 - y0 + 1 })
         .png()
         .toBuffer();
@@ -430,6 +445,19 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     emit({ stage: 'facts', facts: f });
   })().catch(() => undefined);
 
+  // Poses are drawn from the profile, so it is awaited (12 s at most); Spark failing or running late means the species default.
+  const profileMs = o.timing?.profileMs ?? 12_000;
+  const profile = await new Promise<MotionProfile | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), profileMs);
+    motionProfile(o.client, cutout, o.petName, o.species, AbortSignal.any([spark.signal, AbortSignal.timeout(profileMs)])).then(
+      (p) => (clearTimeout(timer), resolve(p)),
+      () => (clearTimeout(timer), resolve(null)),
+    );
+  }).then((p) => p ?? defaultProfile(o.species));
+  emit({ stage: 'profile', profile });
+  const style = styleFor(profile);
+  const poses = posesFor(profile);
+
   const keyed = await (async () => {
   const cutoutOnMagenta = dataUrl(await sharp(cutout).flatten({ background: MAGENTA }).png().toBuffer());
 
@@ -451,14 +479,15 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       clearTimeout(timer);
     }
   };
-  const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>) => {
+  const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>, retry = true) => {
     const prompt =
       name === 'idle_blink'
-        ? POSES[name]!
-        : `${STYLE} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
+        ? poses[name]!
+        : `${style} ${poses[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '') + (refs.length > 2 ? ' The third image shows the same character from every angle; keep it consistent with those views.' : '');
     try {
       return await attempt(prompt, refs, finish);
     } catch (first) {
+      if (!retry) throw first;
       const wait = (first instanceof MetaApiError && first.status === 429 ? 3 : 1) * backoffMs;
       await new Promise((r) => setTimeout(r, wait));
       return await attempt(prompt, refs, finish);
@@ -476,28 +505,69 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const idleRaw = dataUrl(idleDraw.img.buffer, idleDraw.img.mime);
 
   const keyed: Record<string, KeyedFrame> = { idle_0: idle };
-  // On failure every name in `names` falls back to the idle frame (a missing walk/blink is harmless, a bad one is not).
-  const run = async (names: string[], go: () => Promise<KeyedFrame[]>) => {
+  // On failure every name in `names` falls back to the idle frame (a missing blink is harmless, a bad one is not).
+  // `omit`: nothing is stored and the pose stays out of the pack (a walk made of idle frames glides); the UI still gets idle as the preview.
+  const run = async (names: string[], go: () => Promise<KeyedFrame[]>, omit?: string) => {
     let failure: string | null = null;
     try {
       const out = await go();
+      names = names.slice(0, out.length); // a fallback walk has fewer frames than the full sheet
       names.forEach((n, i) => (keyed[n] = out[i] as KeyedFrame));
     } catch (err) {
-      names.forEach((n) => (keyed[n] = idle));
+      if (!omit) names.forEach((n) => (keyed[n] = idle));
       failure = reason(err, (err as { timedOut?: boolean }).timedOut === true);
     }
     for (const n of names) {
       if (failure) emit({ stage: 'pose-failed', name: n, error: failure });
-      poseEvent(n, (keyed[n] as KeyedFrame).png, failure ? true : undefined);
+      poseEvent(n, (keyed[n] ?? idle).png, failure ? true : undefined);
     }
+    if (failure && omit) emit({ stage: 'pose-failed', name: omit, error: failure });
   };
-  const refs = [cutoutOnMagenta, idleRaw];
-  const sheet = async (_img: unknown, k: Keyed) => sheetFrames(k);
+  // One sheet of five views; later poses see it as an extra reference so every angle agrees. Failure just skips it.
+  let turnRaw: string | undefined;
+  await run(
+    TURN_FRAMES,
+    async () => {
+      const t = await draw('turn_sheet', [cutoutOnMagenta, idleRaw], async (img, k) => ({ frames: await sheetFrames(k, TURN_FRAMES.length), raw: dataUrl(img.buffer, img.mime) }));
+      turnRaw = t.raw;
+      return t.frames;
+    },
+    'turn',
+  );
+  const refs = [cutoutOnMagenta, idleRaw, ...(turnRaw ? [turnRaw] : [])];
+  const sheet = (n: number, rows: number) => async (_img: unknown, k: Keyed) => {
+    const frames = await sheetFrames(k, n, rows);
+    if (await isStaticSheet(frames)) throw new BadOutputError('static sheet');
+    return frames;
+  };
+  // Stride, stand, stride, stand; the stand frames are idle on the walk canvas.
+  const pair = async (_img: unknown, k: Keyed) => {
+    const [a, b] = await sheetFrames(k, 2);
+    return [a as KeyedFrame, idle, b as KeyedFrame, idle];
+  };
+  // Walk: the 8-phase grid (2 tries), then the old 4-frame sheet (1 try), then two contact poses (1 try), then no walk.
+  // Other cycle kinds: their 4-frame sheet (2 tries), then the pair. Worst case 4 walk calls.
+  const walk = async () => {
+    const tries: (() => Promise<KeyedFrame[]>)[] =
+      profile.cycle.kind === 'walk'
+        ? [() => draw('walk_sheet8', refs, sheet(8, WALK_ROWS)), () => draw('walk_sheet', refs, sheet(4, 1), false)]
+        : [() => draw('walk_sheet', refs, sheet(4, 1))];
+    tries.push(() => draw('walk_pair', refs, pair, false));
+    let first: unknown;
+    for (const t of tries) {
+      try {
+        return await t();
+      } catch (err) {
+        first ??= err;
+      }
+    }
+    throw first;
+  };
   await Promise.all([
-    run(WALK_FRAMES, () => draw('walk_sheet', refs, sheet)),
+    run(SIDE_FRAMES, walk, 'walk'),
     ...['sit', 'sleep', 'bark', 'roll'].map((n) => run([n], async () => [await draw(n, refs, single)])),
     run(['idle_blink'], async () => [
-      await draw('idle_blink', [idleRaw], async (img, k) => {
+      await draw('idle_blink', [idleRaw, ...(turnRaw ? [turnRaw] : [])], async (img, k) => {
         if (bboxIoU(k.box, idleDraw.k.box) < BLINK_MIN_IOU) throw new BadOutputError('blink moved');
         return single(img, k);
       }),
@@ -517,9 +587,12 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const manifest: SpriteManifest = {
     pet: o.petName,
     species: o.species,
+    profile,
     poses: {
       idle: pose(['idle_0.png'], 2),
-      walk: pose(SIDE_FRAMES.map((f) => `${f}.png`), 8),
+      // side_0 is a contact pose (a front leg fully forward); on the 8-frame sheet it is the right-front contact, then down, pass, up, then the left side.
+      ...(keyed['side_0'] ? { walk: pose(SIDE_FRAMES.filter((f) => keyed[f]).map((f) => `${f}.png`), 8) } : {}),
+      ...(keyed['turn_front'] ? { turn: pose(TURN_FRAMES.map((f) => `${f}.png`), 1) } : {}),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),
       bark: pose(['bark.png'], 4),

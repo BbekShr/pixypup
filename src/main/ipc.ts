@@ -30,5 +30,10 @@ export const IPC = {
   obFinished: 'pixy:ob-finished',
   obPersonality: 'pixy:ob-personality',
   obFacts: 'pixy:ob-facts',
+  obStepsFailed: 'pixy:ob-steps-failed',
   obOpenSource: 'pixy:ob-open-source',
+  overloadStart: 'pixy:overload-start',
+  overloadCursor: 'pixy:overload-cursor',
+  overloadDone: 'pixy:overload-done',
+  overloadStarted: 'pixy:overload-started',
 } as const;

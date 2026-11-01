@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, fall, gait, headX, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -10,13 +10,6 @@ describe('layout', () => {
 });
 
 describe('motion', () => {
-  it('eases in, cruises at max, eases out, never stalls', () => {
-    expect(walkSpeed(0, 500)).toBe(8);
-    expect(walkSpeed(150, 500)).toBeCloseTo(MAX_SPEED / 2);
-    expect(walkSpeed(2000, 500)).toBe(MAX_SPEED);
-    expect(walkSpeed(2000, 5)).toBeLessThan(MAX_SPEED / 2);
-    expect(walkSpeed(2000, 0)).toBeGreaterThan(0);
-  });
   it('wander targets are 120-400 px away and inside the window', () => {
     for (const [x, r1, r2] of [[500, 0, 0], [500, 1, 1], [10, 0, 0.5], [900, 1, 0.5], [0, 0.9, 0]] as const) {
       const t = pickTarget(x, 1000, 500, r1, r2);
@@ -36,11 +29,6 @@ describe('motion', () => {
     expect(walkFrame(40, 2, 20)).toBe(0);
     expect(walkFrame(79, 4, 20)).toBe(3);
     expect(walkFrame(80, 4, 20)).toBe(0);
-  });
-  it('bob is 0 at a footfall, 4 px up mid-stride, and frozen when standing still', () => {
-    expect(bob(0, 20)).toBeCloseTo(0);
-    expect(bob(20, 20)).toBeCloseTo(0);
-    expect(bob(10, 20)).toBeCloseTo(-4);
   });
   it('leans toward the travel direction and the transform keeps that sign when mirrored', () => {
     expect(lean(1)).toBe(2);
@@ -71,34 +59,143 @@ describe('motion', () => {
   });
 });
 
-describe('fall', () => {
-  const run = (lift: number) => {
-    let l = lift, v = 0, impacts = 0, maxV = 0, peak = 0, steps = 0, settled = false;
-    while (!settled && steps++ < 1000) {
-      const r = fall(l, v, 1 / 60);
-      l = r.lift; v = r.vy; settled = r.settled;
-      if (r.impact) impacts++;
-      maxV = Math.max(maxV, v);
-      if (impacts) peak = Math.max(peak, -l);
+describe('airStep', () => {
+  const run = (lift: number, vx = 0, maxX = 1000, x = 500) => {
+    let b = { x, lift, vx, vy: 0 };
+    const apexes: number[] = [];
+    let steps = 0, maxV = 0, settled = false, minX = x, maxSeen = x;
+    const speeds: number[] = [];
+    while (!settled && steps++ < 2000) {
+      const r = airStep(b, 1 / 60, maxX, 1e9);
+      if (b.vy < 0 && r.vy >= 0) apexes.push(-r.lift);
+      b = r;
+      settled = r.settled;
+      maxV = Math.max(maxV, r.vy);
+      minX = Math.min(minX, r.x);
+      maxSeen = Math.max(maxSeen, r.x);
+      speeds.push(r.vx);
     }
-    return { l, impacts, maxV, peak, steps, settled };
+    return { b, apexes, steps, maxV, settled, minX, maxSeen, speeds };
   };
-  it('lands on the floor from anywhere, with speed capped, one impact and a ~12 px bounce', () => {
-    const r = run(-700);
+  it('a 600 px drop bounces at least twice, each apex lower, and settles in bounded time', () => {
+    const r = run(-600);
     expect(r.settled).toBe(true);
-    expect(r.l).toBe(0);
-    expect(r.impacts).toBe(1);
+    expect(r.b.lift).toBe(0);
+    expect(r.apexes.length).toBeGreaterThanOrEqual(2);
+    r.apexes.slice(1).forEach((a, i) => expect(a).toBeLessThan(r.apexes[i]!));
+    expect(r.steps).toBeLessThan(240);
     expect(r.maxV).toBeLessThanOrEqual(1400);
-    expect(r.peak).toBeGreaterThan(8);
-    expect(r.peak).toBeLessThan(14);
   });
-  it('a tiny drop settles without an impact bounce', () => {
-    const r = run(-3);
-    expect(r.impacts).toBe(0);
-    expect(r.settled).toBe(true);
+  it('a 10 px drop barely bounces', () => {
+    expect(Math.max(0, ...run(-10).apexes)).toBeLessThan(2);
   });
   it('a pet below the floor is pulled back to it', () => {
-    expect(run(50).l).toBe(0);
+    expect(run(50).b.lift).toBe(0);
+  });
+  it('a throw at the wall stays inside [0, maxX] and comes back slower', () => {
+    const r = run(-100, 1500, 700, 600);
+    expect(r.minX).toBeGreaterThanOrEqual(0);
+    expect(r.maxSeen).toBeLessThanOrEqual(700);
+    const hit = r.speeds.findIndex((v) => v < 0);
+    expect(hit).toBeGreaterThan(0);
+    expect(Math.abs(r.speeds[hit]!)).toBeLessThan(1500);
+  });
+  it('an upward flick bounces off the top of the window, but a pet spawned above it falls in', () => {
+    let b = { x: 100, lift: -50, vx: 0, vy: -1600 };
+    let top = 0;
+    for (let i = 0; i < 300; i++) { b = airStep(b, 1 / 60, 500, 300); top = Math.min(top, b.lift); }
+    expect(top).toBeGreaterThanOrEqual(-300);
+    const spawn = airStep({ x: 100, lift: -900, vx: 0, vy: 0 }, 1 / 60, 500, 300);
+    expect(spawn.lift).toBeGreaterThan(-900);
+  });
+  it('a floor slide slows monotonically to rest', () => {
+    let b = { x: 100, lift: 0, vx: 600, vy: 0 };
+    let prev = 600, steps = 0;
+    for (; steps < 600; steps++) {
+      const r = airStep(b, 1 / 60, 5000, 1e9);
+      expect(Math.abs(r.vx)).toBeLessThanOrEqual(prev);
+      prev = Math.abs(r.vx);
+      b = r;
+      if (r.settled) break;
+    }
+    expect(b.vx).toBe(0);
+    expect(b.x).toBeGreaterThan(100);
+    expect(steps).toBeLessThan(120);
+  });
+});
+
+describe('releaseVelocity', () => {
+  const flick = (v: number, until = 1000) => Array.from({ length: 10 }, (_, i) => ({ x: (v * (i * 16)) / 1000, y: 0, t: until - (9 - i) * 16 }));
+  it('a steady flick returns its speed', () => {
+    expect(releaseVelocity(flick(800), 1005).vx).toBeGreaterThan(720);
+    expect(releaseVelocity(flick(800), 1005).vx).toBeLessThan(880);
+  });
+  it('a pointer held still before release returns 0', () => {
+    expect(releaseVelocity(flick(800), 1100)).toEqual({ vx: 0, vy: 0 });
+  });
+  it('huge flicks are clamped', () => {
+    const v = releaseVelocity(flick(20000), 1005);
+    expect(Math.hypot(v.vx, v.vy)).toBeLessThanOrEqual(1600.001);
+  });
+});
+
+describe('dangle', () => {
+  it('lags a hand accelerating right (negative first), settles when left alone, never passes the clamp', () => {
+    let s = { angle: 0, omega: 0 };
+    s = dangle(s, 5000, 1 / 60, 60);
+    expect(s.angle).toBeLessThan(0);
+    let worst = 0;
+    for (let i = 0; i < 20; i++) { s = dangle(s, 100000, 1 / 60, 60); worst = Math.max(worst, Math.abs(s.angle)); }
+    expect(worst).toBeLessThanOrEqual(35);
+    s = { angle: 25, omega: 0 };
+    for (let i = 0; i < 180; i++) s = dangle(s, 0, 1 / 60, 60);
+    expect(Math.abs(s.angle)).toBeLessThan(0.5);
+  });
+});
+
+describe('pivotShift', () => {
+  it.each([1, -1])('keeps the grab point fixed under rotation (flip %i)', (flip) => {
+    const g = { x: 30, y: -40 }; // local grab point from the origin
+    const q = { x: g.x * flip * 1.1, y: g.y * 0.95 }; // where scale(flip*sx, sy) puts it on screen
+    for (const deg of [-35, -8, 12, 35]) {
+      const t = pivotShift(q.x, q.y, deg);
+      const r = (deg * Math.PI) / 180;
+      expect(t.dx + Math.cos(r) * q.x - Math.sin(r) * q.y).toBeCloseTo(q.x, 6);
+      expect(t.dy + Math.sin(r) * q.x + Math.cos(r) * q.y).toBeCloseTo(q.y, 6);
+    }
+  });
+});
+
+describe('dangle soft limit', () => {
+  it('a fast 200 px / 150 ms hand move peaks short of the stop and turns around smoothly', () => {
+    const dt = 1 / 60;
+    let s = { angle: 0, omega: 0 }, x = 0, hv = 0, peak = 0, turned = false;
+    for (let i = 0; i < 90; i++) {
+      const u = Math.min(1, (i + 1) / 9);
+      const nx = 200 * (3 * u * u - 2 * u ** 3);
+      const v = hv + ((nx - x) / dt - hv) * 0.5; // the overlay's hand smoothing
+      const ax = Math.max(-30000, Math.min(30000, (v - hv) / dt));
+      x = nx;
+      hv = v;
+      const prev = s;
+      s = dangle(s, ax, dt, 60);
+      peak = Math.max(peak, Math.abs(s.angle));
+      expect(Math.abs(s.angle)).toBeLessThan(35);
+      if (prev.omega * s.omega < 0) turned = true; // omega passes through 0 instead of being zeroed
+      if (Math.abs(prev.angle) > 10 && s.omega === 0) throw new Error('omega zeroed mid-swing');
+    }
+    expect(peak).toBeGreaterThan(10);
+    expect(peak).toBeLessThan(30);
+    expect(turned).toBe(true);
+  });
+});
+
+describe('landSquash', () => {
+  it('dips more for harder impacts and returns to 1', () => {
+    expect(landSquash(0, 200)).toBeGreaterThan(landSquash(0, 800));
+    expect(landSquash(0, 800)).toBeGreaterThan(landSquash(0, 1400));
+    expect(landSquash(0, 1400)).toBeGreaterThanOrEqual(0.75);
+    expect(landSquash(220, 1400)).toBe(1);
   });
 });
 
@@ -110,13 +207,75 @@ describe('blink', () => {
   });
 });
 
-describe('walkSpeed cap', () => {
-  it('a custom max is reached and never exceeded, and still arrives', () => {
-    expect(walkSpeed(2000, 500, 126)).toBe(126);
-    expect(walkSpeed(2000, 500, 54)).toBe(54);
-    expect(walkSpeed(2000, 0.1, 54)).toBeGreaterThanOrEqual(8);
+describe('walkStep', () => {
+  const walk = (px: number, vMax = MAX_SPEED) => {
+    let v = 0, x = 0, t = 0, top = 0;
+    while (px - x >= 1 && t < 60) {
+      v = walkStep(v, px - x, vMax, 1 / 60);
+      x += Math.min(v / 60, px - x);
+      t += 1 / 60;
+      top = Math.max(top, v);
+    }
+    return { t, v, x, top };
+  };
+  it('accelerates from rest to vMax in about vMax/A seconds, never jumping or exceeding it', () => {
+    let v = 0;
+    let t = 0;
+    for (; v < MAX_SPEED && t < 5; t += 1 / 60) {
+      const n = walkStep(v, 10000, MAX_SPEED, 1 / 60);
+      expect(n - v).toBeLessThanOrEqual((WALK_ACCEL * MAX_SPEED) / MAX_SPEED / 60 + 8 + 1e-9);
+      expect(n).toBeLessThanOrEqual(MAX_SPEED);
+      v = n;
+    }
+    expect(t).toBeGreaterThan((MAX_SPEED / WALK_ACCEL) * 0.8);
+    expect(t).toBeLessThan((MAX_SPEED / WALK_ACCEL) * 1.3);
   });
-  it('display width follows the chosen height', () => {
+  it.each([50, 200, 600])('a %d px walk arrives in bounded time, without overshoot, slowly', (px) => {
+    for (const vMax of [54, MAX_SPEED, 126]) {
+      const r = walk(px, vMax);
+      expect(r.x).toBeLessThanOrEqual(px);
+      expect(px - r.x).toBeLessThan(1); // the overlay arrives within 1 px
+      expect(r.t).toBeLessThan(px / vMax + 3);
+      expect(r.v).toBeLessThan(30 * Math.max(1, vMax / MAX_SPEED)); // within a pixel of the target: a third of cruise or less
+    }
+  });
+  it('a short walk never reaches vMax', () => {
+    expect(walk(20).top).toBeLessThan(MAX_SPEED);
+    expect(walk(600).top).toBe(MAX_SPEED);
+  });
+  it('still moves when almost there', () => {
+    expect(walkStep(0, 0, MAX_SPEED, 1 / 60)).toBeGreaterThan(0);
+  });
+});
+
+describe('turnScale', () => {
+  it('goes from +1 to -1 monotonically, crossing the sign once and never a zero-width sliver', () => {
+    const v = Array.from({ length: 101 }, (_, i) => turnScale(i * 3.8, 380));
+    expect(v[0]).toBe(1);
+    expect(v[100]).toBe(-1);
+    v.forEach((a, i) => {
+      expect(Math.abs(a)).toBeGreaterThanOrEqual(TURN_FLOOR);
+      if (i) expect(a).toBeLessThanOrEqual(v[i - 1]!);
+    });
+    expect(v.filter((a, i) => i && Math.sign(a) !== Math.sign(v[i - 1]!)).length).toBe(1);
+  });
+});
+
+describe('lean', () => {
+  it('is LEAN_DEG at steady speed, more when speeding up, less or negative when braking, and clamped', () => {
+    expect(lean(1, 1, 0)).toBe(LEAN_DEG);
+    expect(lean(1, 0.3, 1)).toBeGreaterThan(0);
+    expect(lean(1, 1, 1)).toBeGreaterThan(lean(1, 1, 0));
+    expect(lean(1, 1, -0.86)).toBeLessThan(lean(1, 1, 0));
+    expect(lean(1, 0.2, -0.86)).toBeLessThan(0);
+    expect(lean(1, 1, 50)).toBe(4);
+    expect(lean(-1, 1, 50)).toBe(-4);
+    expect(lean(-1, 1, 0)).toBe(-LEAN_DEG);
+  });
+});
+
+describe('display width', () => {
+  it('follows the chosen height', () => {
     expect(displayWidth(200, 100, 180)).toBe(360);
     expect(displayWidth(200, 100, 110)).toBe(220);
   });
@@ -144,21 +303,34 @@ describe('frame registration', () => {
   });
 });
 
-describe('gait, bark, settle', () => {
-  it('squashes at each footfall, stretches mid-stride, rocks the other way every step', () => {
-    expect(gait(0, 20).sy).toBeCloseTo(0.985);
-    expect(gait(10, 20).sy).toBeCloseTo(1.015);
-    expect(gait(10, 20).sx).toBeLessThan(1);
-    expect(gait(10, 20).rot).toBeCloseTo(1.2);
-    expect(gait(30, 20).rot).toBeCloseTo(-1.2);
-    expect(gait(10, 20).dy).toBe(bob(10, 20));
+describe('boundGait', () => {
+  const H = 100;
+  const stride = 20;
+  const samples = Array.from({ length: 200 }, (_, i) => boundGait((i / 200) * stride, stride, H));
+  it('leaves the ground by at least 0.05h once per stride and is grounded at each footfall', () => {
+    expect(Math.max(...samples.map((s) => -s.dy))).toBeGreaterThanOrEqual(0.05 * H);
+    expect(Math.max(...samples.map((s) => -s.dy))).toBeLessThanOrEqual(0.07 * H + 1e-9);
+    expect(boundGait(0, stride, H).dy).toBeCloseTo(0);
+    expect(boundGait(stride, stride, H).dy).toBeCloseTo(0);
+    expect(boundGait(3 * stride, stride, H).dy).toBeCloseTo(0);
   });
-  it('adds only a light footfall and no rock to a drawn side-on cycle', () => {
-    expect(gait(10, 20, true).rot).toBe(0);
-    expect(gait(30, 20, true).rot).toBe(0);
-    expect(gait(10, 20, true).dy).toBeCloseTo(0.4 * bob(10, 20));
-    expect(gait(10, 20, true).sy).toBeCloseTo(1.006);
+  it('stretches mid-air, squashes on landing, keeps volume, and pitches forward at push-off', () => {
+    expect(boundGait(10, stride, H).sy).toBeCloseTo(1.06);
+    expect(boundGait(0, stride, H).sy).toBeCloseTo(0.92);
+    for (const s of samples) expect(s.sx * s.sy).toBeCloseTo(1);
+    const rot = samples.map((s) => s.rot);
+    expect(Math.max(...rot)).toBeGreaterThan(3);
+    expect(Math.max(...rot)).toBeLessThan(4.5);
   });
+  it('does not bounce a body that has not moved', () => {
+    const still = boundGait(7 * stride, stride, H); // stopped on a footfall: the same pose every frame, nothing airborne
+    expect(Math.abs(still.dy)).toBeLessThan(1e-9);
+    expect(Math.abs(still.rot)).toBeLessThan(1e-9);
+    expect(boundGait(7 * stride, stride, H)).toEqual(still);
+  });
+});
+
+describe('bark, settle', () => {
   it('each woof winds up (nose down, crouch) then pops (nose up, chest up), and is calm between bursts', () => {
     const wind = barkPose(140);
     expect(wind.rot).toBeLessThan(0);
@@ -188,5 +360,152 @@ describe('gait, bark, settle', () => {
     expect(envelope(500, 1000)).toBeCloseTo(1);
     expect(envelope(1000, 1000)).toBe(0);
     expect(envelope(250, 1000)).toBeCloseTo(0.5);
+  });
+});
+
+describe('mirror', () => {
+  const D = 380;
+  const settled: Mirror = { from: -1, to: 1, at: -Infinity };
+
+  it('a full turn goes from -> to with one sign change', () => {
+    const m = steer(settled, -1, 1000, D);
+    const v = Array.from({ length: 39 }, (_, i) => mirrorScale(m, 1000 + i * 10, D));
+    expect(v[0]).toBe(1);
+    expect(v.filter((a, i) => i && Math.sign(a) !== Math.sign(v[i - 1]!))).toHaveLength(1);
+    expect(mirrorScale(m, 1000 + D, D)).toBe(-1);
+    expect(mirrorScale(m, 5000, D)).toBe(-1);
+  });
+
+  it('want === to is a no-op', () => {
+    expect(steer(settled, 1, 50, D)).toBe(settled);
+    const m = steer(settled, -1, 0, D);
+    expect(steer(m, -1, 100, D)).toBe(m);
+  });
+
+  it('a reversal at any point does not jump, and ends at the original facing', () => {
+    const step = Math.max(...Array.from({ length: 38 }, (_, i) => Math.abs(turnScale((i + 1) * 10, D) - turnScale(i * 10, D))));
+    for (const e of [1, 40, 95, 150, 189, 191, 230, 300, 379]) {
+      const t0 = 1000;
+      const m = steer(settled, -1, t0, D);
+      const before = mirrorScale(m, t0 + e - 1, D);
+      const r = steer(m, 1, t0 + e, D);
+      const after = mirrorScale(r, t0 + e, D);
+      expect(Math.abs(after - before)).toBeLessThanOrEqual(step + 1e-9);
+      expect(mirrorScale(r, t0 + e + D, D)).toBe(1);
+    }
+  });
+
+  it('durMs 0 is instant', () => {
+    const m = steer(settled, -1, 10, 0);
+    expect(mirrorScale(m, 10, 0)).toBe(-1);
+    expect(mirrorScale(steer(m, 1, 11, 0), 11, 0)).toBe(1);
+  });
+});
+
+describe('hopTurn', () => {
+  const us = Array.from({ length: 101 }, (_, i) => i / 100);
+
+  it('is symmetric in u <-> 1-u', () => {
+    for (const u of us) {
+      const a = hopTurn(u, 8);
+      const b = hopTurn(1 - u, 8);
+      expect(a.dy).toBeCloseTo(b.dy, 9);
+      expect(a.sx).toBeCloseTo(b.sx, 9);
+      expect(a.sy).toBeCloseTo(b.sy, 9);
+    }
+  });
+
+  it('has the feet down at both ends, the apex at 0.5, and no air at height 0', () => {
+    expect(hopTurn(0, 8).dy).toBeCloseTo(0, 9);
+    expect(hopTurn(1, 8).dy).toBeCloseTo(0, 9);
+    expect(Math.min(...us.map((u) => hopTurn(u, 8).dy))).toBe(hopTurn(0.5, 8).dy);
+    expect(hopTurn(0.5, 8).dy).toBeCloseTo(-8, 9);
+    expect(us.every((u) => hopTurn(u, 0).dy === 0)).toBe(true);
+    expect(hopTurn(0.075, 0).sy).toBeCloseTo(0.92, 9);
+  });
+
+  it('a reversal at any point does not jump the composed body', () => {
+    const D = 300;
+    const f = (m: Mirror, t: number) => hopTurn(mirrorProgress(m, t, D), 8);
+    const base = steer({ from: -1, to: 1, at: -Infinity }, -1, 1000, D);
+    let step = 0;
+    for (let t = 1000; t < 1000 + D; t++) step = Math.max(step, Math.abs(f(base, t + 1).dy - f(base, t).dy), 8 * Math.abs(f(base, t + 1).sy - f(base, t).sy));
+    for (const e of [1, 20, 45, 100, 149, 151, 200, 255, 299]) {
+      const r = steer(base, 1, 1000 + e, D);
+      expect(Math.abs(f(r, 1000 + e).dy - f(base, 1000 + e - 1).dy)).toBeLessThanOrEqual(step + 1e-9);
+      expect(Math.abs(f(r, 1000 + e).sy - f(base, 1000 + e - 1).sy) * 8).toBeLessThanOrEqual(step + 1e-9);
+    }
+  });
+});
+
+describe('turnFrame', () => {
+  it('goes side, front34, front at the apex, front34, side', () => {
+    const seq = [0.05, 0.3, 0.5, 0.7, 0.95].map((u) => turnFrame(u).idx);
+    expect(seq).toEqual([TURN_SIDE, TURN_FRONT34, TURN_FRONT, TURN_FRONT34, TURN_SIDE]);
+  });
+  it('is symmetric under u -> 1-u', () => {
+    for (let u = 0; u <= 1; u += 0.01) expect(turnFrame(u).idx).toBe(turnFrame(1 - u).idx);
+  });
+  it('flips the mirror once, at the apex where the front is drawn', () => {
+    let flips = 0;
+    let prev = turnFrame(0);
+    for (let u = 0.001; u <= 1; u += 0.001) {
+      const f = turnFrame(u);
+      if (f.mirrorFromFacing !== prev.mirrorFromFacing) { flips++; expect(f.idx).toBe(TURN_FRONT); }
+      prev = f;
+    }
+    expect(flips).toBe(1);
+  });
+});
+
+describe('walkBody', () => {
+  const H = 140;
+  const dy = (p: number, g = gaitParams('walk')): number => walkBody(p, H, g).dy;
+  it('is lowest on the down phases and highest on the up phases', () => {
+    for (const p of [1 / 8, 5 / 8]) expect(dy(p)).toBeCloseTo(0.012 * H, 6);
+    for (const p of [3 / 8, 7 / 8]) expect(dy(p)).toBeCloseTo(-0.012 * H, 6);
+    for (const p of [0, 2 / 8, 4 / 8, 6 / 8]) expect(Math.abs(dy(p))).toBeLessThan(1e-9);
+  });
+  it('repeats every half cycle and is continuous across the wrap', () => {
+    for (let p = 0; p < 0.5; p += 0.01) {
+      expect(walkBody(p, H).dy).toBeCloseTo(walkBody(p + 0.5, H).dy, 9);
+      expect(walkBody(p, H).rot).toBeCloseTo(walkBody(p + 0.5, H).rot, 9);
+    }
+    expect(walkBody(0, H).dy).toBeCloseTo(walkBody(1 - 1e-9, H).dy, 6);
+  });
+  it('stays small: the frames already draw the legs', () => {
+    for (let p = 0; p <= 1; p += 0.01) {
+      const b = walkBody(p, H);
+      expect(Math.abs(b.dy)).toBeLessThanOrEqual(0.012 * H + 1e-9);
+      expect(Math.abs(b.rot)).toBeLessThanOrEqual(1.2 + 1e-9);
+      expect(b.sx * b.sy).toBeCloseTo(1, 9); // volume kept
+      expect(b.sy).toBeGreaterThanOrEqual(0.98 - 1e-9);
+    }
+  });
+  it('the spine rocks out of phase with the dip', () => {
+    expect(walkBody(0, H).rot).toBeCloseTo(1.2, 6);
+    expect(walkBody(1 / 8, H).rot).toBeCloseTo(0, 6);
+    expect(walkBody(2 / 8, H).rot).toBeCloseTo(-1.2, 6);
+  });
+});
+
+describe('gaits', () => {
+  it('a trot reaches further, bounces more and floats at the pass phases; a sneak is low, slow and nose-down', () => {
+    const [w, t, s] = [gaitParams('walk'), gaitParams('trot'), gaitParams('sniff')];
+    expect(t.reach).toBe(1.3);
+    expect(t.bounce).toBe(1.8);
+    expect(t.speed).toBe(2);
+    expect(walkBody(0.25, 140, t).dy).toBeLessThan(walkBody(0.25, 140, w).dy);
+    expect(s.speed).toBe(0.6);
+    expect(s.sy).toBe(0.95);
+    expect(walkBody(0.3, 140, s).sy).toBeLessThan(walkBody(0.3, 140, w).sy);
+    expect(walkBody(0.25, 140, s).rot).toBeLessThan(walkBody(0.25, 140, w).rot - 3.9);
+    expect(s.bounce).toBe(0.5);
+  });
+  it('the default dog profile reproduces the constants; other profiles scale and clamp', () => {
+    expect(profileScale({ bounce: 0.03, pitchDeg: 2 })).toEqual({ bounce: 1, pitch: 1 });
+    expect(profileScale(undefined)).toEqual({ bounce: 1, pitch: 1 });
+    expect(profileScale({ bounce: 0.15, pitchDeg: 40 })).toEqual({ bounce: 1.5, pitch: 1.5 });
+    expect(profileScale({ bounce: 0, pitchDeg: 0 })).toEqual({ bounce: 0.3, pitch: 0 });
   });
 });

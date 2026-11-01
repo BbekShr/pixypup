@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { execFile } from 'node:child_process';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,11 @@ import { shouldRegister, syncShortcut } from '../voice/listen';
 import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
+import { comeCommand } from '../overlay/call';
+import { headCrop } from './head-crop';
+import { addPet, MAX_PETS, petList, pickWindow, removePet, rekeyWins, routeReaction } from './pets';
 import { setupOnboarding } from './onboarding';
+import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
 import { startScreenLoop } from './screen-loop';
 import { setupScreenExplainer } from './screen-explainer';
@@ -25,18 +29,28 @@ import { getApiKey } from './secrets';
 import { hideLockedByAdmin, loadSettings, saveSettings, voiceLockedByAdmin } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
-let win: BrowserWindow | null = null;
+const wins = new Map<string, BrowserWindow>(); // one transparent overlay window per pet, keyed by folder slug
+const senderSlug = new WeakMap<Electron.WebContents, string>();
+const petSpecies = new Map<string, string>();
+const petNames = new Map<string, string>(); // slug -> display name, learnt as each pack loads
+const packEnergies = new Map<string, Energy>();
+const primarySlug = (): string => petList(settings)[0]!;
+/** The primary pet's window: screen reactions, voice and the debug panel go here. */
+const primary = (): BrowserWindow | null => wins.get(primarySlug()) ?? null;
+const allWins = (): BrowserWindow[] => [...wins.values()].filter((w) => !w.isDestroyed());
+const winOf = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): BrowserWindow | undefined => pickWindow(wins, senderSlug.get(e.sender));
 let tray: Tray | null = null;
-let trayIcon: Electron.NativeImage | null = null;
+let trayIcon: Electron.NativeImage | null = null; // the placeholder, used only while no pet's pack has loaded
 let trayIconDim: Electron.NativeImage | null = null;
+const petIcons = new Map<string, { icon: Electron.NativeImage; dim: Electron.NativeImage }>(); // slug -> its face for the menu bar
 let lastFailure: { text: string; at: number } | null = null; // the sniffed failure, in memory only, for a hint the user asks for
 let fakeScreen: ReturnType<typeof fakeReader> | undefined;
 let debugOn = false; // "Show what <name> sees": not persisted, resets each launch
 let stay = false; // mirrors the overlay's stay flag for the menu checkbox; not persisted
 
-function createWindow(): void {
+function createWindow(slug: string, enterDrop = false): void {
   const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
-  win = new BrowserWindow({
+  const win = new BrowserWindow({
     x,
     y,
     width,
@@ -57,27 +71,58 @@ function createWindow(): void {
   });
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.setIgnoreMouseEvents(true, { forward: true });
+  win.setIgnoreMouseEvents(true, { forward: true }); // every pet window starts, and after any menu returns to, click-through
   win.setContentProtection(settings.hideInShares);
+  wins.set(slug, win);
+  // A crashed or hung page can't toggle click-through itself: until it recovers, nothing on screen may swallow clicks.
+  for (const ev of ['render-process-gone', 'unresponsive'] as const) win.webContents.on(ev as 'render-process-gone', () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); });
+  senderSlug.set(win.webContents, slug);
+  win.on('closed', () => { if (wins.get(slug) === win) wins.delete(slug); });
 
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   // Dev rehearsal only: PIXY_CHATTY=1 makes the pet speak every ~5 s.
-  const search = !app.isPackaged && process.env['PIXY_CHATTY'] === '1' ? '?chatty=1' : '';
+  const q = new URLSearchParams({ pet: slug });
+  if (!app.isPackaged && process.env['PIXY_CHATTY'] === '1') q.set('chatty', '1');
+  if (enterDrop) q.set('enter', 'drop');
+  const search = `?${q.toString()}`;
   if (devUrl) void win.loadURL(`${devUrl}/overlay/index.html${search}`);
   else void win.loadFile(join(here, '../renderer/overlay/index.html'), { search });
+}
+
+const TRAY_H = 18;
+// Snoozed = a faded icon. The bitmap is premultiplied BGRA, so every byte scales, not just alpha.
+const fade = (px: Buffer, k: number): Buffer => Buffer.from(px.map((v) => Math.round(v * k)));
+
+/** Colour icon with a 2x representation so it is crisp on Retina. */
+function trayImage(src: Electron.NativeImage, k: number): Electron.NativeImage {
+  const one = src.resize({ height: TRAY_H });
+  const two = src.resize({ height: TRAY_H * 2 });
+  const [a, b] = [one.getSize(), two.getSize()];
+  const out = nativeImage.createFromBitmap(fade(one.toBitmap(), k), { width: a.width, height: a.height });
+  out.addRepresentation({ scaleFactor: 2, width: b.width, height: b.height, buffer: fade(two.toBitmap(), k) });
+  return out;
+}
+
+/** The menu-bar icon of a pet: its head, cropped from the idle frame. null when the frame can't be read. */
+function petTrayIcons(dataUrl: string): { icon: Electron.NativeImage; dim: Electron.NativeImage } | null {
+  const img = nativeImage.createFromDataURL(dataUrl);
+  if (img.isEmpty()) return null;
+  const { width, height } = img.getSize();
+  const px = img.toBitmap();
+  const r = headCrop(px.subarray(3), width, height, 4);
+  if (!r) return null;
+  const head = img.crop(r);
+  return { icon: trayImage(head, 1), dim: trayImage(head, 0.35) };
 }
 
 function createTray(): void {
   trayIcon = nativeImage
     .createFromPath(join(app.getAppPath(), 'assets/placeholder/pup.png'))
-    .resize({ height: 18 });
+    .resize({ height: TRAY_H });
   trayIconDim = trayIcon;
   if (!trayIcon.isEmpty()) {
-    // Snoozed = a faded icon. The bitmap is premultiplied BGRA, so every byte scales, not just alpha.
     const { width, height } = trayIcon.getSize();
-    const px = trayIcon.toBitmap();
-    for (let i = 0; i < px.length; i++) px[i] = Math.round(px[i]! * 0.35);
-    trayIconDim = nativeImage.createFromBitmap(px, { width, height });
+    trayIconDim = nativeImage.createFromBitmap(fade(trayIcon.toBitmap(), 0.35), { width, height });
   }
   tray = new Tray(trayIcon);
   tray.setToolTip('PixyPup');
@@ -97,12 +142,13 @@ function toNative(items: MenuItem[], run: (cmd: string) => void): MenuItemConstr
 }
 
 let settings = loadSettings(); // TODO(F1): feed settings to feature gates
-let packEnergy: Energy | undefined; // the loaded pet's own personality.energy
-let packPetName: string | undefined; // the loaded pet's display name, boosted as a speech keyword
 /** What the user called their pet (manifest), not the folder slug in settings. */
-const displayName = (): string => packPetName ?? settings.petName;
+const displayName = (): string => petNames.get(primarySlug()) ?? settings.petName; // the primary's own name, boosted as a speech keyword
+const speciesOf = (): string | undefined => petSpecies.get(primarySlug()); // so Spark's lines suit the pet
+const nameOf = (slug: string): string => petNames.get(slug) ?? slug;
 let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
+let overload: ReturnType<typeof setupOverload> | undefined;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
 let voiceExplainer: ReturnType<typeof setupScreenExplainer>;
 let voice: ReturnType<typeof createVoiceSession>;
@@ -110,17 +156,29 @@ let micWin: ReturnType<typeof setupMic>;
 let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech model when there is no key
 
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
-const prefs = (s = snoozed()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergy ?? 'normal', snoozed: s });
+const prefs = (s = snoozed(), slug = primarySlug()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergies.get(slug) ?? 'normal', snoozed: s });
+const menuPets = (): { slug: string; name: string }[] => petList(settings).map((slug) => ({ slug, name: nameOf(slug) }));
 const ACTIVATE_GRACE_MS = 2000;
 const MAX_TIMER = 2 ** 31 - 1; // setTimeout wraps to 1 ms above this
 // The checkbox shows what macOS says (the user can change it in System Settings); dev has no real login item.
 const loginOn = (): boolean => (app.isPackaged ? app.getLoginItemSettings().openAtLogin : settings.openAtLogin);
 
 /** Apply every effect of the current settings; the one place main reacts to a change. */
+/** Replace-mode onboarding changes the primary's slug: its window moves to the new key instead of being orphaned. */
+function rekeyPrimary(): void {
+  for (const [from, to] of rekeyWins(wins, petList(settings))) {
+    const w = wins.get(from)!;
+    wins.delete(from);
+    wins.set(to, w);
+    senderSlug.set(w.webContents, to);
+    for (const m of [petNames, petSpecies, petIcons, packEnergies] as Map<string, unknown>[]) m.delete(from);
+  }
+}
+
 function sync(): void {
+  rekeyPrimary();
   const s = snoozed();
-  win?.webContents.send(IPC.prefs, prefs(s));
-  win?.setContentProtection(settings.hideInShares);
+  for (const [slug, w] of wins) if (!w.isDestroyed()) { w.webContents.send(IPC.prefs, prefs(s, slug)); w.setContentProtection(settings.hideInShares); }
   onboarding.applyProtection();
   clearTimeout(wakeTimer);
   // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
@@ -130,23 +188,32 @@ function sync(): void {
   syncShortcut(globalShortcut, listen, () => { settings = loadSettings(); sync(); voice.press(); });
   if (listen) micWin.warm();
   else { voice.abort(); micWin.close(); }
-  tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName() }), run)));
+  const mine = petIcons.get(primarySlug());
+  tray?.setImage((s ? (mine?.dim ?? trayIconDim) : (mine?.icon ?? trayIcon)) ?? nativeImage.createEmpty());
+  tray?.setToolTip(`PixyPup \u00b7 ${nameOf(primarySlug())}`);
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets() }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
-function run(cmd: string): void {
+function run(cmd: string, from?: BrowserWindow): void {
+  if (cmd === 'overload') { void overload?.start(); return; }
+  if (cmd === 'overload:end') { overload?.stop(); return; }
   if (cmd === 'stay' || cmd === 'wander') stay = cmd === 'stay';
   if (cmd === 'debug:on' || cmd === 'debug:off') {
     debugOn = cmd === 'debug:on';
-    win?.webContents.send(IPC.debug, { on: debugOn, name: displayName() });
+    primary()?.webContents.send(IPC.debug, { on: debugOn, name: displayName() });
     return;
   }
   if (cmd === 'new-pet') {
+    if (petList(settings).length >= MAX_PETS) {
+      void dialog.showMessageBox({ type: 'info', message: 'Four pets is a full house!', detail: 'Send one home first (right-click a pet, "Send … home"), then add another.' });
+      return;
+    }
     if (snoozed()) run('wake');
-    onboarding.open(true);
+    onboarding.open(true, true);
     return;
   }
+  if (cmd.startsWith('home:')) return sendHome(cmd.slice(5));
   if (cmd === 'screen:on') {
     // The explainer is the consent: nothing reads the screen (or asks macOS for Terminal access) before "Turn it on".
     if (!settings.adminDisableScreenAware) void screenExplainer.ask(displayName()).then((yes) => { if (yes) run('screen:yes'); });
@@ -174,7 +241,44 @@ function run(cmd: string): void {
       else console.log(`[prefs] openAtLogin=${String(patch['openAtLogin'])} stored; only applied in a packaged app`);
     }
     sync();
-  } else win?.webContents.send(IPC.command, cmd);
+  } else if (cmd === 'stay' || cmd === 'wander') for (const w of allWins()) w.webContents.send(IPC.command, cmd);
+  else {
+    const dest = from && !from.isDestroyed() ? from : primary();
+    // "Come here" goes to the pointer, in the coordinates of the window that owns the pet.
+    dest?.webContents.send(IPC.command, cmd === 'come' && dest ? comeCommand(screen.getCursorScreenPoint().x, dest.getBounds().x) : cmd);
+  }
+}
+
+/** A pet made in add mode: it joins the list and drops in. */
+function joinPet(slug: string): void {
+  const next = addPet(petList(settings), slug);
+  if (!next) return;
+  try {
+    saveSettings({ pets: next });
+  } catch {
+    console.warn('PixyPup: could not save the pet list');
+  }
+  settings = loadSettings();
+  createWindow(slug, true);
+  sync();
+}
+
+function sendHome(slug: string): void {
+  const next = removePet(petList(settings), slug);
+  if (!next) return;
+  try {
+    saveSettings({ pets: next, petName: next[0] });
+  } catch {
+    console.warn('PixyPup: could not save the pet list');
+  }
+  settings = loadSettings();
+  const w = wins.get(slug);
+  wins.delete(slug);
+  petIcons.delete(slug);
+  petNames.delete(slug);
+  petSpecies.delete(slug);
+  w?.destroy();
+  sync();
 }
 
 // Runs from launch but does nothing (no osascript, no helper, no network) until screen-aware is on and allowed.
@@ -188,7 +292,7 @@ function startScreenAwareLoop(): void {
   const spark = async (input: { failureLine: string }, signal?: AbortSignal): Promise<{ bubble: string } | null> => {
     try {
       const key = getApiKey();
-      return key ? await sniffBubble(openClient('screen', loadSettings(), key), input.failureLine, signal) : null;
+      return key ? await sniffBubble(openClient('screen', loadSettings(), key), input.failureLine, signal, speciesOf()) : null;
     } catch {
       return null;
     }
@@ -196,12 +300,12 @@ function startScreenAwareLoop(): void {
   startScreenLoop({
     getSettings: () => settings,
     isSnoozed: snoozed,
-    overlay: { bounds: () => win?.getBounds() ?? null, send: (b) => win?.webContents.send(IPC.behavior, b) },
+    overlay: { bounds: () => primary()?.getBounds() ?? null, send: (b) => { for (const [slug, m] of routeReaction(petList(settings), b)) wins.get(slug)?.webContents.send(IPC.behavior, m); } },
     reader,
     decider: createDecider({ spark }),
     onFailure: (text) => { lastFailure = text ? { text, at: Date.now() } : null; },
     canHint: () => fake || !!getApiKey(),
-    debug: { on: () => debugOn, send: (info) => win?.webContents.send(IPC.debug, { on: true, name: displayName(), info }) },
+    debug: { on: () => debugOn, send: (info) => primary()?.webContents.send(IPC.debug, { on: true, name: displayName(), info }) },
   });
 }
 
@@ -215,7 +319,7 @@ function askHint(): Promise<string | null> {
     const key = getApiKey();
     if (!key) return fakeScreen ? 'Rehearsal hint: add(2, 2) returns 4, but the test in demo/math.test.ts expects 5.' : null;
     try {
-      return (await fixHint(openClient('screen', loadSettings(), key), f, AbortSignal.timeout(15_000)))?.hint ?? null;
+      return (await fixHint(openClient('screen', loadSettings(), key), f, AbortSignal.timeout(15_000), speciesOf()))?.hint ?? null;
     } catch {
       return null;
     }
@@ -224,7 +328,7 @@ function askHint(): Promise<string | null> {
 }
 
 function startVoice(): void {
-  const tell = (m: VoiceUi): void => { win?.webContents.send(IPC.voice, m); };
+  const tell = (m: VoiceUi): void => { primary()?.webContents.send(IPC.voice, m); };
   micWin = setupMic({ onChunk: (b) => voice.chunk(b), fake: app.isPackaged ? undefined : fakeMicPcm(process.env['PIXY_FAKE_MIC']) });
   voice = createVoiceSession({
     allowed: () => shouldRegister(loadSettings(), snoozed()),
@@ -233,8 +337,8 @@ function startVoice(): void {
     open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, { ...opts, keywords: [displayName()] })),
     mic: micWin,
     ui: tell,
-    command: (c) => win?.webContents.send(IPC.command, c),
-    heard: (text) => { if (debugOn) win?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
+    command: (c) => run(c),
+    heard: (text) => { if (debugOn) primary()?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
   });
 }
 
@@ -246,40 +350,56 @@ async function fakeVoice(text: string, onTranscript: (t: { text: string; final: 
 app.dock?.hide();
 
 void app.whenReady().then(async () => {
-  onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
+  onboarding = setupOnboarding({ getOverlay: primary, addPet: joinPet, getPets: () => petList(settings), onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
+  overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
   voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });
   startVoice();
-  ipcMain.handle(IPC.getPack, async () => {
+  ipcMain.handle(IPC.getPack, async (ev) => {
+    const slug = senderSlug.get(ev.sender) ?? primarySlug();
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
     const candidates = [join(app.getAppPath(), 'assets/pets/Pakkun')];
-    if (isPlainName(settings.petName)) candidates.unshift(join(app.getPath('userData'), 'pets', settings.petName));
+    if (isPlainName(slug)) candidates.unshift(join(app.getPath('userData'), 'pets', slug));
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
     const pack = dir && (await loadPack(dir));
-    packPetName = pack ? pack.manifest.pet : undefined;
-    const e = pack ? pack.manifest.personality?.energy : undefined;
-    if (e !== packEnergy) {
-      packEnergy = e;
-      win?.webContents.send(IPC.prefs, prefs());
+    if (!pack) { // a reload that finds nothing must not leave the old name, species or face behind
+      petNames.delete(slug);
+      petSpecies.delete(slug);
+      petIcons.delete(slug);
+    } else {
+      petNames.set(slug, pack.manifest.pet);
+      petSpecies.set(slug, pack.manifest.species);
+      const idle = pack.frames[pack.manifest.poses['idle']?.frames[0] ?? ''];
+      const icons = idle ? petTrayIcons(idle) : null;
+      if (icons) petIcons.set(slug, icons);
+      else petIcons.delete(slug);
     }
+    const e = pack ? pack.manifest.personality?.energy : undefined;
+    if (e !== packEnergies.get(slug)) {
+      if (e) packEnergies.set(slug, e);
+      else packEnergies.delete(slug);
+      wins.get(slug)?.webContents.send(IPC.prefs, prefs(snoozed(), slug));
+    }
+    if (pack) sync(); // the menus name the pets
     return pack;
   });
-  ipcMain.handle(IPC.getPrefs, () => prefs());
+  ipcMain.handle(IPC.getPrefs, (ev) => prefs(snoozed(), senderSlug.get(ev.sender)));
   ipcMain.handle(IPC.askHint, () => (snoozed() ? null : askHint()));
   if (!app.isPackaged) ipcMain.on(IPC.devCmd, (_e, cmd: unknown) => { if (typeof cmd === 'string') run(cmd); }); // CDP can't click native menus
   ipcMain.handle(IPC.getStay, () => stay);
-  ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => {
-    win?.setIgnoreMouseEvents(on, { forward: true });
+  ipcMain.on(IPC.setClickThrough, (e, on: boolean) => {
+    winOf(e)?.setIgnoreMouseEvents(on, { forward: true });
   });
-  ipcMain.on(IPC.showMenu, () => {
+  ipcMain.on(IPC.showMenu, (e) => {
+    const win = winOf(e);
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, name: displayName() }), run);
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), name: displayName() }), (c) => run(c, win));
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
-    Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });
+    Menu.buildFromTemplate(items).popup({ window: win, callback: () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); } });
   });
-  createWindow();
+  for (const slug of petList(settings)) createWindow(slug);
   createTray();
   const atLogin = app.isPackaged && app.getLoginItemSettings().wasOpenedAtLogin === true;
   if (wakeOnOpen(snoozed(), atLogin)) run('wake'); // run syncs
