@@ -17,7 +17,7 @@ vi.mock('node:fs', () => ({
 const defaults: Settings = {
   screenAware: false,
   voice: false,
-  offline: true,
+  offline: false,
   adminDisableScreenAware: false,
   petName: 'Pakkun',
   onboarded: false,

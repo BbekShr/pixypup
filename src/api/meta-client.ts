@@ -104,6 +104,7 @@ export async function* parseSse(body: ReadableStream<Uint8Array>): AsyncGenerato
   if (buffer.trim()) yield* flush(buffer);
 }
 
-export function clientFromEnv(): MetaClient {
+// Scripts only (scripts/*.ts): the app must go through openClient in gate.ts.
+export function clientForScripts(): MetaClient {
   return new MetaClient({ apiKey: process.env.MODEL_API_KEY ?? '' });
 }

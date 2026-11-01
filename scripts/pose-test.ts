@@ -11,7 +11,7 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
-import { clientFromEnv } from '../src/api/meta-client.js';
+import { clientForScripts } from '../src/api/meta-client.js';
 import { editImage } from '../src/api/muse-image.js';
 import { chromaKey, dataUrl, MAGENTA, normalizePhoto, POSES, readPhoto, samCutout, STYLE } from '../src/api/pose-pipeline.js';
 import { breedFacts, meetPet } from '../src/api/personality.js';
@@ -36,7 +36,7 @@ async function firstPhoto(): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const client = clientFromEnv();
+  const client = clientForScripts();
   await mkdir(OUT, { recursive: true });
   const report: string[] = [`# Pose test ${new Date().toISOString()}`, ''];
   const log = (line: string) => {
