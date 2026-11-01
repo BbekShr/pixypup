@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import type { PetFact, Personality, SpriteManifest } from '../../contracts/types.js';
-import { validateManifest } from './manifest.js';
+import { validateManifest, WALK_CYCLE } from './manifest.js';
 import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
 import { breedFacts, meetPet } from './personality.js';
@@ -495,7 +495,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     species: o.species,
     poses: {
       idle: pose(['idle_0.png'], 2),
-      walk: pose(['walk_0.png', 'walk_1.png', 'walk_2.png', 'walk_3.png'], 8),
+      walk: pose(WALK_CYCLE, 8), // stride, stand (manifest.ts says why)
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),
       bark: pose(['bark.png'], 4),
