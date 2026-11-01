@@ -15,7 +15,7 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 ## Active
 | ID | Pri | Title | Owner | Status | Acceptance criteria | Notes |
 |---|---|---|---|---|---|---|
-| B1 | P0 | Any window titled "zoom" hides the pet instead of sniffing | pixypup-ai-engineer | open | `ruleDecide` detects calls by owner (`zoom.us`) or a meeting-title pattern, not a bare "zoom" substring in any title; terminal titled "zoom-lens" + terminalError → sniff (test); real Zoom still → hide (test) | Found at bootstrap, `src/screen/decide.ts:15-18`; threatens the never-cut sniff. Eval case pixypup-1 |
+| B1 | P0 | Any window titled "zoom" hides the pet instead of sniffing | pixypup-ai-engineer | done [verified 2026-10-31 @e99da33] | `ruleDecide` detects calls by owner (`zoom.us`) or a meeting-title pattern, not a bare "zoom" substring in any title; terminal titled "zoom-lens" + terminalError → sniff (test); real Zoom still → hide (test) | Found at bootstrap, `src/screen/decide.ts:15-18`; threatens the never-cut sniff. Eval case pixypup-1 |
 | B2 | P0 | Wrong-typed settings values enable features | pixypup-app-engineer | open | Settings read validates each key's type; `"screenAware": "false"` yields false (test through the real read/merge path) | `src/main/settings.ts` readJson casts without validation. Eval pixypup-2 |
 | B3 | P0 | Corrupt admin.json fails open | pixypup-app-engineer | open | If the admin file exists but can't be parsed or read, screen-aware and voice are forced off and the error is logged; test | `readJson` returns `{}` on parse error. Eval pixypup-3 |
 | F1 | P0 | Overlay verified on a real launch | pixypup-app-engineer | open | Pup walks, flips at edges, drags and resumes walking; click-through restored after every drag (incl. drop off-sprite); tray Quit works; CDP evidence per `/pixypup-verify`; multi-display: overlay on the primary display only, documented | Scaffold landed the code in c35a067; this item proves and hardens it |
@@ -37,6 +37,8 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 | P4 | P2 | Re-enable the renderer sandbox | pixypup-app-engineer | open | Preload built as CommonJS so `sandbox: true` works; overlay still walks and drags (CDP evidence) | `src/main/main.ts:29` sets `sandbox: false` for the ESM preload |
 
 ## Deferred (each with the trigger that would reopen it)
+- B4: any `zoom.us` window (incl. Zoom's home window with no meeting) hides the pet (`src/screen/decide.ts:16`). Kept for the demo, which opens a real meeting. Reopen if a user reports the pet hiding whenever Zoom is running.
 
 ## Done log
 <!-- ID, date, PR, one line. Prune entries older than ~90 days; git history keeps them. -->
+- B1, 2026-10-31, branch org/B1-zoom-title: calls detected by owner or meeting-specific title; terminal titled "zoom" now sniffs.

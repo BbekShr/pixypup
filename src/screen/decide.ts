@@ -13,7 +13,7 @@ const TERMINALS = ['terminal', 'iterm', 'iterm2', 'warp', 'ghostty', 'alacritty'
 export function ruleDecide(obs: Observation): BehaviorDecision | null {
   const call = obs.windows.some(
     (w) =>
-      /zoom\.us|^zoom$/i.test(w.owner) || /zoom|\bmeet\b/i.test(w.title),
+      /zoom\.us|^zoom$/i.test(w.owner) || /^meet - |meet\.google\.com|zoom meeting/i.test(w.title),
   );
   if (call) return { action: 'hide', durationMs: 30000, reason: 'video call in progress' };
 

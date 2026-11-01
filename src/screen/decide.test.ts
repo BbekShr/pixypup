@@ -16,6 +16,28 @@ describe('ruleDecide', () => {
     const d = ruleDecide({ ...base, windows: [{ owner: 'Chrome', title: 'Meet - abc', bounds: b }] });
     expect(d?.action).toBe('hide');
   });
+  it('hides for a Chrome Meet tab with a full title', () => {
+    const d = ruleDecide({
+      ...base,
+      windows: [{ owner: 'Google Chrome', title: 'Meet - abc-defg-hij - Google Chrome', bounds: b }],
+    });
+    expect(d?.action).toBe('hide');
+  });
+  it('sniffs in a terminal whose title contains zoom', () => {
+    const d = ruleDecide({
+      ...base,
+      windows: [{ owner: 'Terminal', title: '~/code/zoom-lens — npx vitest', bounds: b }],
+      terminalError: { text: 'boom' },
+    });
+    expect(d?.action).toBe('sniff');
+  });
+  it('does not treat meeting notes as a call', () => {
+    const d = ruleDecide({
+      ...base,
+      windows: [{ owner: 'Code', title: 'meeting notes.md', bounds: b }],
+    });
+    expect(d).toBeNull();
+  });
   it('sniffs the error box center', () => {
     const d = ruleDecide({ ...base, terminalError: { text: 'boom', box: { x: 10, y: 20, w: 100, h: 40 } } });
     expect(d).toMatchObject({ action: 'sniff', target: { x: 60, y: 40 } });

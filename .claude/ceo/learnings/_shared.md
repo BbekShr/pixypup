@@ -7,5 +7,6 @@
 - Tests never call the real Meta API: inject `fetchImpl` into `MetaClient`. A live check needs `MODEL_API_KEY` and is reported with call count and timing only.
 - Prove overlay and main-process changes in a real launch over CDP (`/pixypup-verify`); `screencapture` doesn't work from agent shells.
 - Contracts change in pairs: `contracts/*.schema.json` and `contracts/types.ts` in the same commit.
+- Match window titles with anchored, product-specific patterns, never bare keywords: titles carry user paths and filenames (B1, `src/screen/decide.ts`).
 
 ## Archive
