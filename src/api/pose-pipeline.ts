@@ -92,7 +92,7 @@ export interface PackOptions {
   client: MetaClient;
   photo: Buffer;
   petName: string;
-  species: 'dog' | 'cat';
+  species: string;
   outDir: string;
   onProgress?: (e: PipelineEvent) => void;
   /** Per-pose request timeout and retry back-off (x3 after HTTP 429); tests shrink these. */

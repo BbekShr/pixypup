@@ -76,10 +76,10 @@ async function main(): Promise<void> {
     }
   }
 
-  const meet = await meetPet(client, cutout, 'Pet', (values.species ?? 'dog') as 'dog' | 'cat');
+  const meet = await meetPet(client, cutout, 'Pet', (values.species ?? 'dog'));
   log(`- Meet your pet: ${meet ? JSON.stringify(meet) : 'FAILED (null)'}`);
   if (meet) {
-    const facts = await breedFacts(client, meet.breed, (values.species ?? 'dog') as 'dog' | 'cat');
+    const facts = await breedFacts(client, meet.breed, (values.species ?? 'dog'));
     log(`- Breed facts: ${facts ? JSON.stringify(facts) : 'FAILED (null)'}`);
   }
 
