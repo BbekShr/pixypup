@@ -1,3 +1,4 @@
+import { MAX_PETS, takenSlug } from './pets';
 import { SIZES, type Energy, type Size } from './prefs';
 
 export type MenuItem =
@@ -6,7 +7,7 @@ export type MenuItem =
   | { label: string; quit: true }
   | { label: string; submenu: MenuItem[] };
 
-export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; name: string }
+export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; library?: { slug: string; name: string }[]; name: string }
 
 const SIZE_LABELS: Record<Size, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 const ENERGY_LABELS: [Energy, string][] = [['sleepy', 'Sleepy'], ['normal', 'Normal'], ['playful', 'Playful']];
@@ -15,6 +16,14 @@ const toggle = (label: string, key: string, on: boolean): MenuItem => ({ label, 
 const overloadItem = (running?: boolean): MenuItem => (running ? { label: 'End the overload', command: 'overload:end' } : { label: 'PixyPup Overload!', command: 'overload' });
 /** One "Send X home" per pet, only while there is more than one: the last pet can't leave. */
 const sendHome = (pets: MenuState['pets']): MenuItem[] => ((pets?.length ?? 0) > 1 ? pets!.map((p) => ({ label: `Send ${p.name} home`, command: `home:${p.slug}` })) : []);
+/** Bundled pets not already on screen; disabled at the cap. Omitted when main passed no library. */
+const libraryMenu = (o: Pick<MenuState, 'pets' | 'library'>): MenuItem[] => {
+  if (!o.library) return [];
+  const on = (o.pets ?? []).map((p) => p.slug);
+  const full = on.length >= MAX_PETS;
+  const items: MenuItem[] = o.library.filter((l) => !takenSlug(on, l.slug)).map((l) => ({ label: l.name, command: `library:${l.slug}`, ...(full && { enabled: false as const }) }));
+  return [{ label: 'Pet library', submenu: items.length ? items : [{ label: "Everyone's here", command: 'library:none', enabled: false }] }];
+};
 const talkItem = (name: string): MenuItem => ({ label: `Talk to ${name}…`, command: 'talk' });
 const LOCKED = ' (set by your organisation)';
 
@@ -39,6 +48,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     toggle(`Show what ${o.name} sees`, 'debug', o.debug ?? false),
     toggle('Open at login', 'login', o.openAtLogin),
     { label: 'Add another pet…', command: 'new-pet' },
+    ...libraryMenu(o),
     ...sendHome(o.pets),
     overloadItem(o.overload),
     { type: 'separator' },
@@ -46,11 +56,12 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
   ];
 }
 
-export const trayMenuTemplate = (o: Pick<MenuState, 'snoozed' | 'name' | 'overload' | 'pets'>): MenuItem[] => [
+export const trayMenuTemplate = (o: Pick<MenuState, 'snoozed' | 'name' | 'overload' | 'pets' | 'library'>): MenuItem[] => [
   talkItem(o.name),
   o.snoozed ? { label: `Wake up ${o.name}`, command: 'wake' } : SNOOZE,
   overloadItem(o.overload),
   { label: 'Add another pet…', command: 'new-pet' },
+  ...libraryMenu(o),
   ...sendHome(o.pets),
   { type: 'separator' },
   { label: 'Quit PixyPup', quit: true },

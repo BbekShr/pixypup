@@ -16,7 +16,7 @@ import { createVoiceSession, type VoiceUi } from './voice-session';
 import { shouldRegister, syncShortcut } from '../voice/listen';
 import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
-import { isPlainName, loadPack, pickPackDir } from './pack';
+import { isPlainName, listLibrary, loadPack, packCandidates, pickPackDir } from './pack';
 import { comeCommand } from '../overlay/call';
 import { headCrop } from './head-crop';
 import { addPet, MAX_PETS, petList, pickWindow, removePet, rekeyWins, routeReaction } from './pets';
@@ -161,6 +161,7 @@ let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech
 
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
 const prefs = (s = snoozed(), slug = primarySlug()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergies.get(slug) ?? 'normal', snoozed: s });
+let library: { slug: string; name: string }[] = [];
 const menuPets = (): { slug: string; name: string }[] => petList(settings).map((slug) => ({ slug, name: nameOf(slug) }));
 const ACTIVATE_GRACE_MS = 2000;
 const MAX_TIMER = 2 ** 31 - 1; // setTimeout wraps to 1 ms above this
@@ -196,7 +197,7 @@ function sync(): void {
   const mine = petIcons.get(primarySlug());
   tray?.setImage((s ? (mine?.dim ?? trayIconDim) : (mine?.icon ?? trayIcon)) ?? nativeImage.createEmpty());
   tray?.setToolTip(`PixyPup \u00b7 ${nameOf(primarySlug())}`);
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets() }), run)));
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets(), library }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
@@ -221,6 +222,11 @@ function run(cmd: string, from?: BrowserWindow): void {
     }
     if (snoozed()) run('wake');
     onboarding.open(true, true);
+    return;
+  }
+  if (cmd.startsWith('library:')) {
+    const slug = cmd.slice(8);
+    if (library.some((l) => l.slug === slug)) { if (snoozed()) run('wake'); joinPet(slug); }
     return;
   }
   if (cmd.startsWith('home:')) return sendHome(cmd.slice(5));
@@ -385,8 +391,7 @@ void app.whenReady().then(async () => {
     const slug = senderSlug.get(ev.sender) ?? primarySlug();
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
-    const candidates = [join(app.getAppPath(), 'assets/pets/Pakkun')];
-    if (isPlainName(slug)) candidates.unshift(join(app.getPath('userData'), 'pets', slug));
+    const candidates = packCandidates(slug, join(app.getPath('userData'), 'pets'), join(app.getAppPath(), 'assets/pets'));
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
     const pack = dir && (await loadPack(dir));
     if (!pack) { // a reload that finds nothing must not leave the old name, species or face behind
@@ -420,11 +425,12 @@ void app.whenReady().then(async () => {
   ipcMain.on(IPC.showMenu, (e) => {
     const win = winOf(e);
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), name: displayName() }), (c) => run(c, win));
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library, name: displayName() }), (c) => run(c, win));
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); } });
   });
+  library = await listLibrary(join(app.getAppPath(), 'assets/pets'));
   for (const slug of petList(settings)) createWindow(slug);
   createTray();
   const atLogin = app.isPackaged && app.getLoginItemSettings().wasOpenedAtLogin === true;
