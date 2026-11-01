@@ -5,11 +5,14 @@ import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MetaApiError, type MetaClient, type StreamEvent } from '../meta-client.js';
 import {
+  bboxIoU,
   chromaKey,
   generateSpritePack,
   layoutFrames,
   NoPetFoundError,
   POSES,
+  STYLE,
+  sliceSheet,
   writePack,
   type PipelineEvent,
 } from '../pose-pipeline.js';
@@ -31,6 +34,18 @@ const drawn = (cw: number, ch: number, w: number, h: number) =>
     .composite([{ input: { create: { width: w, height: h, channels: 3, background: '#00aa00' } }, left: 10, top: 10 }])
     .png()
     .toBuffer();
+
+/** A sprite sheet: 4 equal blobs separated by wide magenta gaps. */
+const sheetImg = (widths = [50, 50, 50, 50]) => {
+  let left = 10;
+  const blobs = widths.map((w) => {
+    const b = { input: { create: { width: w, height: 50, channels: 3 as const, background: '#00aa00' } }, left, top: 10 };
+    left += w + 50;
+    return b;
+  });
+  return sharp({ create: { width: left, height: 100, channels: 3, background: '#ff00ff' } }).composite(blobs).png().toBuffer();
+};
+const defaultImage = (pose: string) => (pose === 'walk_sheet' ? sheetImg() : drawn(100, 100, 50, 50));
 
 const photo = () => sharp({ create: { width: 320, height: 334, channels: 3, background: '#888' } }).png().toBuffer();
 
@@ -60,7 +75,7 @@ function fakeClient(o: FakeOpts = {}) {
       await new Promise((r) => setTimeout(r, o.delayMs ?? 0));
       const f = o.fail?.(pose);
       if (f) throw f instanceof Error ? f : new Error(`boom ${pose}`);
-      const png = o.image ? await o.image(pose) : await drawn(100, 100, 50, 50);
+      const png = o.image ? await o.image(pose) : await defaultImage(pose);
       const webp = await sharp(png).webp({ lossless: true }).toBuffer();
       return { data: [{ b64_json: webp.toString('base64') }] };
     },
@@ -172,69 +187,64 @@ describe('chromaKey soft fur fringe', () => {
   });
 });
 
-describe('layoutFrames', () => {
-  const frame = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 4, background: '#0a0' } }).png().toBuffer();
+const solid = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 4, background: '#0a0' } }).png().toBuffer();
 
+describe('layoutFrames', () => {
   it('scales idle to 256 px and shares one canvas and footY', async () => {
     const out = await layoutFrames(
-      {
-        idle_0: { png: await frame(100, 50), rawHeight: 200 },
-        sit: { png: await frame(40, 80), rawHeight: 200 },
-      },
+      { idle_0: { png: await solid(100, 50), rawHeight: 200 }, sit: { png: await solid(40, 80), rawHeight: 200 } },
       'idle_0',
     );
     for (const f of Object.values(out.frames)) {
       const m = await sharp(f).metadata();
       expect([m.width, m.height]).toEqual([out.width, out.height]);
     }
-    expect(out.height).toBe(Math.round(80 * (256 / 50)) + 2);
+    expect(out.height).toBe(256 + 2);
     expect(out.footY).toBeCloseTo((out.height - 2) / out.height);
     expect(await drawnHeight(out.frames.idle_0)).toBe(256);
   });
 
-  it('rescales a pose drawn on a bigger canvas to idle size, and keeps natural size on equal canvases', async () => {
+  it('ends a smaller-drawn standing pose (walk, blink, sit) at idle height', async () => {
     const out = await layoutFrames(
       {
-        idle_0: { png: await frame(100, 50), rawHeight: 200 },
-        walk_0: { png: await frame(200, 100), rawHeight: 400 },
-        sit: { png: await frame(100, 50), rawHeight: 200 },
+        idle_0: { png: await solid(100, 50), rawHeight: 200 },
+        walk_0: { png: await solid(80, 40), rawHeight: 200 },
+        walk_3: { png: await solid(200, 100), rawHeight: 400 },
+        idle_blink: { png: await solid(100, 50), rawHeight: 200 },
       },
       'idle_0',
     );
-    const h = (n: string) => drawnHeight(out.frames[n] as Buffer);
-    expect(await h('walk_0')).toBe(await h('idle_0'));
-    expect(await h('sit')).toBe(await h('idle_0'));
+    for (const n of ['walk_0', 'walk_3', 'idle_blink']) expect(await drawnHeight(out.frames[n] as Buffer)).toBe(256);
   });
 
-  it('keeps a pose drawn twice as large on the same canvas twice as tall', async () => {
+  it('clamps a wildly small drawing to 0.6..1.6 of the raw-canvas estimate', async () => {
     const out = await layoutFrames(
-      {
-        idle_0: { png: await frame(100, 50), rawHeight: 200 },
-        roll: { png: await frame(200, 100), rawHeight: 200 },
-      },
+      { idle_0: { png: await solid(100, 50), rawHeight: 200 }, walk_0: { png: await solid(20, 10), rawHeight: 200 } },
       'idle_0',
     );
-    expect(out.height).toBe(512 + 2);
+    expect(await drawnHeight(out.frames.walk_0 as Buffer)).toBe(Math.round(10 * 1.6 * 5.12));
   });
-});
 
-describe('layoutFrames raw canvas differs', () => {
-  it('rescales by the raw height ratio, not width', async () => {
-    const frame = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 4, background: '#0a0' } }).png().toBuffer();
+  it('sizes a lying pose to 1.1 x idle width', async () => {
     const out = await layoutFrames(
-      { idle_0: { png: await frame(100, 100), rawHeight: 1536 }, sit: { png: await frame(100, 100), rawHeight: 1024 } },
+      { idle_0: { png: await solid(100, 50), rawHeight: 200 }, sleep: { png: await solid(130, 40), rawHeight: 200 } },
       'idle_0',
     );
-    // same-size drawing on a 1.5x shorter canvas fills more of it, so it is 1.5x the idle height
-    expect(out.height).toBe(Math.round(256 * 1.5) + 2);
+    expect(out.width).toBe(Math.round(1.1 * 100 * 5.12));
+    expect(out.height).toBe(256 + 2);
   });
-});
 
-describe('layoutFrames wide pose', () => {
+  it('does not clamp sheet slices (no raw canvas)', async () => {
+    const out = await layoutFrames(
+      { idle_0: { png: await solid(100, 50), rawHeight: 200 }, walk_0: { png: await solid(20, 10) } },
+      'idle_0',
+    );
+    expect(await drawnHeight(out.frames.walk_0 as Buffer)).toBe(256);
+  });
+
   it('keeps a pose wider than idle whole', async () => {
-    const frame = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 4, background: '#0a0' } }).png().toBuffer();
     const out = await layoutFrames(
-      { idle_0: { png: await frame(100, 50), rawHeight: 200 }, walk_0: { png: await frame(200, 50), rawHeight: 200 } },
+      { idle_0: { png: await solid(100, 50), rawHeight: 200 }, walk_0: { png: await solid(200, 50), rawHeight: 200 } },
       'idle_0',
     );
     expect(out.width).toBe(Math.round(200 * (256 / 50)));
@@ -242,6 +252,39 @@ describe('layoutFrames wide pose', () => {
     let opaque = 0;
     for (let i = 3; i < data.length; i += 4) if (data[i] === 255) opaque++;
     expect(opaque).toBe(Math.round(200 * (256 / 50)) * 256);
+  });
+});
+
+describe('sliceSheet', () => {
+  const sheet = (blobs: [number, number][], W = 400, H = 20) => {
+    const buf = Buffer.alloc(W * H * 4);
+    for (const [x0, w] of blobs) for (let y = 2; y < 18; y++) for (let x = x0; x < x0 + w; x++) buf[(y * W + x) * 4 + 3] = 255;
+    return { buf, W, H };
+  };
+  it('finds 4 equal runs', () => {
+    const { buf, W, H } = sheet([[10, 50], [110, 50], [210, 50], [310, 50]]);
+    expect(sliceSheet(buf, W, H, 4)).toEqual([{ x0: 10, x1: 59 }, { x0: 110, x1: 159 }, { x0: 210, x1: 259 }, { x0: 310, x1: 359 }]);
+  });
+  it('merges runs split by a gap under 8 columns (a tail or ear gap is not a frame boundary)', () => {
+    const { buf, W, H } = sheet([[10, 20], [35, 25], [110, 50], [210, 50], [310, 50]]);
+    expect(sliceSheet(buf, W, H, 4)).toHaveLength(4);
+  });
+  it('rejects 3 blobs, 5 blobs and unequal widths', () => {
+    const three = sheet([[10, 50], [110, 50], [210, 50]]);
+    expect(sliceSheet(three.buf, three.W, three.H, 4)).toBeNull();
+    const five = sheet([[10, 30], [60, 30], [110, 30], [160, 30], [210, 30]]);
+    expect(sliceSheet(five.buf, five.W, five.H, 4)).toBeNull();
+    const unequal = sheet([[10, 50], [110, 50], [210, 50], [310, 20]]);
+    expect(sliceSheet(unequal.buf, unequal.W, unequal.H, 4)).toBeNull();
+  });
+});
+
+describe('bboxIoU', () => {
+  const b = (x0: number, y0: number, x1: number, y1: number) => ({ x0, y0, x1, y1 });
+  it('is 1 for identical, 0 for disjoint, partial otherwise', () => {
+    expect(bboxIoU(b(0, 0, 9, 9), b(0, 0, 9, 9))).toBe(1);
+    expect(bboxIoU(b(0, 0, 9, 9), b(20, 20, 29, 29))).toBe(0);
+    expect(bboxIoU(b(0, 0, 9, 9), b(5, 0, 14, 9))).toBeCloseTo(50 / 150);
   });
 });
 
@@ -294,25 +337,65 @@ describe('generateSpritePack', () => {
     expect(await readdir(root)).toEqual(['pack']);
   });
 
-  it('draws idle, then walk_0, then the rest in parallel', async () => {
+  it('draws idle first, then the sheet, sit, sleep, bark, roll and blink in parallel (7 requests)', async () => {
     const t = Date.now();
     const { p, requested } = await run({ delayMs: 50 });
     await p;
-    expect(requested.slice(0, 2)).toEqual(['idle_0', 'walk_0']);
-    expect(Date.now() - t).toBeLessThan(400);
+    expect(requested[0]).toBe('idle_0');
+    expect(requested.slice(1).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet']);
+    expect(Date.now() - t).toBeLessThan(300);
   });
 
-  it('passes walk_0 as a third reference to walk_1..3 only', async () => {
+  it('references: idle alone for blink, cutout+idle for the others', async () => {
     const refCount: Record<string, number> = {};
     const { client } = fakeClient();
     const post = client.postJson.bind(client) as (path: string, body: { prompt: string; images: unknown[] }, s?: AbortSignal) => Promise<unknown>;
     (client as unknown as { postJson: typeof post }).postJson = (path, body, sig) => {
       const name = Object.keys(POSES).find((k) => body.prompt.includes(POSES[k] as string)) as string;
       refCount[name] = body.images.length;
+      if (name === 'idle_blink') expect(body.prompt).toBe(POSES.idle_blink);
+      else expect(body.prompt.startsWith(STYLE)).toBe(true);
       return post(path, body, sig);
     };
     await generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, timing: { backoffMs: 1 } });
-    expect(refCount).toMatchObject({ idle_0: 1, walk_0: 2, walk_1: 3, walk_2: 3, walk_3: 3, sit: 2, bark: 2, idle_blink: 2 });
+    expect(refCount).toEqual({ idle_0: 1, walk_sheet: 2, sit: 2, sleep: 2, bark: 2, roll: 2, idle_blink: 1 });
+  });
+
+  it.each([
+    ['3 blobs', () => sheetImg().then((b) => sharp(b).composite([{ input: { create: { width: 60, height: 100, channels: 3, background: '#ff00ff' } }, left: 310, top: 0 }]).png().toBuffer())],
+    ['unequal widths', () => sheetImg([50, 50, 50, 20])],
+    ['one blob', () => drawn(100, 100, 50, 50)],
+  ])('falls back to 4 idle frames when the walk sheet is bad (%s), after one retry', async (_n, make) => {
+    const events: PipelineEvent[] = [];
+    const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? make() : defaultImage(n)) }, events);
+    await p;
+    expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(2);
+    expect(events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name)).toEqual(['walk_0', 'walk_1', 'walk_2', 'walk_3']);
+    for (let i = 0; i < 4; i++) expect(await readFile(join(out, `walk_${i}.png`))).toEqual(await readFile(join(out, 'idle_0.png')));
+  });
+
+  it('slices a good sheet into 4 walk frames at idle height', async () => {
+    const { p } = await run({});
+    await p;
+    for (let i = 0; i < 4; i++) expect(await drawnHeight(await readFile(join(out, `walk_${i}.png`)))).toBe(256);
+  });
+
+  it('falls back to idle when the blink jumps (IoU < 0.85)', async () => {
+    const events: PipelineEvent[] = [];
+    const moved = () => sharp({ create: { width: 100, height: 100, channels: 3, background: '#ff00ff' } })
+      .composite([{ input: { create: { width: 50, height: 50, channels: 3, background: '#00aa00' } }, left: 40, top: 40 }]).png().toBuffer();
+    const { p, requested } = await run({ image: async (n) => (n === 'idle_blink' ? moved() : defaultImage(n)) }, events);
+    await p;
+    expect(requested.filter((n) => n === 'idle_blink')).toHaveLength(2);
+    expect(events.find((e) => e.stage === 'pose-failed')).toMatchObject({ name: 'idle_blink', error: 'bad-output' });
+    expect(await readFile(join(out, 'idle_blink.png'))).toEqual(await readFile(join(out, 'idle_0.png')));
+  });
+
+  it('keeps a blink that stays put', async () => {
+    const events: PipelineEvent[] = [];
+    const { p } = await run({}, events);
+    await p;
+    expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
   });
 
   it('falls back to idle when a pose fails', async () => {
@@ -386,7 +469,7 @@ describe('generateSpritePack', () => {
     ['touches the canvas edge', () => drawn(100, 100, 100, 50)],
   ])('treats a degenerate pose (%s) as a failure and retries', async (_n, make) => {
     const events: PipelineEvent[] = [];
-    const { p, requested } = await run({ image: async (n) => (n === 'sit' ? make() : drawn(100, 100, 50, 50)) }, events);
+    const { p, requested } = await run({ image: async (n) => (n === 'sit' ? make() : defaultImage(n)) }, events);
     await p;
     expect(requested.filter((n) => n === 'sit')).toHaveLength(2);
     expect(events.find((e) => e.stage === 'pose-failed')).toMatchObject({ name: 'sit', error: 'bad-output' });
