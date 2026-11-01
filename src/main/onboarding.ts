@@ -86,7 +86,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   ipcMain.handle(IPC.obPickPhoto, async (e) => {
     if (!ours(e) || !win) return { ok: false, code: 'cancelled' };
     const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Photos', extensions: PHOTO_EXTS }] });
-    return r.canceled || !r.filePaths[0] ? { ok: false, code: 'cancelled' } : photoResult(r.filePaths[0]);
+    // The window may have been replaced while the dialog was up: a late pick must not seed the new window's photo.
+    return r.canceled || !r.filePaths[0] || !ours(e) ? { ok: false, code: 'cancelled' } : photoResult(r.filePaths[0]);
   });
   ipcMain.handle(IPC.obDropPhoto, (e, path: unknown) => (ours(e) ? photoResult(path) : { ok: false, code: 'missing' }));
   if (!app.isPackaged) ipcMain.handle(IPC.obDevPhoto, (e) => (ours(e) ? photoResult(process.env['PIXY_DEV_PHOTO'] ?? join(app.getAppPath(), 'assets/pets/Pakkun/sit.png')) : { ok: false, code: 'missing' }));
@@ -220,6 +221,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
           return;
         }
         const old = win;
+        const x = centreX(); // destroy() skips 'close', which records where a pending hand-off lands
+        if (handoff && x !== undefined) handoff.x = x;
         win = null; // its 'closed' must not clear the replacement
         old.destroy();
       }
