@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
-import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine } from './chatter';
+import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { DISPLAY_H, displayWidth, footOffset } from './layout';
 import { BLINK_MS, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
@@ -161,7 +161,7 @@ function enter(prev: PetState): void {
       );
     }
   }
-  if (state === 'bark' && !greet) {
+  if (state === 'bark' && !greet && quiet(performance.now(), speakingUntil)) {
     if (lineOnBark && speakLine()) return;
     const b = document.createElement('div');
     b.textContent = 'Woof!';
@@ -392,7 +392,6 @@ function speakLine(): boolean {
   const l = pickLine(lines, lastLine, Math.random());
   if (!l) return false;
   lastLine = l;
-  speakingUntil = performance.now() + LINE_MS;
   say(l, LINE_MS);
   return true;
 }
@@ -401,6 +400,7 @@ function say(text: string, ms: number): void {
   const b = document.createElement('div');
   b.className = 'hi';
   b.textContent = text;
+  speakingUntil = performance.now() + ms;
   fx.append(b);
   b.animate(
     [{ opacity: 0, transform: 'translate(-50%,-100%) scale(.6)' }, { opacity: 1, transform: 'translate(-50%,-100%) scale(1)', offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-8px)' }],

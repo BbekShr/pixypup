@@ -53,6 +53,7 @@ const walk = new Map<string, string>(); // the stepping tile cycles whatever wal
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let photoMsg = '';
 let copyTimer = 0;
+let swapTimer = 0; // a queued swap must not overwrite the reveal subtitle
 let personality: Personality | null = null;
 let facts: FactView[] = [];
 let tick = 0;
@@ -123,7 +124,7 @@ function setupMaking(): void {
     const c = nextCopy(copyLines(petName), personality?.lines ?? [], facts, ++tick, ribbonFraction(hasCutout, poseTiles()));
     if (c.text === $('copy-t').textContent) return;
     $('copy').classList.add('swap');
-    setTimeout(() => { showCopy(c); $('copy').classList.remove('swap'); }, 260);
+    swapTimer = window.setTimeout(() => { showCopy(c); $('copy').classList.remove('swap'); }, 260);
   }, 4000);
 }
 
@@ -146,6 +147,8 @@ function showPersonality(p: Personality): void {
 
 // The cutout melts into the generated 3D idle, stars and hearts burst, then the window shrinks toward the floor where the pet lands.
 function reveal(): void {
+  clearTimeout(swapTimer);
+  $('copy').classList.remove('swap');
   clearInterval(walkTimer);
   walkTimer = 0;
   $('making-title').textContent = `Say hi to ${petName}!`;

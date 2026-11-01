@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canSpeak, clickSays, nextSayAt, pickLine } from './chatter';
+import { canSpeak, clickSays, nextSayAt, pickLine, quiet } from './chatter';
 import type { PetState } from './state';
 
 describe('chatter schedule', () => {
@@ -37,5 +37,12 @@ describe('clickSays', () => {
     expect(clickSays(true, 0.24)).toBe(true);
     expect(clickSays(true, 0.25)).toBe(false);
     expect(clickSays(false, 0)).toBe(false);
+  });
+});
+
+describe('quiet', () => {
+  it('is false while a bubble is up and true once it has ended', () => {
+    expect(quiet(1000, 4500)).toBe(false);
+    expect(quiet(4500, 4500)).toBe(true);
   });
 });

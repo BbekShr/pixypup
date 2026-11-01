@@ -11,6 +11,9 @@ export const nextSayAt = (now: number, rand: number, chatty: boolean): number =>
 /** Never while walking, sleeping, mid-trick or during the hand-off; only when calm and nothing else is speaking. */
 export const canSpeak = (state: PetState, busy: boolean): boolean => !busy && (state === 'idle' || state === 'sit');
 
+/** No second bubble over one that is still showing. */
+export const quiet = (now: number, speakingUntil: number): boolean => now >= speakingUntil;
+
 /** A random line that is not the one just said (unless it is the only one). */
 export function pickLine(lines: string[], last: string | null, rand: number): string | null {
   const pool = lines.length > 1 ? lines.filter((l) => l !== last) : lines;

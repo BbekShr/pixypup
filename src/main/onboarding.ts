@@ -140,10 +140,10 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
     const emit = (ev: PipelineEvent): void => {
       if (ev.stage === 'personality') {
         runs = recordInfo(runs, id, { personality: ev.personality });
-        toWin(IPC.obPersonality, ev.personality);
+        if (runs.current?.id === id) toWin(IPC.obPersonality, ev.personality);
       } else if (ev.stage === 'facts') {
         runs = recordInfo(runs, id, { facts: ev.facts });
-        toWin(IPC.obFacts, factViews(runs.current?.facts ?? []));
+        if (runs.current?.id === id) toWin(IPC.obFacts, factViews(runs.current.facts ?? []));
       }
       if (ev.stage !== 'cutout' && ev.stage !== 'pose') return;
       if (ev.stage === 'cutout' && !fake && pendingKey === key) {
