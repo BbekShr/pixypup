@@ -7,6 +7,7 @@ import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chat
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
+import { cleanFrame } from './frames';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
 import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
@@ -154,6 +155,16 @@ async function readPack(): Promise<Prepared | null> {
   }));
   const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
+  for (const name of ['walk', 'turn']) { // old packs: a sliver of a neighbouring frame's tail on the edge
+    const p = poses[name];
+    if (p) p.srcs = await Promise.all(p.srcs.map(async (s) => {
+      const b = bitmaps.find((q) => q.src === s);
+      const c = b && (await cleanFrame(b).catch(() => null));
+      if (!b || !c) return s;
+      bitmaps[bitmaps.indexOf(b)] = c;
+      return c.src;
+    }));
+  }
   if (staticWalk(poses['walk'], bitmaps)) delete poses['walk'];
   const { reg, wag } = register(poses, bitmaps, first);
   return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };

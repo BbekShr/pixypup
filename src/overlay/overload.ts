@@ -1,5 +1,6 @@
 import '../ui/tokens.css';
 import type { Pack } from '../main/pack';
+import { cleanFrame } from './frames';
 import { displayWidth } from './layout';
 import { boundGait, gait, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, walkFrame } from './motion';
 import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW_MS, TURN_MS, type CastMember } from './overload-choreo';
@@ -25,17 +26,20 @@ async function prep(pack: Pack): Promise<Prep | null> {
   const poses = pack.manifest.poses;
   const idle = pack.frames[poses['idle']?.frames[0] ?? ''];
   if (!idle) return null;
-  const walk = (poses['walk']?.frames ?? []).map((f) => pack.frames[f]).filter((s): s is string => !!s);
+  let walk = (poses['walk']?.frames ?? []).map((f) => pack.frames[f]).filter((s): s is string => !!s);
   const natW = new Map<string, number>();
   let idleH = 1;
-  await Promise.all([idle, ...walk].map(async (s) => {
+  walk = await Promise.all([idle, ...walk].map(async (s) => {
     const i = new Image();
     i.src = s;
     await i.decode();
-    keep.push(i);
-    natW.set(s, i.naturalWidth);
+    const c = s === idle ? null : await cleanFrame(i).catch(() => null); // old packs: a sliver of a neighbouring tail on the edge
+    const f = c ?? i;
+    keep.push(f);
+    natW.set(f.src, f.naturalWidth);
     if (s === idle) idleH = i.naturalHeight;
-  }));
+    return f.src;
+  })).then((all) => all.slice(1));
   const idleW = natW.get(idle)!;
   const prof = pack.manifest.profile;
   const flier = prof?.locomotion === 'fly';
