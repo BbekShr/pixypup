@@ -22,7 +22,7 @@ describe('petMenuTemplate', () => {
     expect(petMenuTemplate(base).find((i) => 'label' in i && i.label === 'Stay here')).toMatchObject({ checked: false, command: 'stay' });
   });
   it('snooze submenu offers 1 hour and tomorrow', () => {
-    expect(sub(petMenuTemplate(base), 'Snooze')).toEqual([{ label: 'For 1 hour', command: 'snooze:1h' }, { label: 'Until tomorrow', command: 'snooze:tomorrow' }]);
+    expect(sub(petMenuTemplate(base), 'Snooze')).toEqual([{ label: 'For 1 hour', command: 'snooze:1h' }, { label: 'Until 8 am', command: 'snooze:tomorrow' }]);
   });
   it('size and energy are radios with exactly the current one checked', () => {
     const t = petMenuTemplate({ ...base, size: 'large', energy: 'sleepy' });
@@ -34,6 +34,10 @@ describe('petMenuTemplate', () => {
     expect(find(petMenuTemplate(base), 'Hide during screen sharing')).toEqual({ label: 'Hide during screen sharing', command: 'hide:on', checked: false });
     expect(find(petMenuTemplate({ ...base, hideInShares: true, openAtLogin: true }), 'Hide during screen sharing')).toMatchObject({ command: 'hide:off', checked: true });
     expect(find(petMenuTemplate({ ...base, openAtLogin: true }), 'Open at login')).toMatchObject({ command: 'login:off', checked: true });
+  });
+  it('an admin-locked hide item is a checked, disabled entry that says why', () => {
+    const t = petMenuTemplate({ ...base, hideInShares: true, hideLocked: true });
+    expect(t.find((i) => 'label' in i && i.label.startsWith('Hide'))).toEqual({ label: 'Hide during screen sharing (set by your organisation)', command: 'hide:off', checked: true, enabled: false });
   });
   it('while snoozed the Snooze submenu is replaced by Wake up', () => {
     const t = petMenuTemplate({ ...base, snoozed: true });

@@ -32,12 +32,20 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const ADMIN_FILE = '/Library/Application Support/PixyPup/admin.json';
 
+// An admin may only restrict: everything else (pet name, size, energy, snooze, login item) stays the user's.
+const ADMIN_KEYS = ['screenAware', 'voice', 'offline', 'adminDisableScreenAware'] as const;
+
 export function mergeSettings(
   defaults: Settings,
   user: Partial<Settings> = {},
   admin: Partial<Settings> = {},
 ): Settings {
-  const merged: Settings = { ...defaults, ...user, ...admin };
+  const merged: Settings = { ...defaults, ...user };
+  for (const k of ADMIN_KEYS) {
+    const v = admin[k];
+    if (v !== undefined) merged[k] = v;
+  }
+  if (admin.hideInShares === true) merged.hideInShares = true;
   if (merged.adminDisableScreenAware) merged.screenAware = false;
   return merged;
 }
@@ -100,13 +108,21 @@ function readFile(path: string): string | null | Error {
   }
 }
 
-export function loadSettings(): Settings {
-  const user = parseSettingsFile(readFile(join(app.getPath('userData'), 'settings.json')));
+function loadAdmin(): ReturnType<typeof parseSettingsFile> {
   const admin = parseSettingsFile(readFile(ADMIN_FILE));
   if (admin.failed || admin.invalid.length > 0) {
     console.warn('PixyPup: admin.json unreadable or invalid; screen-aware and voice forced off');
     admin.values = { screenAware: false, voice: false, offline: true };
   }
+  return admin;
+}
+
+/** True when the admin file forces "hide during screen sharing" on, so the menu shows it locked. */
+export const hideLockedByAdmin = (): boolean => loadAdmin().values.hideInShares === true;
+
+export function loadSettings(): Settings {
+  const user = parseSettingsFile(readFile(join(app.getPath('userData'), 'settings.json')));
+  const admin = loadAdmin();
   return mergeSettings(DEFAULT_SETTINGS, user.values, admin.values);
 }
 

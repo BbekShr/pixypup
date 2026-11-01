@@ -6,7 +6,7 @@ import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
 import { setupOnboarding } from './onboarding';
 import { commandToPatch, isSnoozed, type Energy, type Prefs } from './prefs';
-import { loadSettings, saveSettings } from './settings';
+import { hideLockedByAdmin, loadSettings, saveSettings } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 let win: BrowserWindow | null = null;
@@ -52,11 +52,14 @@ function createTray(): void {
   trayIcon = nativeImage
     .createFromPath(join(app.getAppPath(), 'assets/placeholder/pup.png'))
     .resize({ height: 18 });
-  // Snoozed = a faded icon: scale every alpha byte (BGRA) down.
-  const { width, height } = trayIcon.getSize();
-  const px = trayIcon.toBitmap();
-  for (let i = 3; i < px.length; i += 4) px[i] = Math.round(px[i]! * 0.35);
-  trayIconDim = nativeImage.createFromBitmap(px, { width, height });
+  trayIconDim = trayIcon;
+  if (!trayIcon.isEmpty()) {
+    // Snoozed = a faded icon. The bitmap is premultiplied BGRA, so every byte scales, not just alpha.
+    const { width, height } = trayIcon.getSize();
+    const px = trayIcon.toBitmap();
+    for (let i = 0; i < px.length; i++) px[i] = Math.round(px[i]! * 0.35);
+    trayIconDim = nativeImage.createFromBitmap(px, { width, height });
+  }
   tray = new Tray(trayIcon);
   tray.setToolTip('PixyPup');
 }
@@ -79,19 +82,22 @@ let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
 
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
-const prefs = (): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergy ?? 'normal', snoozed: snoozed() });
+const prefs = (s = snoozed()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergy ?? 'normal', snoozed: s });
+const MAX_TIMER = 2 ** 31 - 1; // setTimeout wraps to 1 ms above this
+// The checkbox shows what macOS says (the user can change it in System Settings); dev has no real login item.
+const loginOn = (): boolean => (app.isPackaged ? app.getLoginItemSettings().openAtLogin : settings.openAtLogin);
 
 /** Apply every effect of the current settings; the one place main reacts to a change. */
 function sync(): void {
-  win?.webContents.send(IPC.prefs, prefs());
+  const s = snoozed();
+  win?.webContents.send(IPC.prefs, prefs(s));
   win?.setContentProtection(settings.hideInShares);
   onboarding.applyProtection();
-  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });
-  else console.log(`[prefs] openAtLogin=${settings.openAtLogin} (only applied in a packaged app)`);
   clearTimeout(wakeTimer);
-  if (snoozed()) wakeTimer = setTimeout(() => run('wake'), Math.max(0, (settings.snoozeUntil ?? 0) - Date.now()) + 50);
-  tray?.setImage((snoozed() ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: snoozed(), name: settings.petName }), run)));
+  // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
+  if (s) wakeTimer = setTimeout(sync, Math.min(MAX_TIMER, Math.max(0, (settings.snoozeUntil ?? 0) - Date.now()) + 50));
+  tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: settings.petName }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
@@ -110,6 +116,11 @@ function run(cmd: string): void {
       console.warn('PixyPup: could not save settings', e instanceof Error ? e.message : '');
     }
     settings = loadSettings(); // the admin file still wins over what was just saved
+    // Only an explicit click touches the login item; syncing it would fight the user's System Settings.
+    if (cmd.startsWith('login:')) {
+      if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: patch['openAtLogin'] === true });
+      else console.log(`[prefs] openAtLogin=${String(patch['openAtLogin'])} stored; only applied in a packaged app`);
+    }
     sync();
   } else win?.webContents.send(IPC.command, cmd);
 }
@@ -117,7 +128,7 @@ function run(cmd: string): void {
 app.dock?.hide();
 
 void app.whenReady().then(async () => {
-  onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares });
+  onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
   ipcMain.handle(IPC.getPack, async () => {
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
@@ -140,7 +151,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on(IPC.showMenu, () => {
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, openAtLogin: settings.openAtLogin, name: settings.petName }), run);
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), openAtLogin: loginOn(), name: settings.petName }), run);
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });

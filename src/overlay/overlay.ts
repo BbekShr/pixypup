@@ -38,7 +38,7 @@ const keep: HTMLImageElement[] = []; // decoded bitmaps live as long as the pack
 let poses: Record<string, PoseSet> = { idle: { srcs: [pupUrl], fps: 1 } };
 let W = 120;
 let H = 120;
-let nat = { w: 1, h: 1 }; // the pose's natural size; W and H follow the chosen size
+let nat: { w: number; h: number } | null = null; // the pose's natural size; W and H follow the chosen size
 let prefs: Prefs = { size: 'medium', energy: 'normal', snoozed: false };
 let footY = 1;
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
@@ -82,8 +82,10 @@ function applyPack(p: Prepared): void {
 }
 
 function layout(): void {
+  const n = nat ?? (img.naturalHeight ? { w: img.naturalWidth, h: img.naturalHeight } : null); // before a pack: the placeholder's
+  if (!n) return; // never stretch an image whose size is unknown
   H = SIZES[prefs.size];
-  W = displayWidth(nat.w, nat.h, H);
+  W = displayWidth(n.w, n.h, H);
   x = Math.min(x, Math.max(0, window.innerWidth - W));
   target = Math.min(target, Math.max(0, window.innerWidth - W));
 }
@@ -95,6 +97,7 @@ function sizeImg(): void {
 }
 img.src = pupUrl;
 sizeImg();
+img.addEventListener('load', () => { if (!nat) { layout(); sizeImg(); } }, { once: true });
 void readPack().then((p) => p && applyPack(p)).catch(() => undefined);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
@@ -307,6 +310,8 @@ let preDrag: PetState = 'walk';
 let downAt = 0;
 let downX = 0;
 let downY = 0;
+let ptrX = 0; // last pointer position while dragging
+let ptrY = 0;
 img.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   menuCalls++;
@@ -323,12 +328,16 @@ img.addEventListener('pointerdown', (e) => {
   downAt = performance.now();
   downX = e.clientX;
   downY = e.clientY;
+  ptrX = downX;
+  ptrY = downY;
   lastInteraction = downAt;
   img.setPointerCapture(e.pointerId);
   setState('dragStart');
 });
 img.addEventListener('pointermove', (e) => {
   if (!dragging) return;
+  ptrX = e.clientX;
+  ptrY = e.clientY;
   x = Math.min(Math.max(0, e.clientX - offX), window.innerWidth - W);
   const top = Math.min(Math.max(0, e.clientY - offY), window.innerHeight - H);
   lift = top - floorY();
@@ -394,6 +403,7 @@ function applyRest(): void {
   last = now;
   lastInteraction = now;
   wakeSay = true;
+  sayAt = nextSayAt(now, Math.random(), chatty); // no chatter line right after "Hi again"
   falling = !calm;
   vy = 0;
   lift = calm ? 0 : -(floorY() + H);
@@ -406,7 +416,11 @@ function applyPrefs(raw: unknown): void {
   if (!p) return;
   const sizeChanged = p.size !== prefs.size;
   prefs = p;
-  if (sizeChanged) { layout(); sizeImg(); }
+  if (sizeChanged) {
+    layout();
+    sizeImg();
+    if (dragging) { offX = ptrX - x; offY = ptrY - (floorY() + lift); } // keep the grab point under the pointer
+  }
   applyRest();
 }
 window.pixy.onPrefs(applyPrefs);
@@ -419,7 +433,7 @@ void window.pixy.getPrefs().then((raw) => {
 // Old pet trots off the nearest edge at double speed; dropIn() then fires on arrival. Reduced motion: crossfade swap.
 function swapPets(pack: Prepared, cx: number | undefined): void {
   if (dragging) { pendingSwap = { pack, cx }; return; }
-  if (resting) { prefs = { ...prefs, snoozed: false }; applyRest(); wakeSay = false; } // a new pet is an explicit wake
+  wakeSay = false; // main wakes the pet right before it reveals the new one
   incoming = { pack, cx: validCx(cx, window.innerWidth, x + W / 2) };
   handoff = handoffStart(calm);
   greet = null;
