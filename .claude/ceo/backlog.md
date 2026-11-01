@@ -65,6 +65,7 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 
 ## Done log
 <!-- ID, date, PR, one line. Prune entries older than ~90 days; git history keeps them. -->
+- F30, 2026-11-01 (requested-by: maintainer, "cuteness overload README + GitHub page for the About section"; then "change the name to Pakkun"): README rewritten as a Pakkun showcase (hero, features, four Meta models, privacy, install, fine print kept in <details>); docs/index.html GitHub Pages site with a live interactive Pakkun (walks, click tricks, petting hearts, scripted fail/fix/badge reactions, Overload rain); sprites copied to docs/img/pakkun; docs/.nojekyll. Branding: app = PixyPup, pet = Pakkun (maintainer clarified mid-run). Pages + About link need the maintainer (see report).
 - F11, 2026-11-01: perk-up on any app's new Dock badge; demo kit (demo/fail.command failing vitest, Badge Demo stand-in app, Meet stand-in page, scripts/stage-demo.sh fail|badge|call|reset), docs/DEMO.md rehearsal checklist.
 - F10, 2026-11-01, PR #20: cute DMG (Welcome to PixyPup, Drag me home, paw prints, 3D Pakkun), Pakkun app icon, ad-hoc signing incl. helper (afterPack), Info.plist usage strings + LSUIElement, release/ output; packaged app verified from a scratch copy.
 - F8, 2026-11-01, PR #19: "Listen for my voice" (explainer consent), ⌥Space press-to-talk with auto-stop, mic only during a listen window, Muse Voice Transcribe realtime with keyword biasing (pet name + tricks), name optional during push-to-talk; live real-key: 3/3 back-to-back commands heard exactly.
