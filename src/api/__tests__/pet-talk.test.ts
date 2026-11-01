@@ -29,6 +29,12 @@ describe('petTalk', () => {
     expect(b.input).toContain('turn2');
     expect(MAX_TURNS).toBe(4);
   });
+  it('never sends crisis turns from history', async () => {
+    const calls: Body[] = [];
+    await ask(fake(reply(good), calls), 'thanks', [{ role: 'user', text: 'I want to kill myself' }, { role: 'pet', text: 'Woof' }]);
+    expect(calls[0].input).not.toContain('kill myself');
+    expect(calls[0].input).toContain('Woof');
+  });
   it('failed or invalid replies give null', async () => {
     expect(await ask(fake({ status: 'failed' }), 'hi')).toBeNull();
     expect(await ask(fake(reply({ ...good, woof: 'I think you should rest' })), 'hi')).toBeNull();
@@ -46,6 +52,7 @@ describe('validateTalk', () => {
     expect(() => validateTalk({ ...good, caption: 'x'.repeat(61) })).toThrow();
     expect(() => validateTalk({ ...good, caption: 'wags tail 🐶' })).toThrow();
     expect(() => validateTalk({ ...good, caption: '*hugs*' })).toThrow();
+    expect(() => validateTalk({ ...good, caption: 'Call 555 0100 now' })).toThrow();
     expect(() => validateTalk({ ...good, action: 'dance' })).toThrow();
     expect(() => validateTalk({ ...good, crisis: 'no' })).toThrow();
     expect(() => validateTalk(null)).toThrow();
@@ -54,8 +61,8 @@ describe('validateTalk', () => {
 
 describe('isCrisis / localReply', () => {
   it('is word-bounded', () => {
-    for (const t of ['I want to kill myself', 'i dont want to live', "I'm feeling suicidal.", 'Self-harm thoughts', 'no reason to live']) expect(isCrisis(t)).toBe(true);
-    for (const t of ['killing it at work', 'rough day', 'this bug will kill me', 'suicide squad was bad?'.replace('suicide', 'sui')]) expect(isCrisis(t)).toBe(false);
+    for (const t of ['I want to kill myself', 'i dont want to live', "I'm feeling suicidal.", 'Self-harm thoughts', 'no reason to live', 'I want to end it all', 'i should kms', 'gonna unalive myself', "I don't want to be here anymore", "i can't go on", 'I want to take my own life']) expect(isCrisis(t)).toBe(true);
+    for (const t of ['killing it at work', 'rough day', 'ran 5 kms', 'kms per hour', 'I am dying to see it', 'this bug is killing me', 'kms', 'this bug will kill me', 'suicide squad was bad?'.replace('suicide', 'sui')]) expect(isCrisis(t)).toBe(false);
   });
   it('falls back per species', () => {
     expect(localReply('hi')).toEqual({ action: 'comfort', woof: 'Woof!', caption: 'leans against you', crisis: false });

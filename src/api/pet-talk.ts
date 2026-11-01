@@ -15,8 +15,13 @@ export const CAPTION_MAX = 60;
 export const WOOF_MAX = 40;
 export const CRISIS_TEXT = "You matter. If you're in danger or thinking about hurting yourself, please reach out: call or text 988 (US) or find a line at findahelpline.com";
 
-const CRISIS_RE = /\b(kill myself|suicid\w*|end my life|want to die|don'?t want to (be alive|live)|hurt myself|self[- ]?harm|better off dead|no reason to live)\b/;
-export const isCrisis = (text: string): boolean => CRISIS_RE.test(text.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' '));
+const CRISIS_RE = /\b(kill myself|suicid\w*|end my life|want to die|don'?t want to (be alive|live)|hurt myself|self[- ]?harm|better off dead|no reason to live|end it all|unalive|don'?t want to be here|can'?t go on|take my (own )?life)\b/;
+// "kms" only as the last word and not after a number, so "5 kms" and "kms per hour" stay clean.
+const KMS_RE = /(?<!\d )\bkms$/;
+export const isCrisis = (text: string): boolean => {
+  const t = text.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return CRISIS_RE.test(t) || KMS_RE.test(t);
+};
 
 const SOUNDS = { dog: 'woof|arf|bark|ruff|yip|awoo|grr|whine|wag|pant|bork', cat: 'meow|mrrp|mew|purr|prr|nya|mrow|hiss|chirp' };
 const BAD = /https?:|www\.|@|\p{Extended_Pictographic}|\p{Cc}/u;
@@ -28,7 +33,7 @@ export function validateTalk(v: unknown, species?: string): TalkReply {
   const caption = typeof o.caption === 'string' ? o.caption.trim().replace(/\s+/g, ' ') : '';
   const word = new RegExp(`^((${isCat(species) ? SOUNDS.cat : SOUNDS.dog})+[!?.~♪…]*|[~♪]+)$`, 'i');
   if (!woof || woof.length > WOOF_MAX || !woof.split(/\s+/).every((w) => word.test(w))) throw new Error('Bad woof.');
-  if (!caption || caption.length > CAPTION_MAX || BAD.test(caption) || !/^[a-z0-9 ,.'!?-]+$/i.test(caption)) throw new Error('Bad caption.');
+  if (!caption || caption.length > CAPTION_MAX || BAD.test(caption) || !/^[a-z ,.'!?-]+$/i.test(caption)) throw new Error('Bad caption.');
   if (!(TALK_ACTIONS as readonly unknown[]).includes(o.action)) throw new Error('Bad action.');
   if (typeof o.crisis !== 'boolean') throw new Error('Bad crisis.');
   return { action: o.action as TalkAction, woof, caption, crisis: o.crisis };
@@ -55,7 +60,7 @@ export const talkInstructions = (name: string, species?: string): string => {
 const strip = (s: string): string => s.replace(/[<>]/g, '');
 
 export function talkInput(history: Turn[], text: string): string {
-  const turns = history.slice(-MAX_TURNS).map((t) => ({ role: t.role, text: strip(t.text).slice(0, MAX_USER) }));
+  const turns = history.filter((t) => !isCrisis(t.text)).slice(-MAX_TURNS).map((t) => ({ role: t.role, text: strip(t.text).slice(0, MAX_USER) }));
   return `<chat_data>${JSON.stringify(turns)}</chat_data><user_data>${JSON.stringify(strip(text).slice(0, MAX_USER))}</user_data>`;
 }
 
