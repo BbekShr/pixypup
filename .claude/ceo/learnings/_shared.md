@@ -10,5 +10,7 @@
 - Match window titles with anchored, product-specific patterns, never bare keywords: titles carry user paths and filenames (B1, `src/screen/decide.ts`).
 - Validating a policy file: a dropped invalid key is a failure, not a no-op. Never decide "missing" with `existsSync` (false on EACCES); read and treat only ENOENT as missing (B2/B3, `src/main/settings.ts`).
 - Fail-closed tests need an fs mock that can throw ENOENT and EACCES, or they only prove what the mock can express (B2/B3).
+- Image work is verified by looking at the real output (render the frames at true scale), not by tests alone: F3's tests passed while live frames showed clipping and a wrong-eared pose.
+- Muse Image draws past its canvas edge and drifts on identity: prompts must ask for margins and pin ears/face; reject edge-touching output and retry (F3).
 
 ## Archive

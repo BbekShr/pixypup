@@ -45,7 +45,7 @@ export class MetaClient {
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
-  private async request(path: string, body: unknown, accept: string): Promise<Response> {
+  private async request(path: string, body: unknown, accept: string, signal?: AbortSignal): Promise<Response> {
     const model = (body as { model?: unknown }).model;
     if (typeof model === 'string') assertStandardTier(model);
     const res = await this.fetchImpl(`${this.baseUrl}${path}`, {
@@ -56,19 +56,20 @@ export class MetaClient {
         Accept: accept,
       },
       body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) throw new MetaApiError(res.status, await res.text(), path);
     return res;
   }
 
-  async postJson<T>(path: string, body: unknown): Promise<T> {
-    const res = await this.request(path, body, 'application/json');
+  async postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    const res = await this.request(path, body, 'application/json', signal);
     return (await res.json()) as T;
   }
 
   /** POST with `stream: true` and yield each SSE `data:` payload as a parsed event. */
-  async *postStream(path: string, body: unknown): AsyncGenerator<StreamEvent> {
-    const res = await this.request(path, body, 'text/event-stream');
+  async *postStream(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    const res = await this.request(path, body, 'text/event-stream', signal);
     if (!res.body) throw new MetaApiError(res.status, 'empty stream body', path);
     yield* parseSse(res.body);
   }

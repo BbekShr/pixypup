@@ -19,4 +19,7 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 - 2026-10-31 (B2/B3): test baseline 35 tests in 5 files. `loadSettings` fails closed (screenAware/voice off, offline on) when admin.json is unreadable, corrupt, non-object, or has a mistyped known key. `src/main/settings.ts`
 - 2026-10-31 (B2/B3): `loadSettings()` result is unused until F1/F9 wire feature gates. `src/main/main.ts:53`
 
+- 2026-10-31 (F3): `src/api/pose-pipeline.ts` `generateSpritePack` is the photo→pack entry; events cutout/pose(+fallback)/pose-failed/done; frames share one canvas (~212x288), footY ≈ 0.993. Live: 44 s clean, 66 s with one edge retry. Tests 75 in 9 files.
+- 2026-10-31 (F3): `MetaClient.postJson/postStream` accept an optional AbortSignal. `src/api/meta-client.ts`
+
 ## Clean audits (so discovery skips these grounds)

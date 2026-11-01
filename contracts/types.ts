@@ -3,6 +3,7 @@ export type Species = 'dog' | 'cat';
 export interface PoseDef {
   frames: string[];
   fps: number;
+  /** Fraction (0..1) of the frame height, from the top, where the paws touch the floor. */
   footY: number;
 }
 
