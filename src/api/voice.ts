@@ -19,6 +19,7 @@ const FRAME_MS = 80;
 const FRAME_BYTES = (24000 * 2 * FRAME_MS) / 1000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const END_TIMEOUT_MS = 4000;
+const MAX_QUEUE_BYTES = 6 * 48000;
 export const COMMAND_KEYWORDS = ['sit', 'roll over', 'go to bed', 'come here', 'bark', 'nap'];
 
 export class VoiceError extends Error {
@@ -57,16 +58,26 @@ export async function openTranscription(opts: VoiceOptions): Promise<Transcripti
   const ws = new (opts.WebSocketImpl ?? WebSocket)(URL);
   const keywords = [...new Set([...(opts.keywords ?? []), ...COMMAND_KEYWORDS])];
 
-  let queue = new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  let queued = 0;
   let ending = false;
   let sentEnd = false;
   let closed = false;
   // One 80 ms frame per tick: never faster than real time. The tail frame may be shorter.
   const timer = setInterval(() => {
     if (closed) return;
-    if (queue.length) {
-      ws.send(queue.slice(0, FRAME_BYTES));
-      queue = queue.slice(FRAME_BYTES);
+    if (queued) {
+      const frame = new Uint8Array(Math.min(FRAME_BYTES, queued));
+      for (let n = 0; n < frame.length; ) {
+        const c = chunks[0];
+        const take = Math.min(c.length, frame.length - n);
+        frame.set(c.subarray(0, take), n);
+        n += take;
+        if (take === c.length) chunks.shift();
+        else chunks[0] = c.subarray(take);
+      }
+      queued -= frame.length;
+      ws.send(frame);
     } else if (ending && !sentEnd) {
       sentEnd = true;
       ws.send(JSON.stringify({ type: 'endStream' }));
@@ -92,6 +103,16 @@ export async function openTranscription(opts: VoiceOptions): Promise<Transcripti
   await new Promise<void>((resolve, reject) => {
     let acked = false;
     const to = setTimeout(() => fail(new VoiceError(0, 'handshake timeout')), HANDSHAKE_TIMEOUT_MS);
+    // Attached before the ack: an abort mid-handshake must close a socket that already carries the key.
+    opts.signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(to);
+        if (!acked) reject(new VoiceError(0, 'aborted'));
+        close();
+      },
+      { once: true },
+    );
     const fail = (e: VoiceError) => {
       clearTimeout(to);
       if (!acked) reject(e);
@@ -131,20 +152,18 @@ export async function openTranscription(opts: VoiceOptions): Promise<Transcripti
     };
   });
 
-  opts.signal?.addEventListener('abort', close, { once: true });
-
   return {
     push(pcm) {
       if (ending || closed) return;
       const b = pcm instanceof ArrayBuffer ? new Uint8Array(pcm) : new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-      const q = new Uint8Array(queue.length + b.length);
-      q.set(queue);
-      q.set(b, queue.length);
-      queue = q;
+      const room = MAX_QUEUE_BYTES - queued; // overflow is dropped, keeping the head of the utterance
+      if (room <= 0) return;
+      chunks.push(b.length > room ? b.slice(0, room) : b.slice());
+      queued += Math.min(b.length, room);
     },
     async end() {
       ending = true;
-      const to = setTimeout(close, END_TIMEOUT_MS + queue.length / 48); // queued audio drains at real time first
+      const to = setTimeout(close, END_TIMEOUT_MS + queued / 48); // queued audio drains at real time first
       await done;
       clearTimeout(to);
     },
@@ -153,7 +172,7 @@ export async function openTranscription(opts: VoiceOptions): Promise<Transcripti
 }
 
 // The gate throws NetworkBlockedError when voice is off (or offline): no socket is ever created then.
-export function openVoice(settings: Parameters<typeof openClient>[1], apiKey: string, opts: Omit<VoiceOptions, 'apiKey'>) {
+export async function openVoice(settings: Parameters<typeof openClient>[1], apiKey: string, opts: Omit<VoiceOptions, 'apiKey'>) {
   openClient('voice', settings, apiKey);
   return openTranscription({ ...opts, apiKey });
 }

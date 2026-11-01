@@ -139,10 +139,32 @@ describe('openTranscription', () => {
   });
 });
 
+describe('abort and memory bounds', () => {
+  it('abort during the handshake closes the socket and rejects', async () => {
+    const ac = new AbortController();
+    const p = openTranscription({ apiKey: KEY, onTranscript: vi.fn(), onError: vi.fn(), signal: ac.signal, WebSocketImpl: Impl });
+    FakeWS.last.onopen?.(); // key sent, no ack
+    ac.abort();
+    await expect(p).rejects.toMatchObject({ code: 0 });
+    expect(FakeWS.last.closedWith).toBe(1000);
+  });
+
+  it('caps the pending queue at 6 s and drains it in order', async () => {
+    const t = await setup().p;
+    const big = new Int16Array(24000 * 8).fill(7); // 8 s
+    t.push(big);
+    t.push(new Int16Array(100)); // dropped, queue is full
+    await vi.advanceTimersByTimeAsync(80 * 200);
+    const total = frames().reduce((n, f) => n + f.byteLength, 0);
+    expect(total).toBe(288000);
+    expect(frames().every((f) => f.byteLength <= 3840)).toBe(true);
+  });
+});
+
 describe('openVoice', () => {
-  it('is blocked by the gate when voice is off, before any socket exists', () => {
+  it('is blocked by the gate when voice is off: a rejected promise, no socket', async () => {
     FakeWS.last = undefined as never;
-    expect(() => openVoice(DEFAULT_SETTINGS, KEY, { onTranscript: vi.fn(), onError: vi.fn(), WebSocketImpl: Impl })).toThrow(NetworkBlockedError);
+    await expect(openVoice(DEFAULT_SETTINGS, KEY, { onTranscript: vi.fn(), onError: vi.fn(), WebSocketImpl: Impl })).rejects.toBeInstanceOf(NetworkBlockedError);
     expect(FakeWS.last).toBeUndefined();
   });
 });
