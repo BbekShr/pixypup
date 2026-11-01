@@ -1,6 +1,6 @@
 # PixyPup
 
-PixyPup is a desktop pet for macOS. A little dog walks along the bottom of your screen on a transparent, click-through overlay, reacts to what you are doing (when you opt in), and obeys voice commands. Screen awareness and voice are off by default, and nothing leaves your machine unless you turn them on.
+PixyPup is a desktop pet for macOS. A little 3D-style dog walks along the bottom of your screen on a transparent, click-through overlay, reacts to what you are doing (when you opt in), and obeys voice commands. Screen awareness and voice are off by default, and nothing leaves your machine unless you turn them on.
 
 ## Develop
 

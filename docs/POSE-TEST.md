@@ -42,3 +42,12 @@ SAM 3.1 returned **0 matches** for "red text", "red error message", "error text"
 (`r > 180`, `r - g > 80`, `r - b > 80`) and group rows into lines. It found exactly the three red
 lines with tight boxes, in milliseconds, with no network call. The sniff targets the last red line.
 SAM 3.1 stays where it is strong: cutting the pet out of the photo.
+
+## 3D style
+
+Decision (maintainer): "it has to be 3d". `STYLE` in `src/api/pose-pipeline.ts` now asks for a
+Pixar-style 3D animated-movie character instead of the flat chibi sticker, and the walk is a
+4-frame cycle (walk_0..walk_3, 8 fps) with walk_0 as a third reference for walk_1..3.
+Live result from a side session (pack at `out/pack3d/Pakkun`): 7 poses consistent, 54.2 s total,
+cream coat and collar kept. Soft fur edges stress the chroma key, so the despill path stays and is
+covered by a test with a semi-transparent fur fringe.

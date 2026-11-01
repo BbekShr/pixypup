@@ -10,7 +10,6 @@ import {
   layoutFrames,
   NoPetFoundError,
   POSES,
-  validateManifest,
   writePack,
   type PipelineEvent,
 } from '../pose-pipeline.js';
@@ -144,6 +143,36 @@ describe('chromaKey colour handling', () => {
   });
 });
 
+describe('chromaKey soft fur fringe', () => {
+  it('leaves no magenta cast on a semi-transparent cream fringe', async () => {
+    // 64 px wide ramp: cream coat alpha 1 -> 0 over magenta, like soft fur on the flat background.
+    const W = 64;
+    const buf = Buffer.alloc(W * 8 * 3);
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < W; x++) {
+        const a = 1 - x / (W - 1);
+        const i = (y * W + x) * 3;
+        buf[i] = Math.round(a * 240 + (1 - a) * 255);
+        buf[i + 1] = Math.round(a * 220);
+        buf[i + 2] = Math.round(a * 180 + (1 - a) * 255);
+      }
+    }
+    const { png, bleed } = await chromaKey(await sharp(buf, { raw: { width: W, height: 8, channels: 3 } }).png().toBuffer());
+    const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    console.log('DBG', Array.from({length: info.width}, (_, x) => [...data.subarray(x*4, x*4+4)].join(',')).join(' '));
+    let semi = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if ((data[i + 3] as number) === 0) continue;
+      if ((data[i + 3] as number) < 255) semi++;
+      // below ~25% alpha, 8-bit rounding is amplified by 1/alpha; those pixels are near invisible
+      if ((data[i + 3] as number) >= 64) expect(Math.min(data[i] as number, data[i + 2] as number) - (data[i + 1] as number)).toBeLessThan(60);
+    }
+    expect(semi).toBeGreaterThan(0);
+    expect(info.width).toBeGreaterThan(10);
+    expect(bleed).toBe(0);
+  });
+});
+
 describe('layoutFrames', () => {
   const frame = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 4, background: '#0a0' } }).png().toBuffer();
 
@@ -217,20 +246,6 @@ describe('layoutFrames wide pose', () => {
   });
 });
 
-describe('validateManifest', () => {
-  const ok = { pet: 'P', species: 'dog', poses: { idle: { frames: ['a.png'], fps: 2, footY: 0.9 } } };
-  it('accepts a good manifest', () => expect(() => validateManifest(ok)).not.toThrow());
-  it.each([
-    { ...ok, species: 'cow' },
-    { ...ok, extra: 1 },
-    { ...ok, poses: { idle: { frames: ['a.png'], fps: '2', footY: 0.9 } } },
-    { ...ok, poses: { idle: { frames: [1], fps: 2, footY: 0.9 } } },
-    { ...ok, poses: { idle: { frames: [], fps: 2 } } },
-    { ...ok, poses: { idle: { frames: [], fps: 2, footY: 0.9 } } },
-    null,
-  ])('rejects %j', (bad) => expect(() => validateManifest(bad)).toThrow(/Invalid sprite manifest/));
-});
-
 describe('generateSpritePack', () => {
   let root: string;
   let out: string;
@@ -254,32 +269,51 @@ describe('generateSpritePack', () => {
     return { p, requested };
   };
 
-  it('emits cutout, 7 poses, done, and writes the pack', async () => {
+  it('emits cutout, 10 poses, done, and writes the pack', async () => {
     const events: PipelineEvent[] = [];
     const { p } = await run({}, events);
     const manifest = await p;
-    expect(events.map((e) => e.stage)).toEqual(['cutout', ...Array(7).fill('pose'), 'done']);
+    expect(events.map((e) => e.stage)).toEqual(['cutout', ...Array(10).fill('pose'), 'done']);
     expect((await readdir(out)).sort()).toEqual([
       'bark.png',
       'idle_0.png',
+      'idle_blink.png',
       'roll.png',
       'sit.png',
       'sleep.png',
       'sprite-manifest.json',
       'walk_0.png',
       'walk_1.png',
+      'walk_2.png',
+      'walk_3.png',
     ]);
     expect(JSON.parse(await readFile(join(out, 'sprite-manifest.json'), 'utf8'))).toEqual(manifest);
-    expect(manifest.poses.walk?.frames).toEqual(['walk_0.png', 'walk_1.png']);
+    expect(manifest.poses.walk?.fps).toBe(8);
+    expect(manifest.poses.blink?.frames).toEqual(['idle_blink.png']);
+    expect(manifest.poses.blink?.footY).toBe(manifest.poses.idle?.footY);
+    expect(manifest.poses.walk?.frames).toEqual(['walk_0.png', 'walk_1.png', 'walk_2.png', 'walk_3.png']);
     expect(await readdir(root)).toEqual(['pack']);
   });
 
-  it('draws idle first, then the rest in parallel', async () => {
+  it('draws idle, then walk_0, then the rest in parallel', async () => {
     const t = Date.now();
     const { p, requested } = await run({ delayMs: 50 });
     await p;
-    expect(requested[0]).toBe('idle_0');
-    expect(Date.now() - t).toBeLessThan(300);
+    expect(requested.slice(0, 2)).toEqual(['idle_0', 'walk_0']);
+    expect(Date.now() - t).toBeLessThan(400);
+  });
+
+  it('passes walk_0 as a third reference to walk_1..3 only', async () => {
+    const refCount: Record<string, number> = {};
+    const { client } = fakeClient();
+    const post = client.postJson.bind(client) as (path: string, body: { prompt: string; images: unknown[] }, s?: AbortSignal) => Promise<unknown>;
+    (client as unknown as { postJson: typeof post }).postJson = (path, body, sig) => {
+      const name = Object.keys(POSES).find((k) => body.prompt.includes(POSES[k] as string)) as string;
+      refCount[name] = body.images.length;
+      return post(path, body, sig);
+    };
+    await generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, timing: { backoffMs: 1 } });
+    expect(refCount).toMatchObject({ idle_0: 1, walk_0: 2, walk_1: 3, walk_2: 3, walk_3: 3, sit: 2, bark: 2, idle_blink: 2 });
   });
 
   it('falls back to idle when a pose fails', async () => {
@@ -343,7 +377,7 @@ describe('generateSpritePack', () => {
       },
       timing: { backoffMs: 1 },
     });
-    expect(Object.keys(manifest.poses)).toHaveLength(6);
+    expect(Object.keys(manifest.poses)).toHaveLength(7);
     expect(await readdir(out)).toContain('sprite-manifest.json');
   });
 
@@ -359,7 +393,7 @@ describe('generateSpritePack', () => {
     expect(events.find((e) => e.stage === 'pose-failed')).toMatchObject({ name: 'sit', error: 'bad-output' });
   });
 
-  it('emits a body-free pose-failed and a fallback pose event so 7 pose events always arrive', async () => {
+  it('emits a body-free pose-failed and a fallback pose event so 10 pose events always arrive', async () => {
     const events: PipelineEvent[] = [];
     const { p } = await run({ fail: (n) => (n === 'bark' ? new MetaApiError(500, 'SECRET-BODY', '/images/edits') : false) }, events);
     await p;
@@ -367,7 +401,7 @@ describe('generateSpritePack', () => {
     expect(failed).toMatchObject({ name: 'bark', error: 'generation-failed (HTTP 500)' });
     expect(JSON.stringify(events.filter((e) => e.stage !== 'pose' && e.stage !== 'cutout'))).not.toContain('SECRET-BODY');
     const poses = events.filter((e) => e.stage === 'pose');
-    expect(poses).toHaveLength(7);
+    expect(poses).toHaveLength(10);
     expect(poses.find((e) => e.stage === 'pose' && e.name === 'bark')).toMatchObject({ fallback: true });
   });
 });

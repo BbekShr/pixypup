@@ -1,5 +1,5 @@
-// One pet photo -> sprite pack. SAM cuts the pet out, Muse Image draws idle first, then the other
-// poses in parallel with idle as a second reference, a local chroma key removes the magenta
+// One pet photo -> sprite pack. SAM cuts the pet out, Muse Image draws idle, then walk_0, then the other
+// poses in parallel with idle (and walk_0 for the walk frames) as extra references, a local chroma key removes the magenta
 // background and every frame is scaled to one body size on one shared canvas.
 // Privacy: the photo and cutout live in memory only; the library writes just the pack.
 
@@ -10,34 +10,43 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import type { SpriteManifest } from '../../contracts/types.js';
+import { validateManifest } from './manifest.js';
 import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
 import { largest, maskAt, segment } from './sam.js';
+
+export { validateManifest };
 
 export const MAGENTA = { r: 255, g: 0, b: 255 };
 const TARGET_HEIGHT = 256;
 const MARGIN = 2;
 
 export const STYLE =
-  'Redraw the exact same pet from the reference photo as a cute chibi sticker character: ' +
-  'same breed, same fur colours and markings, same ear shape, big friendly eyes, soft cel shading, ' +
-  'thick clean white sticker outline. Full body visible, centred, nothing cropped. ' +
+  'Render the exact same pet from the reference photo as a cute 3D animated-movie character, ' +
+  'Pixar-style: soft volumetric fur, gentle studio lighting with soft highlights, subtle ambient occlusion, ' +
+  'slightly stylised proportions (big expressive glossy eyes, rounded body), same breed, same fur colour and markings. ' +
+  'Full body visible, centred, nothing cropped. Thin clean white outline around the silhouette. ' +
   'Solid flat pure magenta background (#FF00FF) filling the whole canvas, no gradient, ' +
-  'no ground shadow, no props, no text. ' +
+  'no ground shadow, no reflections, no props, no text. ' +
   'Keep the same soft ears (same shape and how they hang), same face shape and same collar as the reference; ' +
   'do not change the breed or ear shape. ' +
   'Leave a clear margin of empty background on all four sides so nothing touches the canvas edge.';
 
-// idle_0 is generated first and then fed back as a second reference so every other pose
-// copies its character design.
+// idle_0 is generated first and fed back as a second reference so every other pose copies its
+// character design; walk_0 goes next and is the third reference for walk_1..3 so only the legs change.
+const WALK = 'Pose: walking, side view facing right, same size and camera; same body position, same height, only the legs change.';
+
 export const POSES: Record<string, string> = {
   idle_0: 'Pose: standing on all four legs, side view facing right, tail relaxed.',
-  walk_0: 'Pose: mid-walk, side view facing right, front-left and back-right legs forward.',
-  walk_1: 'Pose: mid-walk, side view facing right, front-right and back-left legs forward.',
+  walk_0: `${WALK} Frame 0 of a 4-frame walk cycle, contact: right front leg and left hind leg forward.`,
+  walk_1: `${WALK} Frame 1 of a 4-frame walk cycle, passing: all legs under the body.`,
+  walk_2: `${WALK} Frame 2 of a 4-frame walk cycle, contact mirrored: left front leg and right hind leg forward.`,
+  walk_3: `${WALK} Frame 3 of a 4-frame walk cycle, passing mirrored: all legs under the body, opposite legs lifting.`,
   sit: 'Pose: sitting upright facing the viewer, front paws together.',
   sleep: 'Pose: curled up asleep lying down, eyes closed, side view.',
   bark: 'Pose: barking happily, side view facing right, mouth open, ears perked.',
   roll: 'Pose: rolling over on its back, belly up, paws in the air, playful.',
+  idle_blink: 'Pose: same exact pose and framing as the idle reference image, eyes gently closed (a blink), nothing else changes.',
 };
 
 const POSE_NAMES = Object.keys(POSES);
@@ -220,26 +229,6 @@ export async function layoutFrames(
   return { frames, width, height, footY: (height - MARGIN) / height };
 }
 
-export function validateManifest(m: unknown): asserts m is SpriteManifest {
-  const bad = (why: string): never => {
-    throw new Error(`Invalid sprite manifest: ${why}`);
-  };
-  if (typeof m !== 'object' || m === null) return bad('not an object');
-  const o = m as Record<string, unknown>;
-  if (Object.keys(o).some((k) => !['pet', 'species', 'poses'].includes(k))) bad('unknown key');
-  if (typeof o.pet !== 'string') bad('pet');
-  if (o.species !== 'dog' && o.species !== 'cat') bad('species');
-  if (typeof o.poses !== 'object' || o.poses === null) return bad('poses');
-  for (const [name, p] of Object.entries(o.poses)) {
-    const d = p as Record<string, unknown> | null;
-    if (typeof d !== 'object' || d === null) return bad(`pose ${name}`);
-    if (Object.keys(d).some((k) => !['frames', 'fps', 'footY'].includes(k))) bad(`pose ${name} unknown key`);
-    if (!Array.isArray(d.frames) || d.frames.length === 0 || d.frames.some((f) => typeof f !== 'string')) bad(`pose ${name} frames`);
-    if (typeof d.fps !== 'number') bad(`pose ${name} fps`);
-    if (typeof d.footY !== 'number') bad(`pose ${name} footY`);
-  }
-}
-
 /** Publish `files` as outDir without ever leaving a half-written or missing pack. `mv` is injectable for tests. */
 export async function writePack(
   outDir: string,
@@ -320,7 +309,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     }
   };
   const draw = async (name: string, refs: string[]) => {
-    const prompt = `${STYLE} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
+    const prompt = `${STYLE} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' + (refs.length > 2 ? ' The third image is walk frame 0: keep its body, size and position; only the legs change.' : '') : '');
     try {
       return await attempt(prompt, refs);
     } catch (first) {
@@ -337,19 +326,23 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const refs = [cutoutOnMagenta, dataUrl(idle.img.buffer, idle.img.mime)];
 
   const keyed: Record<string, KeyedFrame> = { idle_0: idle.keyed };
-  await Promise.all(
-    POSE_NAMES.slice(1).map(async (name) => {
-      let failure: string | null = null;
-      try {
-        keyed[name] = (await draw(name, refs)).keyed;
-      } catch (err) {
-        keyed[name] = idle.keyed;
-        failure = reason(err, (err as { timedOut?: boolean }).timedOut === true);
-      }
-      if (failure) emit({ stage: 'pose-failed', name, error: failure });
-      poseEvent(name, (keyed[name] as KeyedFrame).png, failure ? true : undefined);
-    }),
-  );
+  const rest = async (name: string, refs: string[]) => {
+    let failure: string | null = null;
+    let img: Awaited<ReturnType<typeof draw>> | null = null;
+    try {
+      img = await draw(name, refs);
+      keyed[name] = img.keyed;
+    } catch (err) {
+      keyed[name] = idle.keyed;
+      failure = reason(err, (err as { timedOut?: boolean }).timedOut === true);
+    }
+    if (failure) emit({ stage: 'pose-failed', name, error: failure });
+    poseEvent(name, (keyed[name] as KeyedFrame).png, failure ? true : undefined);
+    return img;
+  };
+  const walk0 = await rest('walk_0', refs);
+  const walkRefs = walk0 ? [...refs, dataUrl(walk0.img.buffer, walk0.img.mime)] : refs;
+  await Promise.all(POSE_NAMES.slice(2).map((name) => rest(name, name.startsWith('walk_') ? walkRefs : refs)));
 
   const { frames, footY } = await layoutFrames(keyed, 'idle_0');
   const pose = (frames: string[], fps: number) => ({ frames, fps, footY });
@@ -358,11 +351,12 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     species: o.species,
     poses: {
       idle: pose(['idle_0.png'], 2),
-      walk: pose(['walk_0.png', 'walk_1.png'], 6),
+      walk: pose(['walk_0.png', 'walk_1.png', 'walk_2.png', 'walk_3.png'], 8),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),
       bark: pose(['bark.png'], 4),
       roll: pose(['roll.png'], 2),
+      blink: pose(['idle_blink.png'], 1),
     },
   };
   validateManifest(manifest);
