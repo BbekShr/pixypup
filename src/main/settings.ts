@@ -1,14 +1,18 @@
 import { app } from 'electron';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isPlainName } from './pack';
+import { MAX_PETS } from './pets';
 import { isEnergy, isSize, type Energy, type Size } from './prefs';
+
 
 export interface Settings {
   screenAware: boolean;
   voice: boolean;
   offline: boolean;
   adminDisableScreenAware: boolean;
-  petName: string;
+  petName: string; // the primary pet; also the only one when `pets` is absent or empty
+  pets?: string[]; // every pet's folder slug, primary first, at most MAX_PETS
   onboarded: boolean;
   size: Size;
   energy?: Energy; // only an explicit choice is stored; absent = the pet's own personality.energy
@@ -81,6 +85,10 @@ export function parseSettingsFile(text: string | null | Error): {
     const name = obj.petName;
     if (typeof name === 'string' && name.length > 0 && name.length <= 40) values.petName = name;
     else invalid.push('petName');
+  }
+  if ('pets' in obj) {
+    if (Array.isArray(obj.pets)) values.pets = [...new Set(obj.pets.filter((n): n is string => typeof n === 'string' && isPlainName(n) && n.length <= 40))].slice(0, MAX_PETS);
+    else invalid.push('pets');
   }
   if ('size' in obj) {
     if (isSize(obj.size)) values.size = obj.size;

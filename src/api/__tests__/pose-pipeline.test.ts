@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { isStaticSheet } from '../static-sheet.js';
 import { MetaApiError, type MetaClient, type StreamEvent } from '../meta-client.js';
 import {
   bboxIoU,
@@ -16,6 +17,9 @@ import {
   writePack,
   type PipelineEvent,
 } from '../pose-pipeline.js';
+import { validateManifest } from '../manifest.js';
+import { posesFor, styleFor } from '../pose-prompts.js';
+import { defaultProfile } from '../profile-defaults.js';
 
 const SAM_OUTPUT =
   '<0f>0<|box;x1=211;y1=228;x2=270;y2=254;w=320;h=334|>' +
@@ -36,7 +40,8 @@ const drawn = (cw: number, ch: number, w: number, h: number) =>
     .toBuffer();
 
 /** A sprite sheet: 4 equal blobs separated by wide magenta gaps. */
-const sheetImg = (widths = [50, 50, 50, 50]) => {
+// default widths differ so the frames are not a static sheet
+const sheetImg = (widths = [50, 58, 50, 58]) => {
   let left = 10;
   const blobs = widths.map((w) => {
     // rounded like a real silhouette: a frame cut by a straight edge is rejected as cropped
@@ -47,7 +52,16 @@ const sheetImg = (widths = [50, 50, 50, 50]) => {
   });
   return sharp({ create: { width: left, height: 100, channels: 3, background: '#ff00ff' } }).composite(blobs).png().toBuffer();
 };
-const defaultImage = (pose: string) => (pose === 'walk_sheet' ? sheetImg() : drawn(100, 100, 50, 50));
+/** The 8-phase walk sheet: 2 rows x 4 columns of rounded blobs with wide gaps; widths differ so it is not static. */
+const gridImg = (widths = [50, 58, 50, 58, 54, 46, 54, 46]) => {
+  const blobs = widths.map((w, i) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="50"><ellipse cx="${w / 2}" cy="25" rx="${w / 2}" ry="25" fill="#00aa00"/></svg>`;
+    return { input: Buffer.from(svg), left: 10 + (i % 4) * 110, top: 10 + Math.floor(i / 4) * 90 };
+  });
+  return sharp({ create: { width: 460, height: 170, channels: 3, background: '#ff00ff' } }).composite(blobs).png().toBuffer();
+};
+const defaultImage = (pose: string) =>
+  pose === 'walk_sheet8' ? gridImg() : pose === 'walk_sheet' ? sheetImg() : pose === 'turn_sheet' ? sheetImg([50, 50, 50, 50, 50]) : drawn(100, 100, 50, 50);
 
 const photo = () => sharp({ create: { width: 320, height: 334, channels: 3, background: '#888' } }).png().toBuffer();
 
@@ -62,10 +76,13 @@ interface FakeOpts {
   /** answers POST /responses (Muse Spark); absent = Spark fails */
   spark?: (body: Record<string, unknown>) => Promise<unknown>;
   sparkLog?: string[];
+  /** prompts to recognise poses by; default the dog's */
+  poses?: Record<string, string>;
 }
 
 function fakeClient(o: FakeOpts = {}) {
   const requested: string[] = [];
+  const prompts: string[] = [];
   const seen: Record<string, number> = {};
   const stats = { inflight: 0, maxInflight: 0 };
   const client = {
@@ -76,8 +93,10 @@ function fakeClient(o: FakeOpts = {}) {
         if (!o.spark) throw new Error('spark down');
         return o.spark(body as unknown as Record<string, unknown>);
       }
-      const pose = Object.keys(POSES).find((k) => body.prompt.includes(POSES[k] as string)) as string;
+      const lookup = o.poses ?? POSES;
+      const pose = Object.keys(lookup).find((k) => body.prompt.includes(lookup[k] as string)) as string;
       requested.push(pose);
+      prompts.push(body.prompt);
       const attempt = (seen[pose] = (seen[pose] ?? 0) + 1);
       if (pose === 'sit' && signal) o.signals?.push(signal);
       if (o.hang?.(pose, attempt)) {
@@ -93,7 +112,7 @@ function fakeClient(o: FakeOpts = {}) {
       return { data: [{ b64_json: webp.toString('base64') }] };
     },
   } as unknown as MetaClient;
-  return { client, requested, stats };
+  return { client, requested, prompts, stats };
 }
 
 describe('chromaKey', () => {
@@ -350,6 +369,7 @@ const PERSONA = {
   energy: 'normal',
   lines: ['one', 'two', 'three', 'four', 'five', 'six'],
 };
+const sparkName = (b: Record<string, unknown>) => (b.text as { format: { name: string } }).format.name;
 const sparkReply = (body: Record<string, unknown>) => {
   const isFacts = body.tools !== undefined;
   const t = isFacts ? { facts: [{ text: 'Old breed.', source: 'https://a.org' }] } : PERSONA;
@@ -385,11 +405,11 @@ describe('generateSpritePack', () => {
     return { p, requested, stats };
   };
 
-  it('emits cutout, 10 poses, done, and writes the pack', async () => {
+  it('emits cutout, 19 poses, done, and writes the pack', async () => {
     const events: PipelineEvent[] = [];
     const { p } = await run({}, events);
     const manifest = await p;
-    expect(events.map((e) => e.stage)).toEqual(['cutout', ...Array(10).fill('pose'), 'done']);
+    expect(events.map((e) => e.stage)).toEqual(['cutout', 'profile', ...Array(19).fill('pose'), 'done']);
     expect((await readdir(out)).sort()).toEqual([
       'bark.png',
       'idle_0.png',
@@ -399,23 +419,33 @@ describe('generateSpritePack', () => {
       'side_1.png',
       'side_2.png',
       'side_3.png',
+      'side_4.png',
+      'side_5.png',
+      'side_6.png',
+      'side_7.png',
       'sit.png',
       'sleep.png',
       'sprite-manifest.json',
+      'turn_back.png',
+      'turn_back34.png',
+      'turn_front.png',
+      'turn_front34.png',
+      'turn_side.png',
     ]);
     expect(JSON.parse(await readFile(join(out, 'sprite-manifest.json'), 'utf8'))).toEqual(manifest);
     expect(manifest.poses.walk?.fps).toBe(8);
     expect(manifest.poses.blink?.frames).toEqual(['idle_blink.png']);
     expect(manifest.poses.blink?.footY).toBe(manifest.poses.idle?.footY);
-    expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']); // the profile walk
+    expect(manifest.poses.walk?.frames).toEqual(Array.from({ length: 8 }, (_, i) => `side_${i}.png`)); // the 8-phase walk
     expect(await readdir(root)).toEqual(['pack']);
   });
 
-  it('draws idle first, then the sheet, sit, sleep, bark, roll and blink in parallel (7 requests)', async () => {
+  it('draws idle, then the turnaround, then the walk sheet, sit, sleep, bark, roll and blink in parallel (8 requests)', async () => {
     const { p, requested, stats } = await run({ delayMs: 50 });
     await p;
     expect(requested[0]).toBe('idle_0');
-    expect(requested.slice(1).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet']);
+    expect(requested[1]).toBe('turn_sheet');
+    expect(requested.slice(2).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet8']);
     expect(stats.maxInflight).toBe(6); // idle alone, then the other 6 at once; serial would peak at 1
   });
 
@@ -431,28 +461,99 @@ describe('generateSpritePack', () => {
       return post(path, body, sig);
     };
     await generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, timing: { backoffMs: 1 } });
-    expect(refCount).toEqual({ idle_0: 1, walk_sheet: 2, sit: 2, sleep: 2, bark: 2, roll: 2, idle_blink: 1 });
+    expect(refCount).toEqual({ idle_0: 1, turn_sheet: 2, walk_sheet8: 3, sit: 3, sleep: 3, bark: 3, roll: 3, idle_blink: 2 });
   });
 
   it.each([
     ['3 blobs', () => sheetImg().then((b) => sharp(b).composite([{ input: { create: { width: 60, height: 100, channels: 3, background: '#ff00ff' } }, left: 310, top: 0 }]).png().toBuffer())],
     ['unequal widths', () => sheetImg([50, 50, 50, 20])],
     ['one blob', () => drawn(100, 100, 50, 50)],
-  ])('falls back to 4 idle frames when the walk sheet is bad (%s), after one retry', async (_n, make) => {
+  ])('omits the walk instead of copying idle when the walk sheet is bad (%s): 2 grid tries, 1 four-frame try, 1 pair try', async (_n, make) => {
     const events: PipelineEvent[] = [];
-    const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? make() : defaultImage(n)) }, events);
-    await p;
-    expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(2);
-    expect(events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name)).toEqual(['side_0', 'side_1', 'side_2', 'side_3']);
-    // the idle drawing, on the walk's own (tighter) canvas
-    const drawing = async (f: string) => sharp(await readFile(join(out, f))).trim({ threshold: 0 }).raw().toBuffer();
-    for (let i = 0; i < 4; i++) expect(await drawing(`side_${i}.png`)).toEqual(await drawing('idle_0.png'));
+    const { p, requested } = await run({ image: async (n) => (n.startsWith('walk_sheet') ? make() : n === 'walk_pair' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
+    const manifest = await p;
+    expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(2);
+    expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(1);
+    expect(requested.filter((n) => n === 'walk_pair')).toHaveLength(1);
+    const failed = events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name);
+    expect(failed).toEqual([...Array.from({ length: 8 }, (_, i) => `side_${i}`), 'walk']);
+    expect(manifest.poses.walk).toBeUndefined();
+    expect(events.filter((e) => e.stage === 'pose')).toHaveLength(19);
+    expect((await readdir(out)).filter((f) => f.startsWith('side_'))).toEqual([]);
   });
 
-  it('slices a good sheet into 4 walk frames at idle height', async () => {
+  describe('static walk sheet (husky pack fixture)', () => {
+    const fx = (f: string) => readFile(new URL(`./fixtures/husky-pack/${f}`, import.meta.url));
+    /** The husky's 4 identical side frames laid out as one sheet on magenta. */
+    const staticSheet = async () => {
+      const side = await fx('side_0.png');
+      const { width } = await sharp(side).metadata();
+      const w = width as number;
+      return sharp({ create: { width: 4 * (w + 60) + 20, height: 280, channels: 3, background: '#ff00ff' } })
+        .composite([0, 1, 2, 3].map((i) => ({ input: side, left: 10 + i * (w + 60), top: 10 })))
+        .png()
+        .toBuffer();
+    };
+    /** The same 4 identical frames as an 8-cell 2 x 4 grid. */
+    const staticGrid = async () => {
+      const side = await fx('side_0.png');
+      const { width } = await sharp(side).metadata();
+      const w = width as number;
+      return sharp({ create: { width: 4 * (w + 60) + 20, height: 580, channels: 3, background: '#ff00ff' } })
+        .composite(Array.from({ length: 8 }, (_, i) => ({ input: side, left: 10 + (i % 4) * (w + 60), top: 10 + Math.floor(i / 4) * 290 })))
+        .png()
+        .toBuffer();
+    };
+
+    it('isStaticSheet is true for the real identical frames and false for different shapes', async () => {
+      const same = await Promise.all([0, 1, 2, 3].map(async (i) => ({ png: await fx(`side_${i}.png`) })));
+      expect(await isStaticSheet(same)).toBe(true);
+      const wide = { png: await sharp({ create: { width: 300, height: 100, channels: 4, background: '#0a0' } }).png().toBuffer() };
+      expect(await isStaticSheet([same[0]!, wide])).toBe(false);
+    });
+
+    it('rejects a sheet of identical slices and retries it', async () => {
+      const events: PipelineEvent[] = [];
+      const [grid, sheetPng] = [await staticGrid(), await staticSheet()];
+      const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet8' ? grid : n === 'walk_sheet' ? sheetPng : defaultImage(n)) }, events);
+      await p;
+      expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(2);
+      expect(events.find((e) => e.stage === 'pose-failed' && e.name === 'walk')).toMatchObject({ error: 'bad-output' });
+    });
+
+    it('falls back to a 2-frame sheet: stride, idle, stride, idle', async () => {
+      const events: PipelineEvent[] = [];
+      const [grid, sheetPng] = [await staticGrid(), await staticSheet()];
+      const { p, requested } = await run(
+        { image: async (n) => (n === 'walk_sheet8' ? grid : n === 'walk_sheet' ? sheetPng : n === 'walk_pair' ? sheetImg([50, 70]) : defaultImage(n)) },
+        events,
+      );
+      const manifest = await p;
+      expect(requested.filter((n) => n.startsWith('walk_'))).toHaveLength(4); // grid x2, four-frame sheet, pair: the worst case
+      expect(events.some((e) => e.stage === 'pose' && e.name === 'side_4')).toBe(false);
+      expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']);
+      expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
+      const px = async (f: string) => sharp(await readFile(join(out, f))).raw().toBuffer();
+      expect(await px('side_1.png')).toEqual(await px('side_3.png'));
+      expect((await px('side_0.png')).equals(await px('side_1.png'))).toBe(false);
+      expect((await px('side_0.png')).equals(await px('side_2.png'))).toBe(false);
+    });
+  });
+
+  it('falls back to the 4-frame sheet when the grid is bad, with 3 walk calls', async () => {
+    const events: PipelineEvent[] = [];
+    const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet8' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
+    const manifest = await p;
+    expect(requested.filter((n) => n.startsWith('walk_'))).toEqual(['walk_sheet8', 'walk_sheet8', 'walk_sheet']);
+    expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']);
+    expect(events.filter((e) => e.stage === 'pose')).toHaveLength(15);
+    expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
+  });
+
+  it('slices a good sheet into 8 walk frames at idle height', async () => {
     const { p } = await run({});
     await p;
-    for (let i = 0; i < 4; i++) expect(await drawnHeight(await readFile(join(out, `side_${i}.png`)))).toBe(256);
+    for (let i = 0; i < 8; i++) expect(await drawnHeight(await readFile(join(out, `side_${i}.png`)))).toBe(256);
   });
 
   it('falls back to idle when the blink jumps (IoU < 0.85)', async () => {
@@ -534,7 +635,7 @@ describe('generateSpritePack', () => {
       },
       timing: { backoffMs: 1 },
     });
-    expect(Object.keys(manifest.poses)).toHaveLength(7);
+    expect(Object.keys(manifest.poses)).toHaveLength(8);
     expect(await readdir(out)).toContain('sprite-manifest.json');
   });
 
@@ -550,7 +651,7 @@ describe('generateSpritePack', () => {
     expect(events.find((e) => e.stage === 'pose-failed')).toMatchObject({ name: 'sit', error: 'bad-output' });
   });
 
-  it('emits a body-free pose-failed and a fallback pose event so 10 pose events always arrive', async () => {
+  it('emits a body-free pose-failed and a fallback pose event so 19 pose events always arrive', async () => {
     const events: PipelineEvent[] = [];
     const { p } = await run({ fail: (n) => (n === 'bark' ? new MetaApiError(500, 'SECRET-BODY', '/images/edits') : false) }, events);
     await p;
@@ -558,7 +659,7 @@ describe('generateSpritePack', () => {
     expect(failed).toMatchObject({ name: 'bark', error: 'generation-failed (HTTP 500)' });
     expect(JSON.stringify(events.filter((e) => e.stage !== 'pose' && e.stage !== 'cutout'))).not.toContain('SECRET-BODY');
     const poses = events.filter((e) => e.stage === 'pose');
-    expect(poses).toHaveLength(10);
+    expect(poses).toHaveLength(19);
     expect(poses.find((e) => e.stage === 'pose' && e.name === 'bark')).toMatchObject({ fallback: true });
   });
 });
@@ -662,7 +763,7 @@ describe('meet your pet in the pipeline', () => {
     const sparkLog: string[] = [];
     const manifest = await (await run({ delayMs: 60, spark: slow, sparkLog }, events)).p;
     expect(sparkLog[0]).toBe('spark:0'); // started before any pose request
-    expect(log).toEqual(['spark-start', 'spark-end', 'spark-start', 'spark-end']); // meetPet then breedFacts, both done before the pack
+    expect(log.filter((x) => x === 'spark-end')).toHaveLength(3); // profile, meetPet, breedFacts, all done before the pack
     expect(manifest.personality).toBeDefined(); // finished inside the grace, was not cut
     expect(events.at(-1)?.stage).toBe('done');
   });
@@ -680,7 +781,7 @@ describe('meet your pet in the pipeline', () => {
     // an infinite hang: the test completing at all proves the grace period cuts it off
     const manifest = await generateSpritePack({
       client, photo: await photo(), petName: 'P', species: 'dog', outDir: out,
-      onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 100 },
+      onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 100, profileMs: 50 },
     });
     expect(manifest.personality).toBeUndefined();
     expect(signal?.aborted).toBe(true);
@@ -696,6 +797,7 @@ describe('meet your pet in the pipeline', () => {
     const { client } = fakeClient({
       fail: (pose) => pose === 'idle_0',
       spark: async (b) => {
+        if (sparkName(b) === 'motion_profile') return sparkReply(b); // unparseable as a profile: the default is used at once
         bodies.push(b);
         await gate;
         return sparkReply(b);
@@ -713,6 +815,176 @@ describe('meet your pet in the pipeline', () => {
     release();
     await new Promise((r) => setTimeout(r, 50));
     expect(bodies).toHaveLength(1); // meetPet only
-    expect(events.map((e) => e.stage)).toEqual(['cutout']);
+    expect(events.map((e) => e.stage)).toEqual(['cutout', 'profile']);
+  });
+});
+
+describe('profile-driven prompts', () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'pixy-test-'));
+  });
+  afterEach(() => rm(root, { recursive: true, force: true }));
+
+  const profileReply = (p: unknown) => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(p) }] }] });
+  const pack = async (species: string, o: FakeOpts, timing: Record<string, number> = {}) => {
+    const events: PipelineEvent[] = [];
+    const f = fakeClient(o);
+    const manifest = await generateSpritePack({
+      client: f.client, photo: await photo(), petName: 'P', species, outDir: join(root, 'pack'),
+      onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 50, ...timing },
+    });
+    return { ...f, events, manifest };
+  };
+  const spark = (profile: unknown) => async (b: Record<string, unknown>) => (sparkName(b) === 'motion_profile' ? profileReply(profile) : sparkReply(b));
+
+  it('the dog default reproduces the original dog prompts', () => {
+    const d = posesFor(defaultProfile('dog'));
+    expect(styleFor(defaultProfile('dog'))).toBe(
+      'Render the exact same pet from the reference photo as a cute 3D animated-movie character, ' +
+        'Pixar-style: soft volumetric fur, gentle studio lighting with soft highlights, subtle ambient occlusion, ' +
+        'slightly stylised proportions (big expressive glossy eyes, rounded body), same breed, same fur colour and markings. ' +
+        'Full body visible, centred, nothing cropped. Thin clean white outline around the silhouette. ' +
+        'Solid flat pure magenta background (#FF00FF) filling the whole canvas, no gradient, ' +
+        'no ground shadow, no reflections, no props, no text. ' +
+        'Keep the same soft ears (same shape and how they hang), same face shape and same collar as the reference; ' +
+        'do not change the breed or ear shape. ' +
+        'Leave a clear margin of empty background on all four sides so nothing touches the canvas edge.',
+    );
+    expect(d.walk_sheet).toBe(defaultProfile('dog').cycle.prompt);
+    expect(d.walk_pair).toContain('left front leg reaching far forward');
+    expect(d.sit).toBe('Pose: sitting upright facing the viewer, front paws together.');
+  });
+
+  it('asks a butterfly for wing frames, with no fur and no legs walking', async () => {
+    const bf = { ...defaultProfile('butterfly'), cycle: { kind: 'flap' as const, prompt: 'slow, lazy wingbeats' } };
+    const poses = posesFor(bf);
+    const { prompts, manifest } = await pack('butterfly', { spark: spark(bf), poses, image: async (n) => (n === 'walk_sheet' ? sheetImg() : drawn(100, 100, 50, 50)) });
+    const sheet = prompts.find((p) => p.includes('exactly 4 frames'))!;
+    expect(sheet).toMatch(/wings raised high/);
+    expect(sheet).toContain('slow, lazy wingbeats');
+    expect(sheet).not.toMatch(/walking|legs reaching|front leg/);
+    expect(prompts.every((p) => !/fur|ears|four legs/.test(p) || p === poses.idle_blink)).toBe(true);
+    expect(manifest.profile?.cycle.kind).toBe('flap');
+    expect(manifest.poses.walk?.frames).toHaveLength(4);
+  });
+
+  it('spells out the 8 walk phases on a 2 x 4 grid; other cycles keep 4 frames', () => {
+    const w = posesFor(defaultProfile('dog')).walk_sheet8!;
+    for (const part of ['exactly 8 frames', '2 rows of 4', 'Frame 1 contact', 'Frame 2 down', 'Frame 3 pass', 'Frame 4 up', 'Frames 5 to 8', 'one step behind', 'tail sways']) expect(w).toContain(part);
+    expect(posesFor(defaultProfile('butterfly')).walk_sheet).toContain('exactly 4 frames');
+  });
+
+  it('asks a snake for body undulation', () => {
+    const p = posesFor(defaultProfile('snake'));
+    expect(p.walk_sheet).toMatch(/S curve/);
+    expect(p.walk_sheet).not.toMatch(/legs/);
+    expect(p.walk_pair).toMatch(/S curve/);
+    expect(p.idle_0).not.toMatch(/legs/);
+  });
+
+  it.each([['hop', /crouched low/], ['spin', /quarter turn/]] as const)('%s has its own scaffold', (kind, re) => {
+    expect(posesFor({ ...defaultProfile('dog'), cycle: { kind, prompt: 'x' } }).walk_sheet).toMatch(re);
+  });
+
+  it('wraps role prompts in the style and keeps the manifest pose keys', async () => {
+    const p = { ...defaultProfile('cat'), roles: { ...defaultProfile('cat').roles, voice: { label: 'Meow', prompt: 'Pose: yowling loudly.' } } };
+    const { prompts, manifest } = await pack('cat', { spark: spark(p), poses: posesFor(p) });
+    expect(prompts.find((x) => x.includes('yowling'))!.startsWith(styleFor(p))).toBe(true);
+    expect(Object.keys(manifest.poses).sort()).toEqual(['bark', 'blink', 'idle', 'roll', 'sit', 'sleep', 'turn', 'walk']);
+  });
+
+  it('emits the profile before the first pose and puts it in a valid manifest', async () => {
+    const { events, manifest } = await pack('dog', { spark: spark(defaultProfile('dog')) });
+    const stages = events.map((e) => e.stage);
+    expect(stages.indexOf('profile')).toBeGreaterThan(stages.indexOf('cutout'));
+    expect(stages.indexOf('profile')).toBeLessThan(stages.indexOf('pose'));
+    const ev = events.find((e) => e.stage === 'profile');
+    expect(ev && ev.stage === 'profile' && ev.profile).toEqual(manifest.profile);
+    expect(() => validateManifest(JSON.parse(JSON.stringify(manifest)))).not.toThrow();
+  });
+
+  it.each([
+    ['Spark is down', {}, {}],
+    ['a profile that never answers', { spark: () => new Promise(() => undefined) }, { profileMs: 40 }],
+    ['an unusable profile', { spark: async () => profileReply({ locomotion: 'nope' }) }, {}],
+  ])('falls back to the species default when %s, and still completes', async (_n, o, timing) => {
+    const { manifest, events } = await pack('rabbit', o as FakeOpts, timing);
+    expect(manifest.profile).toEqual(defaultProfile('rabbit'));
+    expect(events.at(-1)?.stage).toBe('done');
+  });
+
+  it('makes SAM 1, Spark 3 (profile, personality, facts) and Image 8 requests (7 + the turnaround)', async () => {
+    const paths: string[] = [];
+    const f = fakeClient({ spark: spark(defaultProfile('dog')) });
+    const post = f.client.postJson.bind(f.client) as (p: string, b: unknown, s?: AbortSignal) => Promise<unknown>;
+    (f.client as unknown as { postJson: typeof post }).postJson = (path, b, s) => (paths.push(path), post(path, b, s));
+    let streams = 0;
+    const stream = f.client.postStream.bind(f.client);
+    (f.client as unknown as { postStream: typeof stream }).postStream = ((...a: Parameters<typeof stream>) => (streams++, stream(...a))) as typeof stream;
+    await generateSpritePack({ client: f.client, photo: await photo(), petName: 'P', species: 'dog', outDir: join(root, 'pack'), timing: { backoffMs: 1, sparkGraceMs: 200 } });
+    expect(streams).toBe(1);
+    expect(paths.filter((x) => x === '/responses')).toHaveLength(3);
+    expect(paths.filter((x) => x !== '/responses')).toHaveLength(8);
+  });
+});
+
+describe('turnaround sheet', () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'pixy-test-'));
+  });
+  afterEach(() => rm(root, { recursive: true, force: true }));
+
+  /** Records every image request as {pose, refs}. */
+  const go = async (o: FakeOpts = {}) => {
+    const f = fakeClient(o);
+    const calls: { pose: string; refs: string[]; prompt: string }[] = [];
+    const post = f.client.postJson.bind(f.client) as (p: string, b: { prompt: string; images: { image_url: string }[] }, s?: AbortSignal) => Promise<unknown>;
+    (f.client as unknown as { postJson: typeof post }).postJson = (path, b, s) => {
+      if (path !== '/responses') {
+        const pose = Object.keys(POSES).find((k) => b.prompt.includes(POSES[k] as string)) as string;
+        calls.push({ pose, refs: b.images.map((i) => i.image_url), prompt: b.prompt });
+      }
+      return post(path, b, s);
+    };
+    const events: PipelineEvent[] = [];
+    const manifest = await generateSpritePack({
+      client: f.client, photo: await photo(), petName: 'P', species: 'dog', outDir: join(root, 'pack'),
+      onProgress: (e) => events.push(e), timing: { backoffMs: 1 },
+    });
+    return { calls, manifest, events };
+  };
+
+  it('is requested once, right after idle, with cutout + idle as references', async () => {
+    const { calls } = await go();
+    expect(calls.map((c) => c.pose).slice(0, 2)).toEqual(['idle_0', 'turn_sheet']);
+    expect(calls.filter((c) => c.pose === 'turn_sheet')).toHaveLength(1);
+    expect(calls[1]?.refs).toHaveLength(2);
+    expect(calls[1]?.prompt).toMatch(/exactly 5 views/);
+  });
+
+  it('gives five turn frames in the manifest, on one canvas height', async () => {
+    const { manifest, events } = await go();
+    expect(manifest.poses.turn?.frames).toEqual(['turn_front.png', 'turn_front34.png', 'turn_side.png', 'turn_back34.png', 'turn_back.png']);
+    expect(manifest.poses.turn?.footY).toBe(manifest.poses.idle?.footY);
+    expect(events.filter((e) => e.stage === 'pose' && e.name.startsWith('turn_'))).toHaveLength(5);
+  });
+
+  it('passes the turnaround sheet as an extra reference to every later pose', async () => {
+    const { calls } = await go();
+    const later = calls.slice(2);
+    expect(later.map((c) => c.pose).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet8']);
+    for (const c of later) expect(c.refs.length).toBe(c.pose === 'idle_blink' ? 2 : 3);
+    expect(new Set(later.map((c) => c.refs.at(-1))).size).toBe(1);
+  });
+
+  it('skips turn after one retry and still completes when the sheet is bad', async () => {
+    const { calls, manifest, events } = await go({ image: async (n) => (n === 'turn_sheet' ? drawn(100, 100, 50, 50) : defaultImage(n)) });
+    expect(calls.filter((c) => c.pose === 'turn_sheet')).toHaveLength(2);
+    expect(manifest.poses.turn).toBeUndefined();
+    expect(calls.filter((c) => c.pose === 'sit')[0]?.refs).toHaveLength(2);
+    expect(events.filter((e) => e.stage === 'pose-failed' && e.name === 'turn')).toHaveLength(1);
+    expect(events.at(-1)?.stage).toBe('done');
   });
 });

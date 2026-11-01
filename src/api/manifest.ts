@@ -1,5 +1,6 @@
 // Leaf module (no sharp): the app main process imports this to check packs read from disk.
 import type { SpriteManifest } from '../../contracts/types.js';
+import { CYCLES, FIDGETS, LOCOMOTIONS, RANGE, ROLES, SPECIES_RE } from './profile-defaults.js';
 
 const FRAME = /^[A-Za-z0-9_][\w.-]*\.png$/;
 
@@ -26,15 +27,41 @@ function personalityOk(v: unknown): boolean {
   );
 }
 
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const inRange = (v: unknown, r: readonly [number, number]) => typeof v === 'number' && v >= r[0] && v <= r[1];
+const num = (o: Record<string, unknown>, keys: (keyof typeof RANGE)[]) => keys.every((k) => inRange(o[k], RANGE[k]));
+
+function roleOk(v: unknown): boolean {
+  return isObj(v) && only(v, ['label', 'prompt', 'bubble']) && str(v.label, 16) && str(v.prompt, 200) && (v.bubble === undefined || str(v.bubble, 12));
+}
+
+export function profileOk(v: unknown): boolean {
+  if (!isObj(v)) return false;
+  const { gait, air, cycle, roles, fidgets } = v;
+  const GAIT = ['cadenceHz', 'strideBody', 'bounce', 'pitchDeg', 'speedBody'] as const;
+  const AIR = ['minLiftBody', 'maxLiftBody', 'flutterHz', 'sway'] as const;
+  return (
+    only(v, ['locomotion', 'subject', 'styleHints', 'gait', 'air', 'cycle', 'idlePrompt', 'fidgets', 'roles', 'energy']) &&
+    LOCOMOTIONS.includes(v.locomotion as never) && str(v.subject, 60) && str(v.styleHints, 120) && str(v.idlePrompt, 200) && str(v.energy, 40) &&
+    isObj(gait) && only(gait, [...GAIT]) && num(gait, [...GAIT]) &&
+    (v.locomotion === 'fly' ? isObj(air) : air === undefined || isObj(air)) &&
+    (air === undefined || (isObj(air) && only(air, [...AIR, 'perches']) && num(air, [...AIR]) && typeof air.perches === 'boolean')) &&
+    isObj(cycle) && only(cycle, ['kind', 'prompt']) && CYCLES.includes(cycle.kind as never) && str(cycle.prompt, 900) &&
+    Array.isArray(fidgets) && fidgets.length >= 2 && fidgets.length <= 5 && fidgets.every((f) => FIDGETS.includes(f as never)) &&
+    isObj(roles) && only(roles, ROLES) && ROLES.every((r) => roleOk(roles[r]))
+  );
+}
+
 export function validateManifest(m: unknown): asserts m is SpriteManifest {
   const bad = (why: string): never => {
     throw new Error(`Invalid sprite manifest: ${why}`);
   };
   if (typeof m !== 'object' || m === null) return bad('not an object');
   const o = m as Record<string, unknown>;
-  if (Object.keys(o).some((k) => !['pet', 'species', 'poses', 'personality'].includes(k))) bad('unknown key');
+  if (Object.keys(o).some((k) => !['pet', 'species', 'profile', 'poses', 'personality'].includes(k))) bad('unknown key');
   if (typeof o.pet !== 'string') bad('pet');
-  if (o.species !== 'dog' && o.species !== 'cat') bad('species');
+  if (typeof o.species !== 'string' || !SPECIES_RE.test(o.species)) bad('species');
+  if (o.profile !== undefined && !profileOk(o.profile)) bad('profile');
   if (o.personality !== undefined && !personalityOk(o.personality)) bad('personality');
   if (typeof o.poses !== 'object' || o.poses === null) return bad('poses');
   for (const [name, p] of Object.entries(o.poses)) {

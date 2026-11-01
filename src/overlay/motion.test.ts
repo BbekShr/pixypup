@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, type Mirror, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -29,11 +29,6 @@ describe('motion', () => {
     expect(walkFrame(40, 2, 20)).toBe(0);
     expect(walkFrame(79, 4, 20)).toBe(3);
     expect(walkFrame(80, 4, 20)).toBe(0);
-  });
-  it('bob is 0 at a footfall, 4 px up mid-stride, and frozen when standing still', () => {
-    expect(bob(0, 20)).toBeCloseTo(0);
-    expect(bob(20, 20)).toBeCloseTo(0);
-    expect(bob(10, 20)).toBeCloseTo(-4);
   });
   it('leans toward the travel direction and the transform keeps that sign when mirrored', () => {
     expect(lean(1)).toBe(2);
@@ -308,21 +303,34 @@ describe('frame registration', () => {
   });
 });
 
-describe('gait, bark, settle', () => {
-  it('squashes at each footfall, stretches mid-stride, rocks the other way every step', () => {
-    expect(gait(0, 20).sy).toBeCloseTo(0.985);
-    expect(gait(10, 20).sy).toBeCloseTo(1.015);
-    expect(gait(10, 20).sx).toBeLessThan(1);
-    expect(gait(10, 20).rot).toBeCloseTo(1.2);
-    expect(gait(30, 20).rot).toBeCloseTo(-1.2);
-    expect(gait(10, 20).dy).toBe(bob(10, 20));
+describe('boundGait', () => {
+  const H = 100;
+  const stride = 20;
+  const samples = Array.from({ length: 200 }, (_, i) => boundGait((i / 200) * stride, stride, H));
+  it('leaves the ground by at least 0.05h once per stride and is grounded at each footfall', () => {
+    expect(Math.max(...samples.map((s) => -s.dy))).toBeGreaterThanOrEqual(0.05 * H);
+    expect(Math.max(...samples.map((s) => -s.dy))).toBeLessThanOrEqual(0.07 * H + 1e-9);
+    expect(boundGait(0, stride, H).dy).toBeCloseTo(0);
+    expect(boundGait(stride, stride, H).dy).toBeCloseTo(0);
+    expect(boundGait(3 * stride, stride, H).dy).toBeCloseTo(0);
   });
-  it('adds only a light footfall and no rock to a drawn side-on cycle', () => {
-    expect(gait(10, 20, true).rot).toBe(0);
-    expect(gait(30, 20, true).rot).toBe(0);
-    expect(gait(10, 20, true).dy).toBeCloseTo(0.4 * bob(10, 20));
-    expect(gait(10, 20, true).sy).toBeCloseTo(1.006);
+  it('stretches mid-air, squashes on landing, keeps volume, and pitches forward at push-off', () => {
+    expect(boundGait(10, stride, H).sy).toBeCloseTo(1.06);
+    expect(boundGait(0, stride, H).sy).toBeCloseTo(0.92);
+    for (const s of samples) expect(s.sx * s.sy).toBeCloseTo(1);
+    const rot = samples.map((s) => s.rot);
+    expect(Math.max(...rot)).toBeGreaterThan(3);
+    expect(Math.max(...rot)).toBeLessThan(4.5);
   });
+  it('does not bounce a body that has not moved', () => {
+    const still = boundGait(7 * stride, stride, H); // stopped on a footfall: the same pose every frame, nothing airborne
+    expect(Math.abs(still.dy)).toBeLessThan(1e-9);
+    expect(Math.abs(still.rot)).toBeLessThan(1e-9);
+    expect(boundGait(7 * stride, stride, H)).toEqual(still);
+  });
+});
+
+describe('bark, settle', () => {
   it('each woof winds up (nose down, crouch) then pops (nose up, chest up), and is calm between bursts', () => {
     const wind = barkPose(140);
     expect(wind.rot).toBeLessThan(0);
@@ -427,5 +435,77 @@ describe('hopTurn', () => {
       expect(Math.abs(f(r, 1000 + e).dy - f(base, 1000 + e - 1).dy)).toBeLessThanOrEqual(step + 1e-9);
       expect(Math.abs(f(r, 1000 + e).sy - f(base, 1000 + e - 1).sy) * 8).toBeLessThanOrEqual(step + 1e-9);
     }
+  });
+});
+
+describe('turnFrame', () => {
+  it('goes side, front34, front at the apex, front34, side', () => {
+    const seq = [0.05, 0.3, 0.5, 0.7, 0.95].map((u) => turnFrame(u).idx);
+    expect(seq).toEqual([TURN_SIDE, TURN_FRONT34, TURN_FRONT, TURN_FRONT34, TURN_SIDE]);
+  });
+  it('is symmetric under u -> 1-u', () => {
+    for (let u = 0; u <= 1; u += 0.01) expect(turnFrame(u).idx).toBe(turnFrame(1 - u).idx);
+  });
+  it('flips the mirror once, at the apex where the front is drawn', () => {
+    let flips = 0;
+    let prev = turnFrame(0);
+    for (let u = 0.001; u <= 1; u += 0.001) {
+      const f = turnFrame(u);
+      if (f.mirrorFromFacing !== prev.mirrorFromFacing) { flips++; expect(f.idx).toBe(TURN_FRONT); }
+      prev = f;
+    }
+    expect(flips).toBe(1);
+  });
+});
+
+describe('walkBody', () => {
+  const H = 140;
+  const dy = (p: number, g = gaitParams('walk')): number => walkBody(p, H, g).dy;
+  it('is lowest on the down phases and highest on the up phases', () => {
+    for (const p of [1 / 8, 5 / 8]) expect(dy(p)).toBeCloseTo(0.012 * H, 6);
+    for (const p of [3 / 8, 7 / 8]) expect(dy(p)).toBeCloseTo(-0.012 * H, 6);
+    for (const p of [0, 2 / 8, 4 / 8, 6 / 8]) expect(Math.abs(dy(p))).toBeLessThan(1e-9);
+  });
+  it('repeats every half cycle and is continuous across the wrap', () => {
+    for (let p = 0; p < 0.5; p += 0.01) {
+      expect(walkBody(p, H).dy).toBeCloseTo(walkBody(p + 0.5, H).dy, 9);
+      expect(walkBody(p, H).rot).toBeCloseTo(walkBody(p + 0.5, H).rot, 9);
+    }
+    expect(walkBody(0, H).dy).toBeCloseTo(walkBody(1 - 1e-9, H).dy, 6);
+  });
+  it('stays small: the frames already draw the legs', () => {
+    for (let p = 0; p <= 1; p += 0.01) {
+      const b = walkBody(p, H);
+      expect(Math.abs(b.dy)).toBeLessThanOrEqual(0.012 * H + 1e-9);
+      expect(Math.abs(b.rot)).toBeLessThanOrEqual(1.2 + 1e-9);
+      expect(b.sx * b.sy).toBeCloseTo(1, 9); // volume kept
+      expect(b.sy).toBeGreaterThanOrEqual(0.98 - 1e-9);
+    }
+  });
+  it('the spine rocks out of phase with the dip', () => {
+    expect(walkBody(0, H).rot).toBeCloseTo(1.2, 6);
+    expect(walkBody(1 / 8, H).rot).toBeCloseTo(0, 6);
+    expect(walkBody(2 / 8, H).rot).toBeCloseTo(-1.2, 6);
+  });
+});
+
+describe('gaits', () => {
+  it('a trot reaches further, bounces more and floats at the pass phases; a sneak is low, slow and nose-down', () => {
+    const [w, t, s] = [gaitParams('walk'), gaitParams('trot'), gaitParams('sniff')];
+    expect(t.reach).toBe(1.3);
+    expect(t.bounce).toBe(1.8);
+    expect(t.speed).toBe(2);
+    expect(walkBody(0.25, 140, t).dy).toBeLessThan(walkBody(0.25, 140, w).dy);
+    expect(s.speed).toBe(0.6);
+    expect(s.sy).toBe(0.95);
+    expect(walkBody(0.3, 140, s).sy).toBeLessThan(walkBody(0.3, 140, w).sy);
+    expect(walkBody(0.25, 140, s).rot).toBeLessThan(walkBody(0.25, 140, w).rot - 3.9);
+    expect(s.bounce).toBe(0.5);
+  });
+  it('the default dog profile reproduces the constants; other profiles scale and clamp', () => {
+    expect(profileScale({ bounce: 0.03, pitchDeg: 2 })).toEqual({ bounce: 1, pitch: 1 });
+    expect(profileScale(undefined)).toEqual({ bounce: 1, pitch: 1 });
+    expect(profileScale({ bounce: 0.15, pitchDeg: 40 })).toEqual({ bounce: 1.5, pitch: 1.5 });
+    expect(profileScale({ bounce: 0, pitchDeg: 0 })).toEqual({ bounce: 0.3, pitch: 0 });
   });
 });

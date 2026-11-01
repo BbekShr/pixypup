@@ -22,7 +22,7 @@ const FACTS: PetFact[] = [
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-export async function fakeCreate(o: { srcDir: string; outDir: string; name: string; species: 'dog' | 'cat'; fast: boolean; emit: (e: PipelineEvent) => void }): Promise<void> {
+export async function fakeCreate(o: { srcDir: string; outDir: string; name: string; species: string; fast: boolean; emit: (e: PipelineEvent) => void }): Promise<void> {
   const cutoutAt = o.fast ? 500 : 4000;
   const [from, to] = o.fast ? [1000, 4500] : [15_000, 50_000];
   const manifest = JSON.parse(await readFile(join(o.srcDir, 'sprite-manifest.json'), 'utf8')) as SpriteManifest;

@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'" />
+    <title>PixyPup Overload</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; pointer-events: none; }
+      .sp { position: absolute; left: 0; top: 0; will-change: transform; transform: translate(-9999px, 0); user-select: none; -webkit-user-drag: none; pointer-events: none; }
+      .heart { position: absolute; left: 0; top: 0; font: 700 16px var(--font); color: var(--blush); pointer-events: none; will-change: transform, opacity; }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="./overload.ts"></script>
+  </body>
+</html>

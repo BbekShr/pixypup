@@ -62,6 +62,11 @@ h1 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 800; letter-spa
 input[type="text"], input[type="password"] { width: 100%; max-width: 300px; box-sizing: border-box; font: 600 17px var(--font); color: var(--ink); text-align: center; background: #fff; border: 2px solid var(--cream-deep); border-radius: var(--pill); padding: 12px 18px; user-select: text; -webkit-user-select: text; transition: border-color var(--fast), box-shadow var(--fast); }
 input:focus { outline: none; border-color: var(--blush); box-shadow: 0 0 0 4px rgba(244, 166, 160, .3); }
 input::placeholder { color: rgba(59, 47, 42, .3); font-weight: 500; }
+.ask { margin: 4px 0 0; font: 800 15px var(--font); }
+.err { margin: 0; min-height: 1.4em; color: var(--ink-soft); }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 320px; }
+.chip { font: 700 13px var(--font); color: var(--ink); background: var(--cream-deep); border: 0; border-radius: var(--pill); padding: 6px 14px; cursor: pointer; transition: background var(--fast), transform var(--fast) var(--pop); }
+.chip:hover { background: var(--honey); transform: scale(1.05); }
 .pills { display: flex; gap: 8px; padding: 4px; background: var(--cream-deep); border-radius: var(--pill); }
 .pill { font: 700 14px var(--font); color: var(--ink-soft); border: 0; background: transparent; padding: 8px 22px; border-radius: var(--pill); cursor: pointer; transition: background var(--fast), color var(--fast), transform var(--fast) var(--pop); }
 .pill.on { background: var(--honey); color: var(--ink); box-shadow: 0 2px 6px rgba(59, 47, 42, .15); transform: scale(1.05); }

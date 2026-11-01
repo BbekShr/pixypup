@@ -13,7 +13,7 @@ describe('validateManifest', () => {
   });
   it('is re-exported from pose-pipeline', () => expect(reexported).toBe(validateManifest));
   it.each([
-    { ...ok, species: 'cow' },
+    { ...ok, species: 'c0w' },
     { ...ok, extra: 1 },
     withPose({ fps: '2' }),
     withPose({ frames: [1] }),

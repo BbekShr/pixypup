@@ -1,4 +1,44 @@
-export type Species = 'dog' | 'cat';
+/** Free text, 1 to 30 characters: letters, spaces and hyphens ("husky", "monarch butterfly"). */
+export type Species = string;
+
+export type Locomotion = 'quadruped' | 'biped' | 'hop' | 'fly' | 'slither' | 'roll';
+export type CycleKind = 'walk' | 'flap' | 'hop' | 'undulate' | 'spin';
+export type Fidget = 'groom' | 'knead' | 'flutter' | 'wave' | 'phone' | 'preen' | 'hover' | 'bob';
+export type RoleName = 'rest' | 'sleep' | 'voice' | 'trick';
+
+export interface RoleDef {
+  /** At most 16 characters: the menu label. */
+  label: string;
+  /** At most 200 characters: the pose, wrapped by STYLE. */
+  prompt: string;
+  /** At most 12 characters. */
+  bubble?: string;
+}
+
+/** How this creature moves, idles and what it does for the fixed roles. All numbers are clamped on read. */
+export interface MotionProfile {
+  locomotion: Locomotion;
+  subject: string;
+  styleHints: string;
+  gait: {
+    cadenceHz: number;
+    /** Body widths travelled per full cycle. */
+    strideBody: number;
+    /** Vertical bob, in body heights. */
+    bounce: number;
+    pitchDeg: number;
+    /** Cruise speed, body widths per second. */
+    speedBody: number;
+  };
+  /** Required when locomotion is 'fly'. Heights are in body heights above the floor. */
+  air?: { minLiftBody: number; maxLiftBody: number; flutterHz: number; perches: boolean; sway: number };
+  cycle: { kind: CycleKind; prompt: string };
+  idlePrompt: string;
+  /** 2 to 5. */
+  fidgets: Fidget[];
+  roles: Record<RoleName, RoleDef>;
+  energy: string;
+}
 
 export interface PoseDef {
   frames: string[];
@@ -26,6 +66,8 @@ export interface PetFact {
 export interface SpriteManifest {
   pet: string;
   species: Species;
+  profile?: MotionProfile;
+  /** Optional 'turn': 5 stills in order front, front three-quarter (facing right), right side, back three-quarter, back. */
   poses: Record<string, PoseDef>;
   personality?: Personality & { facts?: PetFact[] };
 }

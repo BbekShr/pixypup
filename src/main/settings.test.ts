@@ -135,3 +135,16 @@ describe('loadSettings (real read/merge path)', () => {
     expect(s.voice).toBe(false);
   });
 });
+
+describe('pets list', () => {
+  it('keeps valid slugs, drops bad names and duplicates, caps at four', async () => {
+    fsMock.files = { '/tmp/settings.json': '{"pets":["a","../x","b","a","c","d","e",3,""]}' };
+    const { loadSettings } = await import('./settings');
+    expect(loadSettings().pets).toEqual(['a', 'b', 'c', 'd']);
+  });
+  it('a non-array pets is dropped', async () => {
+    fsMock.files = { '/tmp/settings.json': '{"pets":"a"}' };
+    const { loadSettings } = await import('./settings');
+    expect(loadSettings().pets).toBeUndefined();
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { factViews, finishRun, noRuns, record, recordInfo, sourceFor, startRun, type Progress } from './run-state';
+import { factViews, finishRun, noRuns, record, recordFailed, recordInfo, sourceFor, startRun, walkFailed, type Progress } from './run-state';
 
 const p = (name: string, url = name): Progress => ({ kind: name === 'cutout' ? 'cutout' : 'pose', name, url });
 
@@ -47,6 +47,16 @@ describe('personality and facts', () => {
     expect(sourceFor(r, 0)).toBe('https://x.org/a');
     for (const bad of [1, 2, 3, -1, 1.5, '0', 'https://evil.example', undefined]) expect(sourceFor(r, bad)).toBeNull();
     expect(sourceFor(noRuns, 0)).toBeNull();
+  });
+  it('reports a lost walk cycle only for a failed walk or all four side frames, and keeps it for a reopened window', () => {
+    const failed = (...names: string[]) => names.reduce((r, n) => recordFailed(r, 1, n), startRun(noRuns, 'Milo', 'dog')!.runs);
+    expect(walkFailed(failed('walk').current)).toBe(true);
+    expect(walkFailed(failed('side_0', 'side_1', 'side_2', 'side_3').current)).toBe(true);
+    expect(walkFailed(failed('sit', 'side_0', 'side_1').current)).toBe(false);
+    expect(walkFailed(null)).toBe(false);
+    const r = failed('walk');
+    expect(r.current?.failed).toEqual(['walk']);
+    expect(recordFailed(r, 2, 'sit')).toBe(r);
   });
   it('shows the page no URLs', () => {
     expect(JSON.stringify(factViews(facts))).not.toContain('http');

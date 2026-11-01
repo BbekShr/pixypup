@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { energyParams } from '../main/prefs';
-import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
+import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
 
 describe('next', () => {
   it('drag wins over everything and drop resumes walking', () => {
@@ -95,5 +95,23 @@ describe('stay, click and release', () => {
   });
   it('a lost pointer (release as a non-click) never leaves the pet in drag', () => {
     for (const stay of [true, false]) expect(release('walk', false, stay)).not.toBe('drag');
+  });
+});
+
+describe('commanded sit hold', () => {
+  it('lasts about a minute, scaled by energy; stay holds without a timeout', () => {
+    const [sleepy, normal, playful] = (['sleepy', 'normal', 'playful'] as const).map((e) => sitHoldMs(energyParams(e), false));
+    expect(normal).toBe(60_000);
+    expect(playful!).toBeLessThan(normal!);
+    expect(sleepy!).toBeGreaterThan(normal!);
+    expect(sitHoldMs(energyParams('normal'), true)).toBe(Infinity);
+  });
+  it('is far longer than the click-trick sit', () => {
+    expect(sitHoldMs(energyParams('playful'), false)).toBeGreaterThan(10 * (dwellMs('sit', 0, energyParams('playful')) ?? 0));
+  });
+  it('a long sit nobody interrupted ends in a nap, a short one wanders on', () => {
+    const p = energyParams('normal');
+    expect(onTimeout('sit', 0.5, sitHoldMs(p, false), p)).toBe('sleep');
+    expect(onTimeout('sit', 0.5, 5000, p)).toBe('walk');
   });
 });

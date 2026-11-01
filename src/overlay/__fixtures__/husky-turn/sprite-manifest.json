@@ -1,0 +1,145 @@
+{
+  "pet": "Rex",
+  "species": "husky",
+  "profile": {
+    "locomotion": "quadruped",
+    "subject": "a husky",
+    "styleHints": "Black-and-white husky fur, erect ears, blue eyes, fluffy curled tail, smiling mouth",
+    "gait": {
+      "cadenceHz": 1.8,
+      "strideBody": 0.9,
+      "bounce": 0.08,
+      "pitchDeg": 5,
+      "speedBody": 0.6
+    },
+    "cycle": {
+      "kind": "walk",
+      "prompt": "Same black-and-white husky with blue eyes, erect ears, fluffy curled tail, strict side profile facing right, one eye visible, same size every frame, walking trot, 4 equal columns with wide magenta gaps, horizontal sprite sheet of exactly 4 frames"
+    },
+    "idlePrompt": "Pose: standing in side view facing right, all four paws planted, chest out, head high, fluffy tail curled behind",
+    "fidgets": [
+      "groom",
+      "bob",
+      "wave"
+    ],
+    "roles": {
+      "rest": {
+        "label": "Sit",
+        "prompt": "Pose: sitting upright on haunches, front legs straight, chest fluffy, head turned right, tail curled around paws",
+        "bubble": "Huff"
+      },
+      "sleep": {
+        "label": "Sleep",
+        "prompt": "Pose: curled up on side, paws tucked, fluffy tail over nose, eyes closed, relaxed breathing",
+        "bubble": "Zzz"
+      },
+      "voice": {
+        "label": "Howl",
+        "prompt": "Pose: sitting, chest out, muzzle lifted up, mouth open howling, ears back, tail still",
+        "bubble": "Awooo!"
+      },
+      "trick": {
+        "label": "Shake Paw",
+        "prompt": "Pose: sitting and lifting right front paw forward, head tilted right, mouth open smile, tail wagging",
+        "bubble": "Woof!"
+      }
+    },
+    "energy": "playful"
+  },
+  "poses": {
+    "idle": {
+      "frames": [
+        "idle_0.png"
+      ],
+      "fps": 2,
+      "footY": 0.9922480620155039
+    },
+    "walk": {
+      "frames": [
+        "side_0.png",
+        "side_1.png",
+        "side_2.png",
+        "side_3.png"
+      ],
+      "fps": 8,
+      "footY": 0.9922480620155039
+    },
+    "turn": {
+      "frames": [
+        "turn_front.png",
+        "turn_front34.png",
+        "turn_side.png",
+        "turn_back34.png",
+        "turn_back.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922480620155039
+    },
+    "sit": {
+      "frames": [
+        "sit.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922480620155039
+    },
+    "sleep": {
+      "frames": [
+        "sleep.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922480620155039
+    },
+    "bark": {
+      "frames": [
+        "bark.png"
+      ],
+      "fps": 4,
+      "footY": 0.9922480620155039
+    },
+    "roll": {
+      "frames": [
+        "roll.png"
+      ],
+      "fps": 2,
+      "footY": 0.9922480620155039
+    },
+    "blink": {
+      "frames": [
+        "idle_blink.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922480620155039
+    }
+  },
+  "personality": {
+    "breed": "Siberian Husky",
+    "coat": "Black and white fluffy",
+    "traits": [
+      "friendly",
+      "brave",
+      "chatty"
+    ],
+    "energy": "playful",
+    "lines": [
+      "Hi I'm Rex, let's run!",
+      "Wow, snow is my favorite!",
+      "I love you to the moon!",
+      "Catch me if you can!",
+      "Let's howl together, friend!",
+      "Belly rubs make me happy!"
+    ],
+    "facts": [
+      {
+        "text": "Huskies were bred by the Chukchi people to pull sleds."
+      },
+      {
+        "text": "Huskies have a thick double coat to stay warm in snow.",
+        "source": "https://www.purina.com/dogs/dog-breeds/siberian-husky"
+      },
+      {
+        "text": "Huskies can have blue eyes, and sometimes one of each color.",
+        "source": "https://www.wisdompanel.com/en-us/dog-breeds/siberian-husky"
+      }
+    ]
+  }
+}
