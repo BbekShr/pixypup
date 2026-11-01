@@ -96,6 +96,8 @@ function toNative(items: MenuItem[], run: (cmd: string) => void): MenuItemConstr
 let settings = loadSettings(); // TODO(F1): feed settings to feature gates
 let packEnergy: Energy | undefined; // the loaded pet's own personality.energy
 let packPetName: string | undefined; // the loaded pet's display name, boosted as a speech keyword
+/** What the user called their pet (manifest), not the folder slug in settings. */
+const displayName = (): string => packPetName ?? settings.petName;
 let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
@@ -125,7 +127,7 @@ function sync(): void {
   if (listen) micWin.warm();
   else { voice.abort(); micWin.close(); }
   tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: settings.petName }), run)));
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName() }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
@@ -133,7 +135,7 @@ function run(cmd: string): void {
   if (cmd === 'stay' || cmd === 'wander') stay = cmd === 'stay';
   if (cmd === 'debug:on' || cmd === 'debug:off') {
     debugOn = cmd === 'debug:on';
-    win?.webContents.send(IPC.debug, { on: debugOn, name: settings.petName });
+    win?.webContents.send(IPC.debug, { on: debugOn, name: displayName() });
     return;
   }
   if (cmd === 'new-pet') {
@@ -143,12 +145,12 @@ function run(cmd: string): void {
   }
   if (cmd === 'screen:on') {
     // The explainer is the consent: nothing reads the screen (or asks macOS for Terminal access) before "Turn it on".
-    if (!settings.adminDisableScreenAware) void screenExplainer.ask(settings.petName).then((yes) => { if (yes) run('screen:yes'); });
+    if (!settings.adminDisableScreenAware) void screenExplainer.ask(displayName()).then((yes) => { if (yes) run('screen:yes'); });
     return;
   }
   if (cmd === 'voice:on') {
     // Same consent rule as the screen: nothing listens, and macOS is never asked for the mic, before "Turn it on".
-    if (!voiceLockedByAdmin()) void voiceExplainer.ask(settings.petName).then((yes) => { if (yes) run('voice:yes'); });
+    if (!voiceLockedByAdmin()) void voiceExplainer.ask(displayName()).then((yes) => { if (yes) run('voice:yes'); });
     return;
   }
   if (!app.isPackaged && cmd === 'voice:listen') return voice.press(); // dev hook: globalShortcut can't be pressed over CDP
@@ -192,7 +194,7 @@ function startScreenAwareLoop(): void {
     overlay: { bounds: () => win?.getBounds() ?? null, send: (b) => win?.webContents.send(IPC.behavior, b) },
     reader,
     decider: createDecider({ spark }),
-    debug: { on: () => debugOn, send: (info) => win?.webContents.send(IPC.debug, { on: true, name: settings.petName, info }) },
+    debug: { on: () => debugOn, send: (info) => win?.webContents.send(IPC.debug, { on: true, name: displayName(), info }) },
   });
 }
 
@@ -202,12 +204,12 @@ function startVoice(): void {
   voice = createVoiceSession({
     allowed: () => shouldRegister(loadSettings(), snoozed()),
     key: () => (fakeTranscript !== undefined ? 'fake' : getApiKey()),
-    petName: () => settings.petName,
-    open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, { ...opts, keywords: [packPetName ?? settings.petName] })),
+    petName: () => displayName(),
+    open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, { ...opts, keywords: [displayName()] })),
     mic: micWin,
     ui: tell,
     command: (c) => win?.webContents.send(IPC.command, c),
-    heard: (text) => { if (debugOn) win?.webContents.send(IPC.debug, { on: true, name: settings.petName, heard: text }); },
+    heard: (text) => { if (debugOn) win?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
   });
 }
 
@@ -246,7 +248,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on(IPC.showMenu, () => {
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, name: settings.petName }), run);
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, name: displayName() }), run);
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });

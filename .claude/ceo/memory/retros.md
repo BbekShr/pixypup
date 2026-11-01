@@ -19,3 +19,4 @@ One line per run: `- YYYY-MM-DD <mode/ID>: <friction observed> → <fix made or 
 - 2026-11-01 F6b: an unverified id-equality assumption would have silently disabled the never-cut sniff → replaced with AppleScript bounds + overlap; lesson: demo-critical paths get no single unverified dependency
 - 2026-11-01 F7: the never-cut moment works in rehearsal and Spark live, but the real Terminal path needs a human click; agents correctly refused to trigger the permission prompt themselves
 - 2026-11-01 F8: the real-key app-path run found a test-harness WAV bug and a missing keyword that every unit test missed; the lens found cross-session audio loss → live runs are mandatory for Meta-integrated features
+- 2026-11-01 E2E: full real-key run 13/13; found one polish bug (slug shown as the pet's name in menus/panel) → fixed by the CEO; one false failure from measuring a transformed bounding box → measure element styles, not boxes
