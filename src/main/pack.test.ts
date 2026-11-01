@@ -27,6 +27,21 @@ describe('loadPack', () => {
     await writeFile(join(d, 'sprite-manifest.json'), '{"pet":1}');
     expect(await loadPack(d)).toBeNull();
   });
+  it('gives a pack made before the stride-and-stand cycle the new walk, and loads no hop frames', async () => {
+    const d = await mkdtemp(join(tmpdir(), 'pack-'));
+    const old = ['walk_0.png', 'walk_1.png', 'walk_2.png', 'walk_3.png'];
+    await writeFile(join(d, 'sprite-manifest.json'), JSON.stringify({ pet: 'P', species: 'dog', poses: { idle: { frames: ['idle_0.png'], fps: 2, footY: 0.99 }, walk: { frames: old, fps: 8, footY: 0.99 } } }));
+    for (const n of ['idle_0.png', ...old]) await writeFile(join(d, n), n);
+    const p = await loadPack(d);
+    expect(p?.manifest.poses['walk']?.frames).toEqual(['walk_0.png', 'idle_0.png', 'walk_2.png', 'idle_0.png']);
+    expect(Object.keys(p?.frames ?? {}).sort()).toEqual(['idle_0.png', 'walk_0.png', 'walk_2.png']);
+  });
+  it('leaves any other walk alone', async () => {
+    const d = await mkdtemp(join(tmpdir(), 'pack-'));
+    await writeFile(join(d, 'sprite-manifest.json'), JSON.stringify({ pet: 'P', species: 'dog', poses: { idle: { frames: ['idle_0.png'], fps: 2, footY: 0.99 }, walk: { frames: ['a.png', 'b.png'], fps: 8, footY: 0.99 } } }));
+    for (const n of ['idle_0.png', 'a.png', 'b.png']) await writeFile(join(d, n), n);
+    expect((await loadPack(d))?.manifest.poses['walk']?.frames).toEqual(['a.png', 'b.png']);
+  });
   it('rejects frame names that escape the pack dir', async () => {
     const outer = await dir('x.png', { 'x.png': 'secret' });
     const inner = await dir('../' + outer.split('/').pop() + '/x.png', {});

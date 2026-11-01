@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SpriteManifest } from '../../contracts/types';
-import { validateManifest } from '../api/manifest';
+import { naturalWalk, validateManifest } from '../api/manifest';
 
 export interface Pack {
   manifest: SpriteManifest;
@@ -16,8 +16,9 @@ export const isPlainName = (n: string): boolean => n !== '' && n !== '.' && !/[/
 
 export async function loadPack(dir: string): Promise<Pack | null> {
   try {
-    const manifest: unknown = JSON.parse(await readFile(join(dir, 'sprite-manifest.json'), 'utf8'));
-    validateManifest(manifest);
+    const raw: unknown = JSON.parse(await readFile(join(dir, 'sprite-manifest.json'), 'utf8'));
+    validateManifest(raw);
+    const manifest = naturalWalk(raw);
     const poses = Object.values(manifest.poses);
     // The pack is user-writable disk data: bound what the renderer will be handed and what the math can divide by.
     if (poses.some((p) => !(p.footY > 0 && p.footY <= 1) || !Number.isFinite(p.fps) || p.fps < 0)) return null;

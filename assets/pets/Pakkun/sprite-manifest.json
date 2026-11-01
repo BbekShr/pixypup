@@ -12,9 +12,9 @@
     "walk": {
       "frames": [
         "walk_0.png",
-        "walk_1.png",
+        "idle_0.png",
         "walk_2.png",
-        "walk_3.png"
+        "idle_0.png"
       ],
       "fps": 8,
       "footY": 0.9922779922779923

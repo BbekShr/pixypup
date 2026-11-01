@@ -375,7 +375,7 @@ describe('generateSpritePack', () => {
     expect(manifest.poses.walk?.fps).toBe(8);
     expect(manifest.poses.blink?.frames).toEqual(['idle_blink.png']);
     expect(manifest.poses.blink?.footY).toBe(manifest.poses.idle?.footY);
-    expect(manifest.poses.walk?.frames).toEqual(['walk_0.png', 'walk_1.png', 'walk_2.png', 'walk_3.png']);
+    expect(manifest.poses.walk?.frames).toEqual(['walk_0.png', 'idle_0.png', 'walk_2.png', 'idle_0.png']); // stride, stand: no crouched hop
     expect(await readdir(root)).toEqual(['pack']);
   });
 

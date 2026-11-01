@@ -46,3 +46,15 @@ export function validateManifest(m: unknown): asserts m is SpriteManifest {
     if (typeof d.footY !== 'number' || !(d.footY > 0 && d.footY <= 1)) bad(`pose ${name} footY`);
   }
 }
+
+// Stride, stand, stride, stand. Muse Image draws the stride (contact) frames well, but its "passing" frames come out
+// as a crouched hop, which reads as a sideways bunny-hop. idle_0 is a clean legs-under-body pose.
+export const WALK_CYCLE = ['walk_0.png', 'idle_0.png', 'walk_2.png', 'idle_0.png'];
+const OLD_WALK = ['walk_0.png', 'walk_1.png', 'walk_2.png', 'walk_3.png'];
+
+/** Packs made before WALK_CYCLE walk with the hop frames; give them the stride-and-stand cycle. Others are untouched. */
+export function naturalWalk(m: SpriteManifest): SpriteManifest {
+  const w = m.poses['walk'];
+  const old = w && w.frames.length === OLD_WALK.length && w.frames.every((f, i) => f === OLD_WALK[i]);
+  return old && m.poses['idle']?.frames[0] === 'idle_0.png' ? { ...m, poses: { ...m.poses, walk: { ...w, frames: [...WALK_CYCLE] } } } : m;
+}
