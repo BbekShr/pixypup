@@ -9,6 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } from './call';
 import { alphaPlane as alpha, cleanFrame } from './frames';
+import { GAITS, bakeWalk, legBand, puppetSpecies } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
@@ -73,6 +74,9 @@ let reg = new Map<string, number>(); // src -> natural px its head sits right of
 let wagOk = false;
 let widths = new Map<string, number>(); // src -> natural width; the profile walk is drawn wider than idle
 let strideFrac = STRIDE; // of the idle width the body advances per walk frame, measured from the pack's art
+type Rig = { kind: string; frames: number; bellyY: number; splitX: number; strideFrac: number; centroids: number[] } | { reason: string } | null;
+let rig: Rig = null; // debug: the baked walk rig, or why there is none
+let walkIdx = -1;
 let bodyScale = { bounce: 1, pitch: 1 }; // the pack's own profile, scaling the body motion
 let comeBubble = 'Here!'; // what the pet says on arriving when called
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
@@ -85,7 +89,7 @@ let woofShown = -1; // the last burst that got one
 const query = new URLSearchParams(location.search);
 const chatty = import.meta.env.DEV && query.get('chatty') === '1';
 
-interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
+interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number>; rig: Rig }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
 const STATIC_WALK_OVERLAP = 0.98;
@@ -188,8 +192,29 @@ async function readPack(): Promise<Prepared | null> {
     p.srcs = p.srcs.map((s) => cleaned.get(s) ?? s);
   }
   if (staticWalk(poses['walk'], bitmaps)) delete poses['walk'];
+  let strideFrac: number | undefined;
+  let body: { bounce: number; pitch: number } | undefined;
+  let rig: Rig = null;
+  const kind = puppetSpecies(pack.manifest.species);
+  if (kind) {
+    const a = alpha(first);
+    const band = a && legBand(a, first.naturalWidth, first.naturalHeight, 4);
+    if (band) {
+      const gait = GAITS[kind];
+      try {
+        const baked = await bakeWalk(first, band, gait, a);
+        poses['walk'] = { srcs: baked.srcs, fps: 8 };
+        bitmaps.push(...baked.bitmaps);
+        strideFrac = baked.cycleNat / gait.frames / first.naturalWidth;
+        body = { bounce: gait.bounce, pitch: gait.pitch };
+        rig = { kind, frames: gait.frames, bellyY: band.bellyY / first.naturalHeight, splitX: band.splitX, strideFrac, centroids: baked.centroids };
+      } catch (e) {
+        rig = { reason: `bake failed: ${e instanceof Error ? e.message : String(e)}` }; // keep the AI walk
+      }
+    } else rig = { reason: 'no leg band found in idle' };
+  }
   const { reg, wag } = register(poses, bitmaps, first);
-  return { name: pack.manifest.pet, strideFrac: walkStride(poses['walk'], bitmaps, first), bodyScale: profileScale(pack.manifest.profile?.gait), comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
+  return { name: pack.manifest.pet, strideFrac: strideFrac ?? walkStride(poses['walk'], bitmaps, first), bodyScale: body ?? profileScale(pack.manifest.profile?.gait), rig, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
 }
 
 function applyPack(p: Prepared): void {
@@ -206,6 +231,7 @@ function applyPack(p: Prepared): void {
   comeBubble = p.comeBubble;
   strideFrac = p.strideFrac;
   bodyScale = p.bodyScale;
+  rig = p.rig;
   sayAt = nextSayAt(performance.now(), Math.random(), chatty);
   sizeImg();
 }
@@ -519,6 +545,7 @@ function frame(now: number): void {
   const pose = poses[wagging ? 'bark' : name] ?? poses['idle']!;
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const front = state === 'sit' && now < frontUntil ? poses['turn']?.srcs[0] : undefined;
+  if (walking) walkIdx = i;
   let src = front ?? pose.srcs[i]!;
   if (turnSrcs && !front && (state === 'walk' || upright)) {
     const u = mirrorProgress(mir, now, turnMs);
@@ -1117,5 +1144,5 @@ raf = requestAnimationFrame(frame);
 import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, wag: wagOk, reg: [...reg.values()].map(Math.round), pose: poseKey, menuCalls, lift, falling, handoff, command, yawn: startYawn }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, wag: wagOk, reg: [...reg.values()].map(Math.round), pose: poseKey, menuCalls, lift, falling, handoff, command, yawn: startYawn, rig, walkIdx, shownW: img.style.width }) });
 }
