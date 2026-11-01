@@ -4,17 +4,19 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_CAST, SHOW_MS } from '../overlay/overload-choreo';
 import { IPC } from './ipc';
-import { isPlainName, loadPack, type Pack } from './pack';
+import { isPlainName, listLibrary, loadPack, type Pack } from './pack';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const CURSOR_HZ_MS = 33;
 const START_CAP_MS = 15_000;
 
-/** Every saved pet plus the built-in one, one per name. */
+/** Every saved pet plus the bundled ones, one per name. */
 async function gatherPacks(): Promise<Pack[]> {
   const root = join(app.getPath('userData'), 'pets');
   const names = (await readdir(root).catch(() => [] as string[])).filter(isPlainName);
-  const dirs = [...names.map((n) => join(root, n)), join(app.getAppPath(), 'assets/pets/Pakkun')];
+  const lib = join(app.getAppPath(), 'assets/pets');
+  // User dirs first: the dedupe below keeps the first pack per name, so a user pet beats a bundled one.
+  const dirs = [...names.map((n) => join(root, n)), ...(await listLibrary(lib)).map((l) => join(lib, l.slug))];
   const seen = new Set<string>();
   const out: Pack[] = [];
   for (const p of await Promise.all(dirs.map(loadPack))) {
