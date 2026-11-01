@@ -146,7 +146,7 @@ function run(cmd: string): void {
 // Runs from launch but does nothing (no osascript, no helper, no network) until screen-aware is on and allowed.
 function startScreenAwareLoop(): void {
   const osa = (args: string[], timeoutMs: number): Promise<string | null> =>
-    new Promise((res) => execFile('osascript', args, { timeout: timeoutMs }, (err, out) => res(err ? null : out)));
+    new Promise((res) => execFile('osascript', args, { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, (err, out) => res(err ? null : out)));
   const reader = !app.isPackaged && process.env['PIXY_FAKE_SCREEN'] === '1'
     ? fakeReader(screen.getPrimaryDisplay().workArea)
     : createScreenReader({ run: makeRun(helperPath()), osa });

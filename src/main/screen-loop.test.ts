@@ -55,13 +55,39 @@ describe('startScreenLoop', () => {
     t.stop();
   });
 
-  it('hide is level-triggered: on once, off once', async () => {
+  it('hide is resent every tick during a call, and lifted only after two clear reads', async () => {
     const t = setup();
     t.set(call, '');
     await tick(3);
     t.set(obs(), '');
+    await tick(1);
+    expect(t.sent.map((b) => b.on)).toEqual([true, true, true]); // one clear read is not enough
+    await tick(1);
+    expect(t.sent.map((b) => b.on)).toEqual([true, true, true, false]);
     await tick(2);
-    expect(t.sent.map((b) => [b.action, b.on])).toEqual([['hide', true], ['hide', false]]);
+    expect(t.sent).toHaveLength(4);
+    t.stop();
+  });
+
+  it('a failed window read (no windows) neither ends the hide nor counts as clear', async () => {
+    let cur = call;
+    let wins = 5;
+    const t = setup({ reader: { tick: async () => ({ observation: cur, debug: { terminalKey: '', windowCount: wins } }) } });
+    await tick(1);
+    cur = obs();
+    wins = 0;
+    await tick(5);
+    expect(t.sent.every((b) => b.on === true)).toBe(true);
+    wins = 5;
+    await tick(2);
+    expect(t.sent.at(-1)?.on).toBe(false);
+    t.stop();
+  });
+
+  it('skips a sniff whose target is on another display instead of clamping it', async () => {
+    const t = setup({ overlay: { bounds: () => ({ x: 1440, y: 0, width: 1440, height: 900 }), send: () => undefined } });
+    await tick(3);
+    expect(t.sent).toEqual([]);
     t.stop();
   });
 
@@ -73,7 +99,7 @@ describe('startScreenLoop', () => {
     await tick();
     t.snooze(false);
     await tick();
-    expect(t.sent.map((b) => b.on)).toEqual([true, false, true]);
+    expect(t.sent.filter((b) => b.on !== undefined).map((b) => b.on)).toEqual([true, false, true]);
     t.stop();
   });
 
