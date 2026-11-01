@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
+import { actAfterCommand, talkGoUntil, behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
 
 const sniff: Behavior = { seq: 1, action: 'sniff', target: { x: 10, y: 10 }, reason: 'r' };
 const free = { dragging: false, falling: false, resting: false, snoozed: false, handoff: null };
@@ -99,5 +99,17 @@ describe('talk behavior', () => {
     expect(talkPlan('nap', false)).toEqual({ walk: true, pose: 'sleep', hearts: false });
     expect(talkPlan('listen', false)).toEqual({ walk: true, pose: 'sit', hearts: false });
     for (const m of ['comfort', 'cheer', 'play', 'nap', 'listen'] as const) expect(talkPlan(m, true)).toEqual({ walk: true, pose: 'sit', hearts: false });
+  });
+});
+
+describe('talk act wedge', () => {
+  it('a user command yields a talk act but leaves other acts alone', () => {
+    expect(actAfterCommand({ kind: 'talk' })).toBeNull();
+    expect(actAfterCommand({ kind: 'sniff' })).toEqual({ kind: 'sniff' });
+    expect(actAfterCommand(null)).toBeNull();
+  });
+  it('the go phase always has a finite deadline', () => {
+    expect(talkGoUntil(500)).toBeGreaterThan(500);
+    expect(talkGoUntil(500)).toBeLessThan(60_000);
   });
 });

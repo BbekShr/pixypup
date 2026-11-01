@@ -93,3 +93,10 @@ export function talkPlan(mood: TalkAction, crisis: boolean): TalkPlan {
     case 'listen': return { walk: true, pose: 'sit', hearts: false };
   }
 }
+
+/** The walk to the chat spot can be cut short (a command, a stop), so it carries a deadline that ends the act. */
+export const TALK_GO_MS = 10_000;
+export const talkGoUntil = (now: number): number => now + TALK_GO_MS;
+
+/** A user command replaces a talk act (its walk/pose); every other act is handled by its own rules. */
+export const actAfterCommand = <A extends { kind: string }>(act: A | null): A | null => (act?.kind === 'talk' ? null : act);

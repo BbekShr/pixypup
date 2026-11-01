@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx, type Handoff } from './handoff';
-import { behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
+import { actAfterCommand, talkGoUntil, behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
@@ -808,6 +808,7 @@ function command(raw: string): void {
   const cmd = r.now;
   if (act?.kind === 'hide') return;
   if (act?.kind === 'sniff' || commandMustWait({ falling, dragging, turning: state === 'walk' && performance.now() < turnUntil })) { queuedCmd = cmd; return; } // waits for the sniff, the fall, the hand or the hop-turn to finish
+  act = actAfterCommand(act);
   lastInteraction = performance.now();
   if (cmd === 'sit') {
     setState('sit', { ms: sitHoldMs(en(), stay) });
@@ -925,7 +926,7 @@ function start(b: Behavior): void {
     const bubble = b.crisis ? '' : (b.bubble ?? 'Woof!'); // a crisis is met with company, not a bark
     if (plan.pose === 'celebrate') start({ ...b, action: 'celebrate' });
     else {
-      act = { kind: 'talk', phase: 'go', until: 0, plan, bubble };
+      act = { kind: 'talk', phase: 'go', until: talkGoUntil(now), plan, bubble };
       if (plan.walk && b.target) setState('walk', { target: Math.min(Math.max(0, b.target.x - W - 8), Math.max(0, window.innerWidth - W)) });
       else actArrive(now);
     }
