@@ -15,11 +15,11 @@ export const CAPTION_MAX = 60;
 export const WOOF_MAX = 40;
 export const CRISIS_TEXT = "You matter. If you're in danger or thinking about hurting yourself, please reach out: call or text 988 (US) or find a line at findahelpline.com";
 
-const CRISIS_RE = /\b(kill myself|suicid\w*|end my life|want to die|don'?t want to (be alive|live)|hurt myself|self[- ]?harm|better off dead|no reason to live|end it all|unalive|don'?t want to be here|can'?t go on|take my (own )?life)\b/;
+const CRISIS_RE = /\b(kill myself|suicid\w*|end my life|want to die|don'?t want to (be alive|live)|hurt myself|self[- ]?harm|better off dead|no reason to live|end it all|thinking (about|of) ending (it|things)|unalive|don'?t want to be here|can'?t go on|take my (own )?life)\b/;
 // "kms" only as the last word and not after a number, so "5 kms" and "kms per hour" stay clean.
 const KMS_RE = /(?<!\d )\bkms$/;
 export const isCrisis = (text: string): boolean => {
-  const t = text.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const t = text.toLowerCase().replace(/[\u2019\u2018\u02bc`]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
   return CRISIS_RE.test(t) || KMS_RE.test(t);
 };
 
