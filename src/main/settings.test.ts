@@ -6,8 +6,12 @@ import { vi } from 'vitest';
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }));
 const fsMock = vi.hoisted(() => ({ files: {} as Record<string, string> }));
 vi.mock('node:fs', () => ({
-  existsSync: (p: string) => p in fsMock.files,
-  readFileSync: (p: string) => fsMock.files[p],
+  readFileSync: (p: string) => {
+    if (!(p in fsMock.files)) throw Object.assign(new Error('nope'), { code: 'ENOENT' });
+    const v = fsMock.files[p];
+    if (v === 'EACCES') throw Object.assign(new Error('denied'), { code: 'EACCES' });
+    return v;
+  },
 }));
 
 const defaults: Settings = {
@@ -56,6 +60,7 @@ describe('loadSettings (real read/merge path)', () => {
     const s = await load({ [USER]: '{"screenAware":true,"voice":true}', [ADMIN_FILE]: '{oops' });
     expect(s.screenAware).toBe(false);
     expect(s.voice).toBe(false);
+    expect(s.offline).toBe(true);
   });
   it('admin file that is not a JSON object fails closed', async () => {
     const { ADMIN_FILE } = await import('./settings');
@@ -71,5 +76,22 @@ describe('loadSettings (real read/merge path)', () => {
   it('missing admin file: user settings apply; corrupt user file gives defaults', async () => {
     expect((await load({ [USER]: '{"screenAware":true,"voice":true}' })).screenAware).toBe(true);
     expect(await load({ [USER]: '{oops' })).toEqual(defaults);
+  });
+  it.each([
+    '{"adminDisableScreenAware":"true"}',
+    '{"adminDisableScreenAware":1}',
+    '{"screenAware":"false"}',
+    '{"petName":""}',
+  ])('admin file with invalid known key %s fails closed', async (admin) => {
+    const { ADMIN_FILE } = await import('./settings');
+    const s = await load({ [USER]: '{"screenAware":true,"voice":true}', [ADMIN_FILE]: admin });
+    expect(s.screenAware).toBe(false);
+    expect(s.voice).toBe(false);
+  });
+  it('unreadable (EACCES) admin file fails closed', async () => {
+    const { ADMIN_FILE } = await import('./settings');
+    const s = await load({ [USER]: '{"screenAware":true,"voice":true}', [ADMIN_FILE]: 'EACCES' });
+    expect(s.screenAware).toBe(false);
+    expect(s.voice).toBe(false);
   });
 });
