@@ -95,6 +95,7 @@ function toNative(items: MenuItem[], run: (cmd: string) => void): MenuItemConstr
 
 let settings = loadSettings(); // TODO(F1): feed settings to feature gates
 let packEnergy: Energy | undefined; // the loaded pet's own personality.energy
+let packPetName: string | undefined; // the loaded pet's display name, boosted as a speech keyword
 let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
@@ -202,7 +203,7 @@ function startVoice(): void {
     allowed: () => shouldRegister(loadSettings(), snoozed()),
     key: () => (fakeTranscript !== undefined ? 'fake' : getApiKey()),
     petName: () => settings.petName,
-    open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, opts)),
+    open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, { ...opts, keywords: [packPetName ?? settings.petName] })),
     mic: micWin,
     ui: tell,
     command: (c) => win?.webContents.send(IPC.command, c),
@@ -229,6 +230,7 @@ void app.whenReady().then(async () => {
     if (isPlainName(settings.petName)) candidates.unshift(join(app.getPath('userData'), 'pets', settings.petName));
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
     const pack = dir && (await loadPack(dir));
+    packPetName = pack ? pack.manifest.pet : undefined;
     const e = pack ? pack.manifest.personality?.energy : undefined;
     if (e !== packEnergy) {
       packEnergy = e;
