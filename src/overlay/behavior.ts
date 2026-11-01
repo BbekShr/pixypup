@@ -49,9 +49,10 @@ export const behaviorBusy = (o: { dragging: boolean; falling: boolean; resting: 
   o.dragging || o.falling || o.resting || o.snoozed || handoffBusy(o.handoff) || o.handoff === 'greet';
 
 /** Hiding wins over everything; while hidden or mid-behaviour, other behaviours wait (queue) or are dropped (hidden). */
-export function routeBehavior(b: Behavior, o: { busy: boolean; acting: 'hide' | 'other' | null }): 'run' | 'queue' | 'drop' {
+export function routeBehavior(b: Behavior, o: { busy: boolean; acting: 'hide' | 'talk' | 'other' | null }): 'run' | 'queue' | 'drop' {
   if (b.action === 'hide') return o.busy ? 'queue' : 'run';
   if (o.acting === 'hide') return 'drop';
+  if (b.action === 'talk' && b.crisis && o.acting === 'talk') return o.busy ? 'queue' : 'run'; // a crisis does not wait behind a chat act
   return o.busy || o.acting ? 'queue' : 'run';
 }
 

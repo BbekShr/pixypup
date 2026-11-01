@@ -6,7 +6,7 @@ import { createVoiceSession, type VoiceUi } from './voice-session';
 const loud = new Int16Array(960).fill(8000).buffer;
 const quiet = new Int16Array(960).buffer;
 
-function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFails?: boolean; talk?: boolean } = {}) {
+function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFails?: boolean; prefill?: boolean } = {}) {
   const log: string[] = [];
   const ui: VoiceUi[] = [];
   const cmds: string[] = [];
@@ -36,7 +36,7 @@ function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFail
     ui: (m) => void ui.push(m),
     command: (c) => void cmds.push(c),
     heard: () => undefined,
-    talk: o.talk ? (t) => void talked.push(t) : undefined,
+    prefill: o.prefill ? (t) => void talked.push(t) : undefined,
   });
   return { s, talked, log, ui, cmds, opened: () => opened, pushed: () => pushed, got, fail: () => opts.onError({ code: 1011 } as never) };
 }
@@ -183,9 +183,9 @@ describe('voice session', () => {
     expect(r.cmds).toEqual([]);
     expect(kinds(r.ui).at(-1)).toBe('huh');
   });
-  it('a sentence that is not a command goes to the chat, a short mumble still gets huh', async () => {
+  it('a sentence that is not a command only opens the chat with the words typed in, a short mumble still gets huh', async () => {
     for (const [transcript, chat] of [['I had a really rough day', true], ['hmm okay', false]] as const) {
-      const r = rig({ transcript, talk: true });
+      const r = rig({ transcript, prefill: true });
       r.s.press();
       await vi.advanceTimersByTimeAsync(0);
       r.s.press();
@@ -196,7 +196,7 @@ describe('voice session', () => {
     }
   });
   it('a real command never opens the chat', async () => {
-    const r = rig({ transcript: 'Pakkun, sit down please now', talk: true });
+    const r = rig({ transcript: 'Pakkun, sit down please now', prefill: true });
     r.s.press();
     await vi.advanceTimersByTimeAsync(0);
     r.s.press();

@@ -760,7 +760,7 @@ img.addEventListener('pointercancel', finish);
 img.addEventListener('lostpointercapture', finish);
 
 /** Which way of moving the pet's context calls for: a sneak up on a sniff, a trot when called or leaving. */
-const gaitKind = (): GaitKind => (act?.kind === 'sniff' && act.phase === 'run' ? 'sniff' : handoff === 'trotOff' || calling || (act?.kind === 'hide' && act.phase === 'go') ? 'trot' : 'walk');
+const gaitKind = (): GaitKind => (act?.kind === 'sniff' && act.phase === 'run' ? 'sniff' : handoff === 'trotOff' || calling || ((act?.kind === 'hide' || act?.kind === 'talk') && act.phase === 'go') ? 'trot' : 'walk');
 
 function come(pointerX: number | null): void {
   if (alreadyHere(x, W, pointerX, window.innerWidth)) return greetCaller(performance.now());
@@ -860,7 +860,7 @@ function onBehavior(raw: unknown): void {
   if (!b || b.seq === lastSeq) return;
   lastSeq = b.seq;
   lastBehavior = b;
-  const r = routeBehavior(b, { busy: busyNow(), acting: act ? (act.kind === 'hide' ? 'hide' : 'other') : null });
+  const r = routeBehavior(b, { busy: busyNow(), acting: act ? (act.kind === 'hide' || act.kind === 'talk' ? act.kind : 'other') : null });
   if (r === 'queue') queuedBehavior = b;
   else if (r === 'run') start(b);
 }
@@ -895,7 +895,7 @@ function start(b: Behavior): void {
     say(b.bubble ?? '!', PERK_MS);
   } else if (b.action === 'talk' && b.mood) {
     const plan = talkPlan(b.mood, b.crisis === true);
-    const bubble = b.bubble ?? 'Woof!';
+    const bubble = b.crisis ? '' : (b.bubble ?? 'Woof!'); // a crisis is met with company, not a bark
     if (plan.pose === 'celebrate') start({ ...b, action: 'celebrate' });
     else {
       act = { kind: 'talk', phase: 'go', until: 0, plan, bubble };
@@ -930,7 +930,7 @@ function actArrive(now: number): void {
     if (act.plan.pose === 'roll') setState('click', { ms: LONG }, calm ? 'sit' : 'roll');
     else setState(act.plan.pose === 'sleep' ? 'sleep' : 'sit', { ms: LONG });
     if (act.plan.hearts && !calm) for (let i = 0; i < 4; i++) setTimeout(heart, i * 200);
-    say(act.bubble, TALK_MS);
+    if (act.bubble) say(act.bubble, TALK_MS);
   } else if (act.kind === 'hide' && act.phase === 'go') {
     act.phase = 'away';
     face(-act.side); // looks in from the edge

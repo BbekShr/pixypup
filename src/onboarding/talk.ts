@@ -6,7 +6,7 @@ import sitUrl from '../../assets/pets/Pakkun/sit.png';
 
 declare global {
   interface Window {
-    pixyTalk: { send(text: string): Promise<unknown>; info(): Promise<unknown>; close(): void; onShow(cb: (m: unknown) => void): void };
+    pixyTalk: { send(text: string): Promise<unknown>; info(): Promise<unknown>; close(): void; onPrefill(cb: (text: unknown) => void): void };
   }
 }
 
@@ -29,8 +29,10 @@ function add(cls: string, ...kids: (string | HTMLElement)[]): HTMLElement {
 const tag = (t: string, cls: string, text: string): HTMLElement => Object.assign(document.createElement(t), { className: cls, textContent: text });
 
 function showReply(r: TalkReply): void {
-  add('msg pup', tag('span', 'woof', r.woof), tag('em', '', `*${r.caption}*`));
-  if (r.crisis) add('help', CRISIS_TEXT);
+  if (r.crisis) {
+    add('msg pup', tag('em', '', '*sits quietly beside you*'));
+    add('help', CRISIS_TEXT);
+  } else add('msg pup', tag('span', 'woof', r.woof), tag('em', '', `*${r.caption}*`));
 }
 function parse(m: unknown): TalkReply | null {
   const r = (m ?? {}) as Partial<TalkReply>;
@@ -59,11 +61,11 @@ $('form').addEventListener('submit', (ev) => {
   });
 });
 
-window.pixyTalk.onShow((m) => {
-  const o = (m ?? {}) as { heard?: unknown; reply?: unknown };
-  if (typeof o.heard === 'string' && o.heard) add('msg me', o.heard);
-  const r = parse(o.reply);
-  if (r) showReply(r);
+window.pixyTalk.onPrefill((text) => {
+  if (typeof text !== 'string' || input.disabled) return;
+  input.value = text;
+  input.focus();
+  input.setSelectionRange(text.length, text.length);
 });
 $('close').addEventListener('click', () => window.pixyTalk.close());
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.pixyTalk.close(); });

@@ -48,6 +48,12 @@ describe('routeBehavior', () => {
     expect(routeBehavior({ ...sniff, action: 'hide', on: false }, { busy: false, acting: 'other' })).toBe('run');
     expect(routeBehavior(sniff, { busy: false, acting: null })).toBe('run');
   });
+  it('a crisis talk replaces a running talk at once, but waits behind other acts', () => {
+    const talk: Behavior = { seq: 9, action: 'talk', mood: 'comfort', reason: 'talk' };
+    expect(routeBehavior({ ...talk, crisis: true }, { busy: false, acting: 'talk' })).toBe('run');
+    expect(routeBehavior(talk, { busy: false, acting: 'talk' })).toBe('queue');
+    expect(routeBehavior({ ...talk, crisis: true }, { busy: false, acting: 'other' })).toBe('queue');
+  });
 });
 
 describe('hide geometry', () => {

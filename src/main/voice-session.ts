@@ -15,7 +15,7 @@ export interface VoiceDeps {
   ui(m: VoiceUi): void;
   command(c: Command): void;
   heard(text: string): void;
-  talk?(text: string): void; // a sentence that is not a command opens the chat
+  prefill?(text: string): void; // a sentence that is not a command opens the chat with it typed in; the human presses Send
 }
 
 export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: ArrayBuffer): void; abort(): void; state(): ListenState } {
@@ -97,8 +97,8 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
       d.heard(heard.slice(0, 60));
       const cmd = matchCommand(heard, d.petName(), { requireName: false }); // pressing the key is the address
       if (cmd) d.command(cmd);
-      const chat = !cmd && !!d.talk && heard.trim().split(/\s+/).length >= 3;
-      if (chat) d.talk!(heard.trim());
+      const chat = !cmd && !!d.prefill && heard.trim().split(/\s+/).length >= 3;
+      if (chat) d.prefill!(heard.trim());
       d.ui({ kind: cmd || chat ? 'idle' : 'huh' });
     });
   }

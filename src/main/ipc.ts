@@ -35,7 +35,7 @@ export const IPC = {
   talkSend: 'pixy:talk-send',
   talkClose: 'pixy:talk-close',
   talkInfo: 'pixy:talk-info',
-  talkShow: 'pixy:talk-show',
+  talkPrefill: 'pixy:talk-prefill',
   overloadStart: 'pixy:overload-start',
   overloadCursor: 'pixy:overload-cursor',
   overloadDone: 'pixy:overload-done',

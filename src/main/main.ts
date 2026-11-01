@@ -348,7 +348,7 @@ function startVoice(): void {
     mic: micWin,
     ui: tell,
     command: (c) => run(c),
-    talk: (text) => { void talk.ask(text); },
+    prefill: (text) => talk.prefill(text),
     heard: (text) => { if (debugOn) primary()?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
   });
 }
@@ -377,7 +377,7 @@ void app.whenReady().then(async () => {
       const w = primary();
       if (!w || snoozed()) return;
       const wb = w.getBounds();
-      w.webContents.send(IPC.behavior, { seq: ++talkSeq, action: 'talk', mood: r.action, crisis: r.crisis, bubble: r.woof, target: toOverlayPoint({ x: b.x, y: b.y + b.height }, wb), reason: 'talk' });
+      w.webContents.send(IPC.behavior, { seq: ++talkSeq, action: 'talk', mood: r.action, crisis: r.crisis, bubble: r.crisis ? undefined : r.woof, target: toOverlayPoint({ x: b.x, y: b.y + b.height }, wb), reason: 'talk' });
     },
   });
   startVoice();
