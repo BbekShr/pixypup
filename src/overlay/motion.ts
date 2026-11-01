@@ -87,10 +87,6 @@ export const LEAN_DEG = 2;
 export const walkFrame = (distancePx: number, frames: number, stridePx: number): number =>
   Math.floor(distancePx / stridePx) % frames;
 
-/** Vertical offset: one hump per stride (= per footfall), 0 whenever a paw is down. */
-export function bob(distancePx: number, stridePx: number): number {
-  return -4 * Math.sin(Math.PI * ((distancePx / stridePx) % 1));
-}
 
 /** Screen-space pitch (deg) in the direction of travel (rotate is applied outside the mirror): LEAN_DEG at steady speed, forward when speeding up, back when braking. speedFrac is v/vMax, accelFrac is a/WALK_ACCEL. */
 export const lean = (dir: number, speedFrac = 1, accelFrac = 0): number =>
@@ -253,19 +249,6 @@ export function overlap(a: ArrayLike<number>, b: ArrayLike<number>, stride = 1):
 
 export interface Pose { dx: number; dy: number; rot: number; sx: number; sy: number }
 
-/**
- * Per-step body motion for the walk, by distance so it stays locked to the frames: a small squash at each
- * footfall and a stretch mid-stride (volume kept: sx moves half as much the other way), plus a side-to-side rock
- * that changes sign every step. rot is nose-down positive; the caller signs it for the facing.
- * `drawn`: the frames are a real side-on cycle that already draws the legs and body height, so only a light
- * footfall is added; a rock would pitch the long body like a rocking horse.
- */
-export function gait(distancePx: number, stridePx: number, drawn = false): Pose {
-  const p = distancePx / stridePx;
-  const k = drawn ? 0.4 : 1;
-  const sy = 1 + k * (0.03 * Math.sin(Math.PI * (p % 1)) - 0.015);
-  return { dx: 0, dy: k * bob(distancePx, stridePx), rot: drawn ? 0 : 1.2 * Math.sin(Math.PI * p), sx: 1 - (sy - 1) / 2, sy };
-}
 
 /**
  * A bounding trot for a pet with no drawn walk cycle: one small airborne bound per stride, stretched mid-air and

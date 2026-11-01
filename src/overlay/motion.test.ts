@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -29,11 +29,6 @@ describe('motion', () => {
     expect(walkFrame(40, 2, 20)).toBe(0);
     expect(walkFrame(79, 4, 20)).toBe(3);
     expect(walkFrame(80, 4, 20)).toBe(0);
-  });
-  it('bob is 0 at a footfall, 4 px up mid-stride, and frozen when standing still', () => {
-    expect(bob(0, 20)).toBeCloseTo(0);
-    expect(bob(20, 20)).toBeCloseTo(0);
-    expect(bob(10, 20)).toBeCloseTo(-4);
   });
   it('leans toward the travel direction and the transform keeps that sign when mirrored', () => {
     expect(lean(1)).toBe(2);
@@ -335,21 +330,7 @@ describe('boundGait', () => {
   });
 });
 
-describe('gait, bark, settle', () => {
-  it('squashes at each footfall, stretches mid-stride, rocks the other way every step', () => {
-    expect(gait(0, 20).sy).toBeCloseTo(0.985);
-    expect(gait(10, 20).sy).toBeCloseTo(1.015);
-    expect(gait(10, 20).sx).toBeLessThan(1);
-    expect(gait(10, 20).rot).toBeCloseTo(1.2);
-    expect(gait(30, 20).rot).toBeCloseTo(-1.2);
-    expect(gait(10, 20).dy).toBe(bob(10, 20));
-  });
-  it('adds only a light footfall and no rock to a drawn side-on cycle', () => {
-    expect(gait(10, 20, true).rot).toBe(0);
-    expect(gait(30, 20, true).rot).toBe(0);
-    expect(gait(10, 20, true).dy).toBeCloseTo(0.4 * bob(10, 20));
-    expect(gait(10, 20, true).sy).toBeCloseTo(1.006);
-  });
+describe('bark, settle', () => {
   it('each woof winds up (nose down, crouch) then pops (nose up, chest up), and is calm between bursts', () => {
     const wind = barkPose(140);
     expect(wind.rot).toBeLessThan(0);
