@@ -886,6 +886,13 @@ describe('profile-driven prompts', () => {
     expect(posesFor(defaultProfile('butterfly')).walk_sheet).toContain('exactly 4 frames');
   });
 
+  it('does not append a 4-frame motion hint to the 8-frame sheet', () => {
+    const d = defaultProfile('dog');
+    const w = posesFor({ ...d, cycle: { ...d.cycle, prompt: 'A sprite sheet of exactly 4 frames in 4 equal columns, trotting.' } }).walk_sheet8!;
+    expect(w).not.toMatch(/exactly 4 frames|Motion notes|trotting/);
+    expect(w).toContain('exactly 8 frames');
+  });
+
   it('asks a snake for body undulation', () => {
     const p = posesFor(defaultProfile('snake'));
     expect(p.walk_sheet).toMatch(/S curve/);
