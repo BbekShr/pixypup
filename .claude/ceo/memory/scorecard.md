@@ -25,4 +25,5 @@ Level: **L1** (target L1) since 2026-10-31.
 | 2026-11-01 | F16 | #12 | landed-clean | no | 2 CONFIRMED + 6 lower | no | 2 sonnet editor runs, 1 sonnet lens |
 | 2026-11-01 | P2 | #13 | landed-edited | yes (CEO: offline default) | 0 | no | 1 sonnet editor run |
 | 2026-11-01 | F6a | #14 | landed-clean | no | 1 PLAUSIBLE | no | 1 sonnet editor run; CEO inline review |
-| 2026-11-01 | F6b | (this PR) | open | no | 5 PLAUSIBLE + 3 minor | no | 4 sonnet editor runs, 1 sonnet lens |
+| 2026-11-01 | F6b | #15 | landed-clean | no | 5 PLAUSIBLE + 3 minor | no | 4 sonnet editor runs, 1 sonnet lens |
+| 2026-11-01 | F7 | (this PR) | open | no | 4 CONFIRMED + 5 lower | no | 4 sonnet editor runs (2 roles), 1 sonnet lens, 1 live Spark probe |

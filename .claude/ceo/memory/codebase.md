@@ -41,4 +41,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F6b): `src/screen/reader.ts` `createScreenReader({run, osa, decodePng?}).tick()` is F7's entry; terminal osascript output = rows\ncols\ntabs\nid\nleft\ntop\nright\nbottom\ncontents; first live osascript triggers the Automation prompt, so wire it only when screen-aware is on. Tests 320 in 24 files.
 
+- 2026-11-01 (F7): `src/main/screen-loop.ts` + `src/screen/decide.ts` createDecider + `src/api/sniff-bubble.ts`; overlay `pixy:behavior` (`src/overlay/behavior.ts`); consent window `src/onboarding/screen.html`; dev `PIXY_FAKE_SCREEN=1`, `__pixyDebug.behave`. Spark bubble live 1-2 s. Tests 351 in 28 files.
+
 ## Clean audits (so discovery skips these grounds)
