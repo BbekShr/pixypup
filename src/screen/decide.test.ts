@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest';
+import { ruleDecide, type Observation } from './decide';
+
+const base: Observation = { windows: [], slackBadge: null, terminalError: null };
+const b = { x: 0, y: 0, w: 100, h: 50 };
+
+describe('ruleDecide', () => {
+  it('returns null when nothing is going on', () => {
+    expect(ruleDecide(base)).toBeNull();
+  });
+  it('hides during Zoom', () => {
+    const d = ruleDecide({ ...base, windows: [{ owner: 'zoom.us', title: 'Zoom Meeting', bounds: b }] });
+    expect(d?.action).toBe('hide');
+  });
+  it('hides during Meet', () => {
+    const d = ruleDecide({ ...base, windows: [{ owner: 'Chrome', title: 'Meet - abc', bounds: b }] });
+    expect(d?.action).toBe('hide');
+  });
+  it('sniffs the error box center', () => {
+    const d = ruleDecide({ ...base, terminalError: { text: 'boom', box: { x: 10, y: 20, w: 100, h: 40 } } });
+    expect(d).toMatchObject({ action: 'sniff', target: { x: 60, y: 40 } });
+  });
+  it('sniffs window bottom-left without a box', () => {
+    const d = ruleDecide({
+      ...base,
+      windows: [{ owner: 'Terminal', title: 'zsh', bounds: { x: 5, y: 10, w: 300, h: 200 } }],
+      terminalError: { text: 'boom' },
+    });
+    expect(d?.target).toEqual({ x: 5, y: 210 });
+  });
+  it('perks up for Slack badge', () => {
+    expect(ruleDecide({ ...base, slackBadge: '3' })).toMatchObject({ action: 'idle', reason: 'perk up' });
+  });
+  it('call beats error', () => {
+    const d = ruleDecide({
+      windows: [{ owner: 'zoom.us', title: '', bounds: b }],
+      slackBadge: '1',
+      terminalError: { text: 'x' },
+    });
+    expect(d?.action).toBe('hide');
+  });
+});
