@@ -33,8 +33,11 @@ export const POSES = posesFor(defaultProfile('dog'));
 // Profile walk frames sit on their own, wider canvas (see layoutFrames); old packs' walk_0..3 are 3/4 view.
 export const SIDE_FRAMES = ['side_0', 'side_1', 'side_2', 'side_3'];
 const WALK_FRAMES = SIDE_FRAMES;
-const SIDE = new Set(SIDE_FRAMES);
-const POSE_NAMES = ['idle_0', ...WALK_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
+// Front, front 3/4, side, back 3/4, back: the identity turnaround, sliced from one sheet.
+export const TURN_FRAMES = ['turn_front', 'turn_front34', 'turn_side', 'turn_back34', 'turn_back'];
+// Side and turn frames each share one scale and one wider canvas; every other pose is sized on its own.
+const group = (n: string) => (n.startsWith('side_') ? 's' : n.startsWith('turn_') ? 't' : 'm');
+const POSE_NAMES = ['idle_0', ...WALK_FRAMES, ...TURN_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
 // Lying poses are sized by width, everything else by height.
 const LYING = new Set(['sleep', 'roll']);
 const BLINK_MIN_IOU = 0.85;
@@ -219,12 +222,16 @@ export async function layoutFrames(
   const refMeta = await sharp(ref.png).metadata();
   const s = TARGET_HEIGHT / refMeta.height;
   const scaled: Record<string, { buf: Buffer; w: number; h: number }> = {};
-  const sides = Object.keys(keyed).filter((n) => SIDE.has(n));
-  const sideMax = Math.max(1, ...(await Promise.all(sides.map(async (n) => (await sharp((keyed[n] as KeyedFrame).png).metadata()).height))));
+  const maxH: Record<string, number> = {};
+  for (const [n, f] of Object.entries(keyed)) {
+    const g = group(n);
+    if (g !== 'm') maxH[g] = Math.max(maxH[g] ?? 1, (await sharp(f.png).metadata()).height);
+  }
   for (const [name, f] of Object.entries(keyed)) {
     const { width, height } = await sharp(f.png).metadata();
-    let k = SIDE.has(name) ? TARGET_HEIGHT / sideMax : LYING.has(name) ? (1.1 * refMeta.width * s) / width : TARGET_HEIGHT / height;
-    if (f.rawHeight && ref.rawHeight && !SIDE.has(name)) {
+    const g = group(name);
+    let k = g !== 'm' ? TARGET_HEIGHT / (maxH[g] as number) : LYING.has(name) ? (1.1 * refMeta.width * s) / width : TARGET_HEIGHT / height;
+    if (f.rawHeight && ref.rawHeight && g === 'm') {
       const est = (s * ref.rawHeight) / f.rawHeight;
       k = Math.min(1.6 * est, Math.max(0.6 * est, k));
     }
@@ -232,13 +239,14 @@ export async function layoutFrames(
     const h = Math.max(1, Math.round(height * k));
     scaled[name] = { buf: await sharp(f.png).resize(w, h).png().toBuffer(), w, h };
   }
-  const widest = (side: boolean) => Math.max(...Object.entries(scaled).filter(([n]) => SIDE.has(n) === side).map(([, f]) => f.w));
-  const width = widest(false);
-  const sideWidth = sides.length ? widest(true) : width;
+  const widest = (g: string) => Math.max(...Object.entries(scaled).filter(([n]) => group(n) === g).map(([, f]) => f.w));
+  const widths: Record<string, number> = { m: widest('m') };
+  for (const g of Object.keys(maxH)) widths[g] = widest(g);
+  const width = widths['m'] as number;
   const height = Math.max(...Object.values(scaled).map((f) => f.h)) + MARGIN;
   const frames: Record<string, Buffer> = {};
   for (const [name, f] of Object.entries(scaled)) {
-    const w = SIDE.has(name) ? sideWidth : width;
+    const w = widths[group(name)] as number;
     frames[name] = await sharp({
       create: { width: w, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
     })
@@ -439,7 +447,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     const prompt =
       name === 'idle_blink'
         ? poses[name]!
-        : `${style} ${poses[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
+        : `${style} ${poses[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '') + (refs.length > 2 ? ' The third image shows the same character from every angle; keep it consistent with those views.' : '');
     try {
       return await attempt(prompt, refs, finish);
     } catch (first) {
@@ -478,7 +486,18 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     }
     if (failure && omit) emit({ stage: 'pose-failed', name: omit, error: failure });
   };
-  const refs = [cutoutOnMagenta, idleRaw];
+  // One sheet of five views; later poses see it as an extra reference so every angle agrees. Failure just skips it.
+  let turnRaw: string | undefined;
+  await run(
+    TURN_FRAMES,
+    async () => {
+      const t = await draw('turn_sheet', [cutoutOnMagenta, idleRaw], async (img, k) => ({ frames: await sheetFrames(k, TURN_FRAMES.length), raw: dataUrl(img.buffer, img.mime) }));
+      turnRaw = t.raw;
+      return t.frames;
+    },
+    'turn',
+  );
+  const refs = [cutoutOnMagenta, idleRaw, ...(turnRaw ? [turnRaw] : [])];
   const sheet = async (_img: unknown, k: Keyed) => {
     const frames = await sheetFrames(k);
     if (await isStaticSheet(frames)) throw new BadOutputError('static sheet');
@@ -504,7 +523,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     run(WALK_FRAMES, walk, 'walk'),
     ...['sit', 'sleep', 'bark', 'roll'].map((n) => run([n], async () => [await draw(n, refs, single)])),
     run(['idle_blink'], async () => [
-      await draw('idle_blink', [idleRaw], async (img, k) => {
+      await draw('idle_blink', [idleRaw, ...(turnRaw ? [turnRaw] : [])], async (img, k) => {
         if (bboxIoU(k.box, idleDraw.k.box) < BLINK_MIN_IOU) throw new BadOutputError('blink moved');
         return single(img, k);
       }),
@@ -528,6 +547,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     poses: {
       idle: pose(['idle_0.png'], 2),
       ...(keyed['side_0'] ? { walk: pose(SIDE_FRAMES.map((f) => `${f}.png`), 8) } : {}),
+      ...(keyed['turn_front'] ? { turn: pose(TURN_FRAMES.map((f) => `${f}.png`), 1) } : {}),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),
       bark: pose(['bark.png'], 4),

@@ -72,6 +72,19 @@ const PAIR: Record<CycleKind, string> = {
   spin: pair('spinning', 'facing right in profile', 'turned away from the camera', 'only the rotation changes'),
 };
 
+// One sheet of five views of the same character: the identity anchor for every other pose.
+function turnSheet(p: MotionProfile): string {
+  const wings = p.locomotion === 'fly' ? ', wings spread' : '';
+  const quad = p.locomotion === 'quadruped';
+  return (
+    `A horizontal sprite sheet of exactly 5 views of this same ${p.subject}, all at the same scale, standing on one ground line: ` +
+    `View 1: front, facing the camera${wings}. View 2: front three-quarter view, facing right${wings}. ` +
+    `View 3: right side profile, facing right${wings}. View 4: back three-quarter view${wings}. View 5: back view, facing away from the camera${wings}. ` +
+    `Identical character in every view: same ${p.styleHints}, same markings, colours and proportions${quad ? ', same ears and collar' : ''}. ` +
+    'Evenly spaced in 5 equal columns with wide magenta gaps between the views.'
+  );
+}
+
 /** Muse Image prompts by pose name; the sheet is the scaffold for the profile's cycle kind plus the model's hint. */
 export function posesFor(p: MotionProfile): Record<string, string> {
   const base = p.cycle.kind === 'walk' ? SHEET : FAMILY[p.cycle.kind];
@@ -80,6 +93,7 @@ export function posesFor(p: MotionProfile): Record<string, string> {
     idle_0: p.idlePrompt,
     walk_sheet: base + hint,
     walk_pair: PAIR[p.cycle.kind],
+    turn_sheet: turnSheet(p),
     sit: p.roles.rest.prompt,
     sleep: p.roles.sleep.prompt,
     bark: p.roles.voice.prompt,

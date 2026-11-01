@@ -67,6 +67,7 @@ export interface SpriteManifest {
   pet: string;
   species: Species;
   profile?: MotionProfile;
+  /** Optional 'turn': 5 stills in order front, front three-quarter (facing right), right side, back three-quarter, back. */
   poses: Record<string, PoseDef>;
   personality?: Personality & { facts?: PetFact[] };
 }

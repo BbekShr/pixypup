@@ -112,6 +112,7 @@
     },
     "poses": {
       "type": "object",
+      "description": "Pose name -> frames. Optional 'turn' holds the five turnaround stills in order: front, front three-quarter (facing right), right side, back three-quarter, back.",
       "additionalProperties": {
         "type": "object",
         "required": ["frames", "fps", "footY"],
