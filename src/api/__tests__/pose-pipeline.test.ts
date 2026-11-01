@@ -159,7 +159,6 @@ describe('chromaKey soft fur fringe', () => {
     }
     const { png, bleed } = await chromaKey(await sharp(buf, { raw: { width: W, height: 8, channels: 3 } }).png().toBuffer());
     const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    console.log('DBG', Array.from({length: info.width}, (_, x) => [...data.subarray(x*4, x*4+4)].join(',')).join(' '));
     let semi = 0;
     for (let i = 0; i < data.length; i += 4) {
       if ((data[i + 3] as number) === 0) continue;
