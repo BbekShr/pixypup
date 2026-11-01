@@ -43,4 +43,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F7): `src/main/screen-loop.ts` + `src/screen/decide.ts` createDecider + `src/api/sniff-bubble.ts`; overlay `pixy:behavior` (`src/overlay/behavior.ts`); consent window `src/onboarding/screen.html`; dev `PIXY_FAKE_SCREEN=1`, `__pixyDebug.behave`. Spark bubble live 1-2 s. Tests 351 in 28 files.
 
+- 2026-11-01 (F8): voice = `src/api/voice.ts` (openVoice gated, async) + `src/main/voice-session.ts` + `src/main/mic.ts` + `src/voice/{listen,commands,pcm}.ts`; dev `PIXY_FAKE_MIC=<wav>` (parses the data chunk), `pref('voice:listen')`, `pref('voice:fake:<text>')`; real driver out/_voicedrive.mjs. Tests 413 in 34 files.
+
 ## Clean audits (so discovery skips these grounds)

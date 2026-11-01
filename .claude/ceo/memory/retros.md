@@ -18,3 +18,4 @@ One line per run: `- YYYY-MM-DD <mode/ID>: <friction observed> → <fix made or 
 - 2026-11-01 F6a: capture can't be verified from any Claude-hosted shell → redesigned the sniff to be text-first so the demo's key moment needs only one permission click
 - 2026-11-01 F6b: an unverified id-equality assumption would have silently disabled the never-cut sniff → replaced with AppleScript bounds + overlap; lesson: demo-critical paths get no single unverified dependency
 - 2026-11-01 F7: the never-cut moment works in rehearsal and Spark live, but the real Terminal path needs a human click; agents correctly refused to trigger the permission prompt themselves
+- 2026-11-01 F8: the real-key app-path run found a test-harness WAV bug and a missing keyword that every unit test missed; the lens found cross-session audio loss → live runs are mandatory for Meta-integrated features
