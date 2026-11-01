@@ -3,8 +3,9 @@ import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
-import { DISPLAY_H, displayWidth, footOffset } from './layout';
-import { BLINK_MS, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
+import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
+import { displayWidth, footOffset } from './layout';
+import { BLINK_MS, MAX_SPEED, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -16,6 +17,9 @@ declare global {
       getPack(): Promise<Pack | null>;
       showMenu(): void;
       getStay(): Promise<boolean>;
+      getPrefs(): Promise<unknown>;
+      onPrefs(cb: (p: unknown) => void): void;
+      devCommand(cmd: string): void;
     };
   }
 }
@@ -34,8 +38,9 @@ const keep: HTMLImageElement[] = []; // decoded bitmaps live as long as the pack
 let poses: Record<string, PoseSet> = { idle: { srcs: [pupUrl], fps: 1 } };
 let W = 120;
 let H = 120;
+let nat: { w: number; h: number } | null = null; // the pose's natural size; W and H follow the chosen size
+let prefs: Prefs = { size: 'medium', energy: 'normal', snoozed: false };
 let footY = 1;
-// TODO(F16): personality.energy is stored but unused; the Energy setting should default from it.
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
 let sayAt = Infinity;
 let speakingUntil = 0;
@@ -43,7 +48,7 @@ let lastLine: string | null = null;
 let lineOnBark = false;
 const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('chatty') === '1';
 
-interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; w: number; h: number; footY: number }
+interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number }
 
 // Decodes everything before anything is swapped, so the old pet keeps its own poses until it has left.
 async function readPack(): Promise<Prepared | null> {
@@ -62,18 +67,27 @@ async function readPack(): Promise<Prepared | null> {
   }));
   const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
-  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, w: displayWidth(first.naturalWidth, first.naturalHeight), h: DISPLAY_H, footY: pack.manifest.poses['idle']?.footY ?? 1 };
+  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1 };
 }
 
 function applyPack(p: Prepared): void {
-  H = p.h;
-  W = p.w;
+  nat = { w: p.nw, h: p.nh };
+  layout();
   footY = p.footY;
   keep.splice(0, keep.length, ...p.bitmaps); // the old pack's bitmaps are released only once the new poses are live
   poses = p.poses;
   lines = p.lines;
   sayAt = nextSayAt(performance.now(), Math.random(), chatty);
   sizeImg();
+}
+
+function layout(): void {
+  const n = nat ?? (img.naturalHeight ? { w: img.naturalWidth, h: img.naturalHeight } : null); // before a pack: the placeholder's
+  if (!n) return; // never stretch an image whose size is unknown
+  H = SIZES[prefs.size];
+  W = displayWidth(n.w, n.h, H);
+  x = Math.min(x, Math.max(0, window.innerWidth - W));
+  target = Math.min(target, Math.max(0, window.innerWidth - W));
 }
 
 function sizeImg(): void {
@@ -83,6 +97,7 @@ function sizeImg(): void {
 }
 img.src = pupUrl;
 sizeImg();
+img.addEventListener('load', () => { if (!nat) { layout(); sizeImg(); } }, { once: true });
 void readPack().then((p) => p && applyPack(p)).catch(() => undefined);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
@@ -121,13 +136,18 @@ let incoming: { pack: Prepared; cx: number | undefined } | null = null; // the n
 let shownSrc = '';
 let walked = 0; // distance walked, drives the stride-synced frame and bob
 let zs: HTMLElement[] = [];
+let resting = false; // snoozed: invisible, and the rAF loop is stopped
+let restTimer: ReturnType<typeof setTimeout> | undefined;
+let wakeSay = false; // wake-up: drop in, then a sleepy greeting
+
+const en = (): ReturnType<typeof energyParams> => energyParams(prefs.energy);
 
 function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced?: PetState): void {
   const now = performance.now();
   const prev = state;
   state = forced ?? resolveWalk(next(state, ev), stay, o.target !== undefined);
   stateAt = now;
-  const dwell = o.ms ?? dwellMs(state, Math.random());
+  const dwell = o.ms ?? dwellMs(state, Math.random(), en());
   deadline = dwell === null ? null : now + dwell;
   if (state === 'walk') {
     walkAt = now;
@@ -175,6 +195,7 @@ function enter(prev: PetState): void {
 }
 
 function frame(now: number): void {
+  if (resting) return;
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   const age = now - stateAt;
@@ -195,6 +216,12 @@ function frame(now: number): void {
         land(g);
       }
     }
+    if (r.settled && wakeSay) {
+      wakeSay = false;
+      lastInteraction = now;
+      setState('sit', { ms: 3000 });
+      say('Hi again… *yawn*', 3000);
+    }
   } else if (state === 'walk' && now >= turnUntil) {
     const rem = Math.abs(target - x);
     const want = target >= x ? 1 : -1;
@@ -202,19 +229,19 @@ function frame(now: number): void {
       handoff = handoffNext(handoff, 'offscreen');
       dropIn();
     } else if (rem < 1) {
-      const ev = onTimeout('walk', Math.random(), now - lastInteraction);
+      const ev = onTimeout('walk', Math.random(), now - lastInteraction, en());
       setState(ev, ev === 'sit' ? { ms: 4000 } : {});
     } else if (want !== dir) {
       dir = want;
       turnUntil = now + TURN_MS;
       walkAt = turnUntil; // speed ramps up from the end of the turn, no lurch
     } else {
-      const step = Math.min(walkSpeed(now - walkAt, rem) * (handoff === 'trotOff' ? TROT_SPEEDUP : 1) * dt, rem);
+      const step = Math.min(walkSpeed(now - walkAt, rem, MAX_SPEED * en().speed * sizeScale(prefs.size)) * (handoff === 'trotOff' ? TROT_SPEEDUP : 1) * dt, rem);
       x += dir * step;
       walked += step;
     }
   } else if (deadline !== null && now >= deadline) {
-    const ev = onTimeout(state, Math.random(), now - lastInteraction);
+    const ev = onTimeout(state, Math.random(), now - lastInteraction, en());
     setState(ev, ev === 'sit' ? { ms: 4000 } : {});
   }
 
@@ -283,6 +310,8 @@ let preDrag: PetState = 'walk';
 let downAt = 0;
 let downX = 0;
 let downY = 0;
+let ptrX = 0; // last pointer position while dragging
+let ptrY = 0;
 img.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   menuCalls++;
@@ -299,12 +328,16 @@ img.addEventListener('pointerdown', (e) => {
   downAt = performance.now();
   downX = e.clientX;
   downY = e.clientY;
+  ptrX = downX;
+  ptrY = downY;
   lastInteraction = downAt;
   img.setPointerCapture(e.pointerId);
   setState('dragStart');
 });
 img.addEventListener('pointermove', (e) => {
   if (!dragging) return;
+  ptrX = e.clientX;
+  ptrY = e.clientY;
   x = Math.min(Math.max(0, e.clientX - offX), window.innerWidth - W);
   const top = Math.min(Math.max(0, e.clientY - offY), window.innerHeight - H);
   lift = top - floorY();
@@ -322,6 +355,7 @@ function finish(e: PointerEvent): void {
   if (lift < 0) { falling = true; vy = 0; }
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
   if (!img.matches(':hover')) window.pixy.setClickThrough(true);
+  applyRest();
   if (pendingSwap) { const q = pendingSwap; pendingSwap = null; swapPets(q.pack, q.cx); }
 }
 img.addEventListener('pointerup', finish);
@@ -344,9 +378,62 @@ function command(raw: string): void {
 }
 window.pixy.onCommand(command);
 
+const REST_MS = 600;
+// Snooze/wake wait out a drag or the pet-swap hand-off, which own the pet until they finish.
+const canRest = (): boolean => !dragging && !handoffBusy(handoff);
+function applyRest(): void {
+  if (prefs.snoozed === resting || !canRest()) return;
+  resting = prefs.snoozed;
+  clearTimeout(restTimer);
+  document.body.style.transition = `opacity ${calm ? 200 : REST_MS}ms`;
+  if (resting) {
+    cancelAnimationFrame(raf);
+    document.body.style.opacity = '0';
+    window.pixy.setClickThrough(true);
+    restTimer = setTimeout(() => {
+      img.style.display = 'none'; // no hover target while snoozed
+      fx.replaceChildren();
+      zs = [];
+    }, REST_MS);
+    return;
+  }
+  img.style.display = '';
+  document.body.style.opacity = '1';
+  const now = performance.now();
+  last = now;
+  lastInteraction = now;
+  wakeSay = true;
+  sayAt = nextSayAt(now, Math.random(), chatty); // no chatter line right after "Hi again"
+  falling = !calm;
+  vy = 0;
+  lift = calm ? 0 : -(floorY() + H);
+  setState('idle', { ms: 3000 });
+  if (calm) { wakeSay = false; setState('sit', { ms: 3000 }); say('Hi again… *yawn*', 3000); }
+  raf = requestAnimationFrame(frame);
+}
+function applyPrefs(raw: unknown): void {
+  const p = parsePrefs(raw);
+  if (!p) return;
+  const sizeChanged = p.size !== prefs.size;
+  prefs = p;
+  if (sizeChanged) {
+    layout();
+    sizeImg();
+    if (dragging) { offX = ptrX - x; offY = ptrY - (floorY() + lift); } // keep the grab point under the pointer
+  }
+  applyRest();
+}
+window.pixy.onPrefs(applyPrefs);
+void window.pixy.getPrefs().then((raw) => {
+  document.body.style.transition = 'none';
+  applyPrefs(raw);
+  if (!prefs.snoozed) document.body.style.opacity = '1';
+}).catch(() => { document.body.style.opacity = '1'; });
+
 // Old pet trots off the nearest edge at double speed; dropIn() then fires on arrival. Reduced motion: crossfade swap.
 function swapPets(pack: Prepared, cx: number | undefined): void {
   if (dragging) { pendingSwap = { pack, cx }; return; }
+  wakeSay = false; // main wakes the pet right before it reveals the new one
   incoming = { pack, cx: validCx(cx, window.innerWidth, x + W / 2) };
   handoff = handoffStart(calm);
   greet = null;
@@ -386,6 +473,7 @@ function land(name: string): void {
     const r = flushCommand(handoff, queuedCmd);
     queuedCmd = r.queued;
     if (r.now) command(r.now);
+    applyRest();
   }, 3600);
 }
 function speakLine(): boolean {
@@ -416,5 +504,5 @@ raf = requestAnimationFrame(frame);
 import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command }) });
 }

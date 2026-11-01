@@ -21,6 +21,10 @@ const defaults: Settings = {
   adminDisableScreenAware: false,
   petName: 'Pakkun',
   onboarded: false,
+  size: 'medium',
+  hideInShares: false,
+  openAtLogin: false,
+  snoozeUntil: null,
 };
 
 describe('mergeSettings', () => {
@@ -28,11 +32,22 @@ describe('mergeSettings', () => {
     const { mergeSettings } = await import('./settings');
     expect(mergeSettings(defaults)).toEqual(defaults);
   });
-  it('user overrides defaults, admin overrides user', async () => {
+  it('user overrides defaults; admin overrides only the restricting keys', async () => {
     const { mergeSettings } = await import('./settings');
-    const s = mergeSettings(defaults, { petName: 'Rex', voice: true }, { petName: 'Corp' });
-    expect(s.petName).toBe('Corp');
-    expect(s.voice).toBe(true);
+    const s = mergeSettings(defaults, { petName: 'Rex', voice: true, size: 'large' }, { voice: false, petName: 'Corp', size: 'small' });
+    expect(s.voice).toBe(false);
+    expect(s.petName).toBe('Rex');
+    expect(s.size).toBe('large');
+  });
+  it('admin cannot force the pet on the user: login, snooze, size, energy, onboarded and a false hide are ignored', async () => {
+    const { mergeSettings } = await import('./settings');
+    const user = { openAtLogin: false, snoozeUntil: null, size: 'small', energy: 'sleepy', onboarded: true, hideInShares: true } as const;
+    const s = mergeSettings(defaults, user, { openAtLogin: true, snoozeUntil: 5, size: 'large', energy: 'playful', onboarded: false, hideInShares: false });
+    expect(s).toMatchObject({ openAtLogin: false, snoozeUntil: null, size: 'small', energy: 'sleepy', onboarded: true, hideInShares: true });
+  });
+  it('admin hideInShares:true is honoured', async () => {
+    const { mergeSettings } = await import('./settings');
+    expect(mergeSettings(defaults, { hideInShares: false }, { hideInShares: true }).hideInShares).toBe(true);
   });
   it('admin disable forces screenAware off', async () => {
     const { mergeSettings } = await import('./settings');
@@ -51,6 +66,25 @@ describe('loadSettings (real read/merge path)', () => {
   it('drops wrong-typed values: "false" string does not enable screenAware', async () => {
     const s = await load({ [USER]: '{"screenAware":"false","voice":1,"petName":"","extra":true}' });
     expect(s).toEqual(defaults);
+  });
+  it('reads the calm keys; wrong types are dropped from the user file', async () => {
+    const ok = await load({ [USER]: '{"size":"large","energy":"sleepy","hideInShares":true,"openAtLogin":true,"snoozeUntil":1234}' });
+    expect(ok).toMatchObject({ size: 'large', energy: 'sleepy', hideInShares: true, openAtLogin: true, snoozeUntil: 1234 });
+    const bad = await load({ [USER]: '{"size":"huge","energy":3,"hideInShares":"y","openAtLogin":1,"snoozeUntil":"x"}' });
+    expect(bad).toEqual(defaults);
+    expect(bad.energy).toBeUndefined();
+  });
+  it('on disk: admin hideInShares:true wins, admin size/petName/openAtLogin do not', async () => {
+    const { ADMIN_FILE } = await import('./settings');
+    const s = await load({ [USER]: '{"size":"large","petName":"Rex"}', [ADMIN_FILE]: '{"size":"small","petName":"Corp","openAtLogin":true,"hideInShares":true}' });
+    expect(s).toMatchObject({ size: 'large', petName: 'Rex', openAtLogin: false, hideInShares: true });
+  });
+  it('hideLockedByAdmin reflects the admin file only', async () => {
+    const { ADMIN_FILE, hideLockedByAdmin } = await import('./settings');
+    await load({ [USER]: '{"hideInShares":true}' });
+    expect(hideLockedByAdmin()).toBe(false);
+    await load({ [ADMIN_FILE]: '{"hideInShares":true}' });
+    expect(hideLockedByAdmin()).toBe(true);
   });
   it('rejects petName over 40 chars, accepts valid one', async () => {
     expect((await load({ [USER]: JSON.stringify({ petName: 'x'.repeat(41) }) })).petName).toBe('Pakkun');
@@ -83,6 +117,11 @@ describe('loadSettings (real read/merge path)', () => {
     '{"adminDisableScreenAware":1}',
     '{"screenAware":"false"}',
     '{"petName":""}',
+    '{"size":"huge"}',
+    '{"energy":"hyper"}',
+    '{"hideInShares":"yes"}',
+    '{"openAtLogin":1}',
+    '{"snoozeUntil":"soon"}',
   ])('admin file with invalid known key %s fails closed', async (admin) => {
     const { ADMIN_FILE } = await import('./settings');
     const s = await load({ [USER]: '{"screenAware":true,"voice":true}', [ADMIN_FILE]: admin });
