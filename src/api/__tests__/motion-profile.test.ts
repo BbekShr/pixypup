@@ -34,6 +34,16 @@ describe('real Spark profiles (fixtures)', () => {
 
 describe('sanitizeProfile', () => {
   const good = () => answer(fixture('husky'));
+  it('truncates an over-long prose field on a word boundary instead of dropping the profile', () => {
+    const g = good();
+    g.cycle = { ...g.cycle, prompt: 'trotting along '.repeat(100) };
+    g.subject = 'a very fluffy husky dog with a curled tail and ' + 'extra '.repeat(20);
+    const p = sanitizeProfile(g, 'husky');
+    expect(p.cycle.prompt.length).toBeLessThanOrEqual(900);
+    expect(p.cycle.prompt.endsWith('trotting along')).toBe(true);
+    expect(p.subject.length).toBeLessThanOrEqual(60);
+    expect(() => sanitizeProfile({ ...g, locomotion: 'swim' }, 'husky')).toThrow();
+  });
   it('clamps numbers into range', () => {
     const g = good();
     g.gait = { ...g.gait, cadenceHz: 99, bounce: -3, pitchDeg: 500, speedBody: 0 };
