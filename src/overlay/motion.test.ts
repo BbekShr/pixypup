@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, type Mirror, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, type Mirror, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -391,5 +391,41 @@ describe('mirror', () => {
     const m = steer(settled, -1, 10, 0);
     expect(mirrorScale(m, 10, 0)).toBe(-1);
     expect(mirrorScale(steer(m, 1, 11, 0), 11, 0)).toBe(1);
+  });
+});
+
+describe('hopTurn', () => {
+  const us = Array.from({ length: 101 }, (_, i) => i / 100);
+
+  it('is symmetric in u <-> 1-u', () => {
+    for (const u of us) {
+      const a = hopTurn(u, 8);
+      const b = hopTurn(1 - u, 8);
+      expect(a.dy).toBeCloseTo(b.dy, 9);
+      expect(a.sx).toBeCloseTo(b.sx, 9);
+      expect(a.sy).toBeCloseTo(b.sy, 9);
+    }
+  });
+
+  it('has the feet down at both ends, the apex at 0.5, and no air at height 0', () => {
+    expect(hopTurn(0, 8).dy).toBeCloseTo(0, 9);
+    expect(hopTurn(1, 8).dy).toBeCloseTo(0, 9);
+    expect(Math.min(...us.map((u) => hopTurn(u, 8).dy))).toBe(hopTurn(0.5, 8).dy);
+    expect(hopTurn(0.5, 8).dy).toBeCloseTo(-8, 9);
+    expect(us.every((u) => hopTurn(u, 0).dy === 0)).toBe(true);
+    expect(hopTurn(0.075, 0).sy).toBeCloseTo(0.92, 9);
+  });
+
+  it('a reversal at any point does not jump the composed body', () => {
+    const D = 300;
+    const f = (m: Mirror, t: number) => hopTurn(mirrorProgress(m, t, D), 8);
+    const base = steer({ from: -1, to: 1, at: -Infinity }, -1, 1000, D);
+    let step = 0;
+    for (let t = 1000; t < 1000 + D; t++) step = Math.max(step, Math.abs(f(base, t + 1).dy - f(base, t).dy), 8 * Math.abs(f(base, t + 1).sy - f(base, t).sy));
+    for (const e of [1, 20, 45, 100, 149, 151, 200, 255, 299]) {
+      const r = steer(base, 1, 1000 + e, D);
+      expect(Math.abs(f(r, 1000 + e).dy - f(base, 1000 + e - 1).dy)).toBeLessThanOrEqual(step + 1e-9);
+      expect(Math.abs(f(r, 1000 + e).sy - f(base, 1000 + e - 1).sy) * 8).toBeLessThanOrEqual(step + 1e-9);
+    }
   });
 });

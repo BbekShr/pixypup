@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -46,7 +46,8 @@ const CELEBRATE_MS = 2600;
 const HINT_SHOW_MS = 11000;
 const MARK_MS = 2600;
 
-const TURN_MS = 380; // a dog turning round, not a flip
+const TURN_MS = 300; // a hop-turn: crouch, hop, land
+const TURN_HOP = 0.07; // of H
 type Fidget = 'look' | 'tilt' | 'sniff' | 'wag';
 const LIFE_MS: Record<Fidget, number> = { look: 1000, tilt: 1400, sniff: 1200, wag: 1000 };
 const WAG_FRAME_MS = 110;
@@ -195,6 +196,8 @@ let target = x;
 let dir = 1; // where it is heading
 let facing = 1; // the side drawn this frame (follows dir through a turn)
 let mir: Mirror = { from: -1, to: 1, at: -Infinity };
+let turnDir = 1; // dir when the last turn started: a look turn leaves it unchanged
+let turnH = 0; // hop height of the turn running
 let turnUntil = 0;
 let stateAt = performance.now();
 let walkV = 0; // px/s
@@ -404,9 +407,10 @@ function frame(now: number): void {
   const life = upright && !act && now < lifeUntil;
   const turning = state === 'walk' && now < turnUntil;
   const turnMs = calm ? 0 : TURN_MS;
+  const prev = mir;
   mir = steer(mir, dir * (life && lifeKind === 'look' ? -1 : 1) as 1 | -1, now, turnMs); // look: the head turns away and back, any interruption turns too
-  const ms = mirrorScale(mir, now, turnMs);
-  const flip = Math.sign(ms);
+  if (mir !== prev && now - prev.at >= turnMs) { turnH = dir === turnDir || falling || dragging ? 0 : TURN_HOP * H; turnDir = dir; } // a reversal keeps its hop; a look crouches on the spot; no hop off thin air
+  const flip = Math.sign(mirrorScale(mir, now, turnMs));
   facing = flip;
   y = floorY() + lift;
   if (dragging && !calm) {
@@ -490,8 +494,10 @@ function frame(now: number): void {
     rot = rollAngle(age);
   }
   if (turning) { sx = 1; sy = 1; }
-  sx *= Math.abs(ms); // the sign lives in flip, so the head registration mirrors with it
-  sy *= 1 - 0.04 * envelope(now - mir.at, turnMs);
+  const hp = hopTurn(mirrorProgress(mir, now, turnMs), turnH);
+  dy += hp.dy;
+  sx *= hp.sx;
+  sy *= hp.sy;
   if (!calm) {
     const ok = hovering && microOk();
     tilt += ((ok ? HOVER_TILT_DEG * hoverSide : 0) - tilt) * Math.min(1, dt * 12);

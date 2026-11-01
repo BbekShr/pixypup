@@ -38,6 +38,21 @@ export function steer(m: Mirror, want: 1 | -1, now: number, durMs: number): Mirr
 export const mirrorScale = (m: Mirror, now: number, durMs: number): number =>
   now - m.at >= durMs ? m.to : m.from * turnScale(now - m.at, durMs);
 
+/** Turn progress 0..1 (1 once done); the side swaps at 0.5. */
+export const mirrorProgress = (m: Mirror, now: number, durMs: number): number =>
+  now - m.at >= durMs ? 1 : (now - m.at) / durMs;
+
+/** Hop-turn body for progress u: crouch, an airborne arc (apex at 0.5, where the mirror swaps), landing squash. Symmetric in u <-> 1-u, so a reversal stays continuous. heightPx 0 = crouch only. */
+export function hopTurn(u: number, heightPx: number): { dy: number; sx: number; sy: number } {
+  const v = Math.min(u, 1 - u);
+  if (v < 0.15) {
+    const k = Math.sin((Math.PI * v) / 0.15);
+    return { dy: 0, sx: 1 + 0.04 * k, sy: 1 - 0.08 * k };
+  }
+  const a = Math.sin((Math.PI * (v - 0.15)) / 0.7);
+  return { dy: -heightPx * a, sx: 1 - 0.02 * a, sy: 1 + 0.04 * a };
+}
+
 /** Wander 120-400 px from x, heading back toward home when it has strayed, always inside [0, maxX]. */
 export function pickTarget(x: number, maxX: number, home: number, r1: number, r2: number): number {
   let dir = x > home + 200 ? -1 : x < home - 200 ? 1 : r1 < 0.5 ? -1 : 1;
