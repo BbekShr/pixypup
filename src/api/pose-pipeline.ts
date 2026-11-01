@@ -15,6 +15,7 @@ import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
 import { breedFacts, meetPet } from './personality.js';
 import { largest, maskAt, segment } from './sam.js';
+import { isStaticSheet } from './static-sheet.js';
 
 export { validateManifest };
 
@@ -46,11 +47,21 @@ const SHEET =
   'Same size, same body height and same head position in every frame; only the legs move. ' +
   'Evenly spaced in 4 equal columns with wide magenta gaps between frames.';
 
+// Last resort when two 4-frame sheets failed: just the two contact poses, which Muse draws well.
+const PAIR =
+  'A horizontal sprite sheet of exactly 2 frames of this same character mid-stride, drawn in strict side profile facing right: ' +
+  "the camera is level and perpendicular to the body, we see the pet's left side, only one eye visible, the head points right. " +
+  'Frame 1: left front leg reaching far forward and right hind leg reaching far back. ' +
+  'Frame 2: right front leg reaching far forward and left hind leg reaching far back. ' +
+  'Same size, same body height and same head position in both frames; only the legs move. ' +
+  'Two equal columns with a wide magenta gap between the frames.';
+
 // The sheet is one request so the four frames come out as one coherent cycle (separate calls copied each other).
 // idle_blink is a pure edit of the idle image: no STYLE prefix, it would invite a redraw.
 export const POSES: Record<string, string> = {
   idle_0: 'Pose: standing on all four legs, side view facing right, tail relaxed.',
   walk_sheet: SHEET,
+  walk_pair: PAIR,
   sit: 'Pose: sitting upright facing the viewer, front paws together.',
   sleep: 'Pose: curled up asleep lying down, eyes closed, side view.',
   bark: 'Pose: barking happily, side view facing right, mouth open, ears perked.',
@@ -326,10 +337,10 @@ export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0:
   return runs.every((r) => Math.abs(r.x1 - r.x0 + 1 - median) <= 0.35 * median) ? runs : null;
 }
 
-/** Cut a keyed walk sheet into its 4 frames, each trimmed to its own alpha rows. Throws on a bad sheet. */
-export async function sheetFrames(k: Keyed): Promise<KeyedFrame[]> {
+/** Cut a keyed walk sheet into its n (default 4) frames, each trimmed to its own alpha rows. Throws on a bad sheet. */
+export async function sheetFrames(k: Keyed, n = WALK_FRAMES.length): Promise<KeyedFrame[]> {
   const { data, info } = await sharp(k.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const runs = sliceSheet(data, info.width, info.height, WALK_FRAMES.length);
+  const runs = sliceSheet(data, info.width, info.height, n);
   if (!runs) throw new BadOutputError('bad sheet');
   return Promise.all(
     runs.map(async (r) => {
@@ -451,7 +462,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       clearTimeout(timer);
     }
   };
-  const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>) => {
+  const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>, retry = true) => {
     const prompt =
       name === 'idle_blink'
         ? POSES[name]!
@@ -459,6 +470,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     try {
       return await attempt(prompt, refs, finish);
     } catch (first) {
+      if (!retry) throw first;
       const wait = (first instanceof MetaApiError && first.status === 429 ? 3 : 1) * backoffMs;
       await new Promise((r) => setTimeout(r, wait));
       return await attempt(prompt, refs, finish);
@@ -476,25 +488,47 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const idleRaw = dataUrl(idleDraw.img.buffer, idleDraw.img.mime);
 
   const keyed: Record<string, KeyedFrame> = { idle_0: idle };
-  // On failure every name in `names` falls back to the idle frame (a missing walk/blink is harmless, a bad one is not).
-  const run = async (names: string[], go: () => Promise<KeyedFrame[]>) => {
+  // On failure every name in `names` falls back to the idle frame (a missing blink is harmless, a bad one is not).
+  // `omit`: nothing is stored and the pose stays out of the pack (a walk made of idle frames glides); the UI still gets idle as the preview.
+  const run = async (names: string[], go: () => Promise<KeyedFrame[]>, omit?: string) => {
     let failure: string | null = null;
     try {
       const out = await go();
       names.forEach((n, i) => (keyed[n] = out[i] as KeyedFrame));
     } catch (err) {
-      names.forEach((n) => (keyed[n] = idle));
+      if (!omit) names.forEach((n) => (keyed[n] = idle));
       failure = reason(err, (err as { timedOut?: boolean }).timedOut === true);
     }
     for (const n of names) {
       if (failure) emit({ stage: 'pose-failed', name: n, error: failure });
-      poseEvent(n, (keyed[n] as KeyedFrame).png, failure ? true : undefined);
+      poseEvent(n, (keyed[n] ?? idle).png, failure ? true : undefined);
     }
+    if (failure && omit) emit({ stage: 'pose-failed', name: omit, error: failure });
   };
   const refs = [cutoutOnMagenta, idleRaw];
-  const sheet = async (_img: unknown, k: Keyed) => sheetFrames(k);
+  const sheet = async (_img: unknown, k: Keyed) => {
+    const frames = await sheetFrames(k);
+    if (await isStaticSheet(frames)) throw new BadOutputError('static sheet');
+    return frames;
+  };
+  // Stride, stand, stride, stand; the stand frames are idle on the walk canvas.
+  const pair = async (_img: unknown, k: Keyed) => {
+    const [a, b] = await sheetFrames(k, 2);
+    return [a as KeyedFrame, idle, b as KeyedFrame, idle];
+  };
+  const walk = async () => {
+    try {
+      return await draw('walk_sheet', refs, sheet);
+    } catch (err) {
+      try {
+        return await draw('walk_pair', refs, pair, false);
+      } catch {
+        throw err;
+      }
+    }
+  };
   await Promise.all([
-    run(WALK_FRAMES, () => draw('walk_sheet', refs, sheet)),
+    run(WALK_FRAMES, walk, 'walk'),
     ...['sit', 'sleep', 'bark', 'roll'].map((n) => run([n], async () => [await draw(n, refs, single)])),
     run(['idle_blink'], async () => [
       await draw('idle_blink', [idleRaw], async (img, k) => {
@@ -519,7 +553,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     species: o.species,
     poses: {
       idle: pose(['idle_0.png'], 2),
-      walk: pose(SIDE_FRAMES.map((f) => `${f}.png`), 8),
+      ...(keyed['side_0'] ? { walk: pose(SIDE_FRAMES.map((f) => `${f}.png`), 8) } : {}),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),
       bark: pose(['bark.png'], 4),

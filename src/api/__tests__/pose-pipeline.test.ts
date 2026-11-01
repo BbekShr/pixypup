@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { isStaticSheet } from '../static-sheet.js';
 import { MetaApiError, type MetaClient, type StreamEvent } from '../meta-client.js';
 import {
   bboxIoU,
@@ -36,7 +37,8 @@ const drawn = (cw: number, ch: number, w: number, h: number) =>
     .toBuffer();
 
 /** A sprite sheet: 4 equal blobs separated by wide magenta gaps. */
-const sheetImg = (widths = [50, 50, 50, 50]) => {
+// default widths differ so the frames are not a static sheet
+const sheetImg = (widths = [50, 58, 50, 58]) => {
   let left = 10;
   const blobs = widths.map((w) => {
     // rounded like a real silhouette: a frame cut by a straight edge is rejected as cropped
@@ -438,15 +440,64 @@ describe('generateSpritePack', () => {
     ['3 blobs', () => sheetImg().then((b) => sharp(b).composite([{ input: { create: { width: 60, height: 100, channels: 3, background: '#ff00ff' } }, left: 310, top: 0 }]).png().toBuffer())],
     ['unequal widths', () => sheetImg([50, 50, 50, 20])],
     ['one blob', () => drawn(100, 100, 50, 50)],
-  ])('falls back to 4 idle frames when the walk sheet is bad (%s), after one retry', async (_n, make) => {
+  ])('omits the walk instead of copying idle when the walk sheet is bad (%s): 2 sheet tries + 1 pair try', async (_n, make) => {
     const events: PipelineEvent[] = [];
-    const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? make() : defaultImage(n)) }, events);
-    await p;
+    const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? make() : n === 'walk_pair' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
+    const manifest = await p;
     expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(2);
-    expect(events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name)).toEqual(['side_0', 'side_1', 'side_2', 'side_3']);
-    // the idle drawing, on the walk's own (tighter) canvas
-    const drawing = async (f: string) => sharp(await readFile(join(out, f))).trim({ threshold: 0 }).raw().toBuffer();
-    for (let i = 0; i < 4; i++) expect(await drawing(`side_${i}.png`)).toEqual(await drawing('idle_0.png'));
+    expect(requested.filter((n) => n === 'walk_pair')).toHaveLength(1);
+    const failed = events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name);
+    expect(failed).toEqual(['side_0', 'side_1', 'side_2', 'side_3', 'walk']);
+    expect(manifest.poses.walk).toBeUndefined();
+    expect(events.filter((e) => e.stage === 'pose')).toHaveLength(10);
+    expect((await readdir(out)).filter((f) => f.startsWith('side_'))).toEqual([]);
+  });
+
+  describe('static walk sheet (husky pack fixture)', () => {
+    const fx = (f: string) => readFile(new URL(`./fixtures/husky-pack/${f}`, import.meta.url));
+    /** The husky's 4 identical side frames laid out as one sheet on magenta. */
+    const staticSheet = async () => {
+      const side = await fx('side_0.png');
+      const { width } = await sharp(side).metadata();
+      const w = width as number;
+      return sharp({ create: { width: 4 * (w + 60) + 20, height: 280, channels: 3, background: '#ff00ff' } })
+        .composite([0, 1, 2, 3].map((i) => ({ input: side, left: 10 + i * (w + 60), top: 10 })))
+        .png()
+        .toBuffer();
+    };
+
+    it('isStaticSheet is true for the real identical frames and false for different shapes', async () => {
+      const same = await Promise.all([0, 1, 2, 3].map(async (i) => ({ png: await fx(`side_${i}.png`) })));
+      expect(await isStaticSheet(same)).toBe(true);
+      const wide = { png: await sharp({ create: { width: 300, height: 100, channels: 4, background: '#0a0' } }).png().toBuffer() };
+      expect(await isStaticSheet([same[0]!, wide])).toBe(false);
+    });
+
+    it('rejects a sheet of identical slices and retries it', async () => {
+      const events: PipelineEvent[] = [];
+      const sheetPng = await staticSheet();
+      const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? sheetPng : defaultImage(n)) }, events);
+      await p;
+      expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(2);
+      expect(events.find((e) => e.stage === 'pose-failed' && e.name === 'walk')).toMatchObject({ error: 'bad-output' });
+    });
+
+    it('falls back to a 2-frame sheet: stride, idle, stride, idle', async () => {
+      const events: PipelineEvent[] = [];
+      const sheetPng = await staticSheet();
+      const { p, requested } = await run(
+        { image: async (n) => (n === 'walk_sheet' ? sheetPng : n === 'walk_pair' ? sheetImg([50, 70]) : defaultImage(n)) },
+        events,
+      );
+      const manifest = await p;
+      expect(requested.filter((n) => n === 'walk_sheet' || n === 'walk_pair')).toHaveLength(3);
+      expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']);
+      expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
+      const px = async (f: string) => sharp(await readFile(join(out, f))).raw().toBuffer();
+      expect(await px('side_1.png')).toEqual(await px('side_3.png'));
+      expect((await px('side_0.png')).equals(await px('side_1.png'))).toBe(false);
+      expect((await px('side_0.png')).equals(await px('side_2.png'))).toBe(false);
+    });
   });
 
   it('slices a good sheet into 4 walk frames at idle height', async () => {

@@ -1,0 +1,90 @@
+{
+  "pet": "Husk",
+  "species": "dog",
+  "poses": {
+    "idle": {
+      "frames": [
+        "idle_0.png"
+      ],
+      "fps": 2,
+      "footY": 0.9922480620155039
+    },
+    "walk": {
+      "frames": [
+        "side_0.png",
+        "side_1.png",
+        "side_2.png",
+        "side_3.png"
+      ],
+      "fps": 8,
+      "footY": 0.9922480620155039
+    },
+    "sit": {
+      "frames": [
+        "sit.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922480620155039
+    },
+    "sleep": {
+      "frames": [
+        "sleep.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922480620155039
+    },
+    "bark": {
+      "frames": [
+        "bark.png"
+      ],
+      "fps": 4,
+      "footY": 0.9922480620155039
+    },
+    "roll": {
+      "frames": [
+        "roll.png"
+      ],
+      "fps": 2,
+      "footY": 0.9922480620155039
+    },
+    "blink": {
+      "frames": [
+        "idle_blink.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922480620155039
+    }
+  },
+  "personality": {
+    "breed": "Siberian Husky",
+    "coat": "Black and white fluffy",
+    "traits": [
+      "Fluffy",
+      "Alert",
+      "Friendly"
+    ],
+    "energy": "normal",
+    "lines": [
+      "Hi I'm Husk, your snow buddy!",
+      "One blue eye, one golden eye!",
+      "Sit with me, I'm super fluffy!",
+      "Ready for an icy adventure?",
+      "Pet my thick winter coat!",
+      "Woof, let's be best friends!"
+    ],
+    "facts": [
+      {
+        "text": "Huskies were bred to pull sleds for miles across snow.",
+        "source": "https://www.purina.com/dogs/dog-breeds/siberian-husky"
+      },
+      {
+        "text": "Huskies have a thick double coat to stay warm in cold.",
+        "source": "https://www.purina.com/dogs/dog-breeds/siberian-husky"
+      },
+      {
+        "text": "Many huskies have bright blue eyes, or one of each color.",
+        "source": "https://www.wisdompanel.com/en-us/dog-breeds/siberian-husky"
+      }
+    ]
+  }
+}
