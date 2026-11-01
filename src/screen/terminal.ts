@@ -92,7 +92,7 @@ export function pickTerminal(windows: Win[]): Win | null {
 
 // Full-screen windows (no title bar) are unsupported: the geometry would be off by the title bar.
 const HEAD =
-  'return (nRows as text) & linefeed & (nCols as text) & linefeed & (tabCount as text) & linefeed & (winId as text) & linefeed & txt';
+  'return (nRows as text) & linefeed & (nCols as text) & linefeed & (tabCount as text) & linefeed & (winId as text) & linefeed & (item 1 of b as text) & linefeed & (item 2 of b as text) & linefeed & (item 3 of b as text) & linefeed & (item 4 of b as text) & linefeed & txt';
 const SCRIPTS: Record<string, string> = {
   Terminal: `tell application "Terminal"
 set t to selected tab of front window
@@ -100,10 +100,11 @@ set nRows to number of rows of t
 set nCols to number of columns of t
 set tabCount to count of tabs of front window
 set winId to id of front window
+set b to bounds of front window
 set txt to contents of t
 ${HEAD}
 end tell`,
-  // iTerm2's window id is not a CGWindowID, so 0 = unknown and the id check is skipped.
+  // iTerm2's window id is not a CGWindowID, so 0 = unknown; bounds decide.
   iTerm2: `tell application "iTerm2"
 tell current session of current window
 set nRows to rows
@@ -112,6 +113,7 @@ set txt to contents
 end tell
 set tabCount to count of tabs of current window
 set winId to 0
+set b to bounds of current window
 ${HEAD}
 end tell`,
 };
@@ -122,6 +124,7 @@ export type Visible = {
   rows: number;
   tabs: number;
   winId: number;
+  bounds: Box;
 };
 
 const int = (s: string, lo: number, hi: number) => {
@@ -129,16 +132,18 @@ const int = (s: string, lo: number, hi: number) => {
   return Number.isInteger(n) && n >= lo && n <= hi ? n : null;
 };
 
-// Output: rows, columns, tabs, window id, then the contents (everything after the 4th newline).
+// Output: rows, columns, tabs, window id, left, top, right, bottom, then the contents.
 export function parseVisible(out: string): Visible | null {
   const parts = out.split('\n');
-  if (parts.length < 5) return null;
+  if (parts.length < 9) return null;
   const rows = int(parts[0], 1, 500);
   const cols = int(parts[1], 1, 1000);
   const tabs = int(parts[2], 1, 100);
   const winId = int(parts[3], 0, 2 ** 32);
+  const [bl, bt, br, bb] = [4, 5, 6, 7].map((i) => int(parts[i], -100000, 100000));
   if (rows === null || cols === null || tabs === null || winId === null) return null;
-  const all = parts.slice(4).join('\n').replace(/\n+$/, '').split('\n');
+  if (bl === null || bt === null || br === null || bb === null || br <= bl || bb <= bt) return null;
+  const all = parts.slice(8).join('\n').replace(/\n+$/, '').split('\n');
   const height = (l: string) => Math.max(1, Math.ceil([...l].length / cols));
   // Visible tail: fill `rows` screen rows from the bottom, counting wrapped lines at full height.
   let used = 0;
@@ -151,7 +156,14 @@ export function parseVisible(out: string): Visible | null {
     rowOf.push(r);
     r += height(l);
   }
-  return { lines, rowOf, rows, tabs, winId };
+  return { lines, rowOf, rows, tabs, winId, bounds: { x: bl, y: bt, w: br - bl, h: bb - bt } };
+}
+
+// Same window in a different id space: the AppleScript rectangle must cover the CG one.
+export function overlap(a: Box, b: Box): number {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? (w * h) / Math.max(a.w * a.h, b.w * b.h) : 0;
 }
 
 export function clean(text: string): string {
@@ -217,12 +229,15 @@ export function createTerminalReader() {
     const out = await deps.osa(['-e', script], 3000);
     const vis = out && parseVisible(out);
     if (!vis) return done(null);
-    if (win.owner === 'Terminal' && vis.winId !== win.id) return done(null);
+    // The id is advisory (CGWindowID may not equal the AppleScript id); bounds decide.
+    const sameId = vis.winId !== 0 && vis.winId === win.id;
+    if (!sameId && overlap(vis.bounds, win.bounds) < 0.8) return done(null);
+    const asWin = { ...win, bounds: vis.bounds };
     const f = findFailure(vis.lines);
     if (!f) return done(null);
     const chrome = TITLE_BAR_PTS + (vis.tabs > 1 ? TAB_BAR_PTS : 0);
-    const textBox = lineToScreen(win.bounds, vis.rows, vis.rowOf[f.lineIndex], chrome);
-    const red = await redBox(deps, win, chrome);
+    const textBox = lineToScreen(vis.bounds, vis.rows, vis.rowOf[f.lineIndex], chrome);
+    const red = await redBox(deps, asWin, chrome);
     const box = red && Math.abs(red.y - textBox.y) <= 1.5 * textBox.h ? red : textBox;
     return done({ text: truncate(clean(f.text)), box });
   };

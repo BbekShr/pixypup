@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getSlackBadge, parseBadges, slackBadge } from './dock-badge';
 import type { Run } from './helper';
 import { createScreenReader } from './reader';
-import { clean, createTerminalReader, findFailure, findRedLines, lineToScreen, parseVisible } from './terminal';
+import { clean, createTerminalReader, findFailure, findRedLines, lineToScreen, overlap, parseVisible } from './terminal';
 import { listWindows, parseWindows } from './window-list';
 import { makeRun } from './helper';
 
@@ -138,13 +138,14 @@ describe('findRedLines', () => {
   });
 });
 
-const out = (rows: number, cols: number, tabs: number, id: number, text: string) =>
-  `${rows}\n${cols}\n${tabs}\n${id}\n${text}`;
+// Default bounds equal win()'s CG bounds {x:100,y:50,w:800,h:628}.
+const out = (rows: number, cols: number, tabs: number, id: number, text: string, b = '100\n50\n900\n678') =>
+  `${rows}\n${cols}\n${tabs}\n${id}\n${b}\n${text}`;
 
 describe('parseVisible / clean', () => {
   it('takes the tail that fits `rows`; trailing newlines dropped', () => {
     expect(parseVisible(out(2, 80, 1, 1, 'l1\nl2\nl3\n\n'))).toEqual({
-      lines: ['l2', 'l3'], rowOf: [0, 1], rows: 2, tabs: 1, winId: 1,
+      lines: ['l2', 'l3'], rowOf: [0, 1], rows: 2, tabs: 1, winId: 1, bounds: { x: 100, y: 50, w: 800, h: 628 },
     });
   });
   it('contents ending in ", 42" are not confused with metadata', () => {
@@ -161,6 +162,8 @@ describe('parseVisible / clean', () => {
     expect(parseVisible(out(0, 80, 1, 1, 'a'))).toBeNull();
     expect(parseVisible(out(501, 80, 1, 1, 'a'))).toBeNull();
     expect(parseVisible(out(5, 0, 1, 1, 'a'))).toBeNull();
+    expect(parseVisible(out(5, 80, 1, 1, 'a', '10\n10\n5\n20'))).toBeNull();
+    expect(parseVisible(out(5, 80, 1, 1, 'a', 'a\n1\n2\n3'))).toBeNull();
     expect(parseVisible('x\nabc')).toBeNull();
     expect(parseVisible('no newline')).toBeNull();
   });
@@ -212,8 +215,17 @@ describe('terminal reader', () => {
     const d = { ...mk('Terminal', out(4, 80, 1, 1, screen)), windows: [win('PixyPup', 9), win('Terminal')] };
     expect((await createTerminalReader()(d)).terminalError).not.toBeNull();
   });
-  it('returns null when the AppleScript window id differs (Terminal only)', async () => {
-    expect((await createTerminalReader()(mk('Terminal', out(4, 80, 1, 77, screen)))).terminalError).toBeNull();
+  it('different id but same bounds still sniffs', async () => {
+    expect((await createTerminalReader()(mk('Terminal', out(4, 80, 1, 77, screen)))).terminalError).not.toBeNull();
+  });
+  it('different id and different window bounds gives null', async () => {
+    const elsewhere = out(4, 80, 1, 77, screen, '1000\n50\n1800\n678');
+    expect((await createTerminalReader()(mk('Terminal', elsewhere))).terminalError).toBeNull();
+  });
+  it('maps from the AppleScript bounds, not the CG bounds', async () => {
+    const shifted = out(4, 80, 1, 1, screen, '102\n52\n902\n680'); // ~99% overlap
+    const r = await createTerminalReader()(mk('Terminal', shifted));
+    expect(r.terminalError?.box).toEqual(lineToScreen({ x: 102, y: 52, w: 800, h: 628 }, 4, 2));
   });
   it('uses the iTerm2 script and skips the id check', async () => {
     const calls: string[][] = [];
@@ -248,6 +260,15 @@ describe('terminal reader', () => {
   });
   it('osascript failure gives null', async () => {
     expect((await createTerminalReader()(mk('Terminal', null))).terminalError).toBeNull();
+  });
+});
+
+describe('overlap', () => {
+  it('is 1 for equal, 0 for disjoint, fractional otherwise', () => {
+    const a = { x: 0, y: 0, w: 10, h: 10 };
+    expect(overlap(a, a)).toBe(1);
+    expect(overlap(a, { x: 20, y: 0, w: 10, h: 10 })).toBe(0);
+    expect(overlap(a, { x: 5, y: 0, w: 10, h: 10 })).toBeCloseTo(0.5);
   });
 });
 
