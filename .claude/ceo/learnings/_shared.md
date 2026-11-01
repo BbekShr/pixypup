@@ -18,5 +18,7 @@
 - When separate image calls copy a reference, ask for one sprite sheet and slice locally; save real model output as a test fixture, because synthetic fixtures are too clean (F13: Muse sheet frames nearly touch).
 - Async user flows that outlive their window are owned by main with a run token; the window rebuilds from main-held state (F5a `src/main/run-state.ts`).
 - Reviewers stay read-only: never `git checkout`/`switch` in the shared tree, even detached (F5a reviewer slip).
+- A multi-phase sequence that owns the pet gates every input (menu, pointer) on a pure busy(phase) predicate and queues the last command (F5b `src/overlay/handoff.ts`).
+- Reduced motion: never `animation-duration:1ms` on infinite animations without `animation-iteration-count:1` (strobe); WAAPI loops need their own check.
 
 ## Archive
