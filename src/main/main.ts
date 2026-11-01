@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
+import { devRendererUrl } from './dev-url.js';
 import { execFile } from 'node:child_process';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,10 +80,12 @@ function createWindow(slug: string, enterDrop = false): void {
   wins.set(slug, win);
   // A crashed or hung page can't toggle click-through itself: until it recovers, nothing on screen may swallow clicks.
   for (const ev of ['render-process-gone', 'unresponsive'] as const) win.webContents.on(ev as 'render-process-gone', () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (ev) => ev.preventDefault());
   senderSlug.set(win.webContents, slug);
   win.on('closed', () => { if (wins.get(slug) === win) wins.delete(slug); });
 
-  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  const devUrl = devRendererUrl();
   // Dev rehearsal only: PIXY_CHATTY=1 makes the pet speak every ~5 s.
   const q = new URLSearchParams({ pet: slug });
   if (!app.isPackaged && process.env['PIXY_CHATTY'] === '1') q.set('chatty', '1');
@@ -426,7 +429,7 @@ void app.whenReady().then(async () => {
     const win = winOf(e);
     if (!win) return;
     const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library, name: displayName() }), (c) => run(c, win));
-    if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
+    if (devRendererUrl()) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); } });
   });

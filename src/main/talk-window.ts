@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain, screen } from 'electron';
+import { devRendererUrl } from './dev-url.js';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openClient } from '../api/gate';
@@ -80,7 +81,7 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     w.webContents.on('will-navigate', (ev) => ev.preventDefault());
     w.on('closed', () => { if (win === w) { win = null; history = []; } });
-    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    const devUrl = devRendererUrl();
     if (devUrl) void w.loadURL(`${devUrl}/onboarding/talk.html`);
     else void w.loadFile(join(here, '../renderer/onboarding/talk.html'));
   }

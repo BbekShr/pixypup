@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { devRendererUrl } from './dev-url.js';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -94,7 +95,7 @@ export function setupOverload(o: { hideInShares: () => boolean; onChange: () => 
       }, CURSOR_HZ_MS);
     });
     endTimer = setTimeout(stop, SHOW_MS + START_CAP_MS);
-    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    const devUrl = devRendererUrl();
     if (devUrl) void w.loadURL(`${devUrl}/overlay/overload.html`);
     else void w.loadFile(join(here, '../renderer/overlay/overload.html'));
   }

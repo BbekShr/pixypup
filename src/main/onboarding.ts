@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
+import { devRendererUrl } from './dev-url.js';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -244,7 +245,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       win.webContents.on('will-navigate', (ev) => ev.preventDefault());
       const q = fromMenu ? `?from=menu${add ? '&mode=add' : ''}` : '';
-      const devUrl = process.env['ELECTRON_RENDERER_URL'];
+      const devUrl = devRendererUrl();
       if (devUrl) void win.loadURL(`${devUrl}/onboarding/index.html${q}`);
       else void win.loadFile(join(here, '../renderer/onboarding/index.html'), { search: q });
     },

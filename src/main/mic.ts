@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain, session } from 'electron';
+import { devRendererUrl } from './dev-url.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,7 +51,7 @@ export function setupMic(o: { onChunk: (b: ArrayBuffer) => void; fake?: ArrayBuf
     w.webContents.once('did-finish-load', send);
     w.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.destroy(); });
     w.on('closed', () => { if (win === w) win = null; });
-    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    const devUrl = devRendererUrl();
     if (devUrl) void w.loadURL(`${devUrl}/voice/mic.html`);
     else void w.loadFile(join(here, '../renderer/voice/mic.html'));
     return w;
