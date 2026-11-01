@@ -24,7 +24,7 @@ export type LoopDeps = {
   intervalMs?: number;
 };
 
-export const CHEERS = ['You fixed it!', 'All green! Good human!', 'Yay, tests pass!', 'Woof! It works now!'];
+export const CHEERS = ['You fixed it!', 'All green! Good human!', 'Yay, tests pass!', 'Yay! It works now!'];
 
 const inside = (p: { x: number; y: number }, b: { x: number; y: number; width: number; height: number }): boolean =>
   p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height;

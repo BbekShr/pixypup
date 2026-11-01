@@ -435,6 +435,17 @@ void app.whenReady().then(async () => {
   });
   library = await listLibrary(join(app.getAppPath(), 'assets/pets'));
   for (const slug of petList(settings)) createWindow(slug);
+  // A window keeps the work area it was born with; the Dock showing, moving or resizing (or a display change) must move every pet's floor too.
+  // macOS doesn't always report a Dock change, so a cheap 2 s check backs up the display events.
+  const refit = (): void => {
+    const b = screen.getPrimaryDisplay().workArea;
+    for (const w of wins.values()) {
+      const c = w.isDestroyed() ? b : w.getBounds();
+      if (c.x !== b.x || c.y !== b.y || c.width !== b.width || c.height !== b.height) w.setBounds(b);
+    }
+  };
+  for (const ev of ['display-metrics-changed', 'display-added', 'display-removed'] as const) screen.on(ev as 'display-added', refit);
+  setInterval(refit, 2000).unref();
   createTray();
   const atLogin = app.isPackaged && app.getLoginItemSettings().wasOpenedAtLogin === true;
   if (wakeOnOpen(snoozed(), atLogin)) run('wake'); // run syncs
