@@ -17,6 +17,7 @@ import { shouldRegister, syncShortcut } from '../voice/listen';
 import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
+import { headCrop } from './head-crop';
 import { addPet, MAX_PETS, petList, pickWindow, removePet, routeReaction } from './pets';
 import { setupOnboarding } from './onboarding';
 import { setupOverload } from './overload';
@@ -37,8 +38,9 @@ const primary = (): BrowserWindow | null => wins.get(primarySlug()) ?? null;
 const allWins = (): BrowserWindow[] => [...wins.values()].filter((w) => !w.isDestroyed());
 const winOf = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): BrowserWindow | undefined => pickWindow(wins, senderSlug.get(e.sender));
 let tray: Tray | null = null;
-let trayIcon: Electron.NativeImage | null = null;
+let trayIcon: Electron.NativeImage | null = null; // the placeholder, used only while no pet's pack has loaded
 let trayIconDim: Electron.NativeImage | null = null;
+const petIcons = new Map<string, { icon: Electron.NativeImage; dim: Electron.NativeImage }>(); // slug -> its face for the menu bar
 let lastFailure: { text: string; at: number } | null = null; // the sniffed failure, in memory only, for a hint the user asks for
 let fakeScreen: ReturnType<typeof fakeReader> | undefined;
 let debugOn = false; // "Show what <name> sees": not persisted, resets each launch
@@ -83,17 +85,40 @@ function createWindow(slug: string, enterDrop = false): void {
   else void win.loadFile(join(here, '../renderer/overlay/index.html'), { search });
 }
 
+const TRAY_H = 18;
+// Snoozed = a faded icon. The bitmap is premultiplied BGRA, so every byte scales, not just alpha.
+const fade = (px: Buffer, k: number): Buffer => Buffer.from(px.map((v) => Math.round(v * k)));
+
+/** Colour icon with a 2x representation so it is crisp on Retina. */
+function trayImage(src: Electron.NativeImage, k: number): Electron.NativeImage {
+  const one = src.resize({ height: TRAY_H });
+  const two = src.resize({ height: TRAY_H * 2 });
+  const [a, b] = [one.getSize(), two.getSize()];
+  const out = nativeImage.createFromBitmap(fade(one.toBitmap(), k), { width: a.width, height: a.height });
+  out.addRepresentation({ scaleFactor: 2, width: b.width, height: b.height, buffer: fade(two.toBitmap(), k) });
+  return out;
+}
+
+/** The menu-bar icon of a pet: its head, cropped from the idle frame. null when the frame can't be read. */
+function petTrayIcons(dataUrl: string): { icon: Electron.NativeImage; dim: Electron.NativeImage } | null {
+  const img = nativeImage.createFromDataURL(dataUrl);
+  if (img.isEmpty()) return null;
+  const { width, height } = img.getSize();
+  const px = img.toBitmap();
+  const r = headCrop(px.subarray(3), width, height, 4);
+  if (!r) return null;
+  const head = img.crop(r);
+  return { icon: trayImage(head, 1), dim: trayImage(head, 0.35) };
+}
+
 function createTray(): void {
   trayIcon = nativeImage
     .createFromPath(join(app.getAppPath(), 'assets/placeholder/pup.png'))
-    .resize({ height: 18 });
+    .resize({ height: TRAY_H });
   trayIconDim = trayIcon;
   if (!trayIcon.isEmpty()) {
-    // Snoozed = a faded icon. The bitmap is premultiplied BGRA, so every byte scales, not just alpha.
     const { width, height } = trayIcon.getSize();
-    const px = trayIcon.toBitmap();
-    for (let i = 0; i < px.length; i++) px[i] = Math.round(px[i]! * 0.35);
-    trayIconDim = nativeImage.createFromBitmap(px, { width, height });
+    trayIconDim = nativeImage.createFromBitmap(fade(trayIcon.toBitmap(), 0.35), { width, height });
   }
   tray = new Tray(trayIcon);
   tray.setToolTip('PixyPup');
@@ -148,7 +173,9 @@ function sync(): void {
   syncShortcut(globalShortcut, listen, () => { settings = loadSettings(); sync(); voice.press(); });
   if (listen) micWin.warm();
   else { voice.abort(); micWin.close(); }
-  tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
+  const mine = petIcons.get(primarySlug());
+  tray?.setImage((s ? (mine?.dim ?? trayIconDim) : (mine?.icon ?? trayIcon)) ?? nativeImage.createEmpty());
+  tray?.setToolTip(`PixyPup \u00b7 ${nameOf(primarySlug())}`);
   tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets() }), run)));
 }
 
@@ -228,6 +255,7 @@ function sendHome(slug: string): void {
   settings = loadSettings();
   const w = wins.get(slug);
   wins.delete(slug);
+  petIcons.delete(slug);
   w?.destroy();
   sync();
 }
@@ -314,7 +342,13 @@ void app.whenReady().then(async () => {
     if (isPlainName(slug)) candidates.unshift(join(app.getPath('userData'), 'pets', slug));
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
     const pack = dir && (await loadPack(dir));
-    if (pack) petNames.set(slug, pack.manifest.pet);
+    if (pack) {
+      petNames.set(slug, pack.manifest.pet);
+      const idle = pack.frames[pack.manifest.poses['idle']?.frames[0] ?? ''];
+      const icons = idle ? petTrayIcons(idle) : null;
+      if (icons) petIcons.set(slug, icons);
+      else petIcons.delete(slug);
+    }
     if (slug === primarySlug()) {
       packPetName = pack ? pack.manifest.pet : undefined;
       packSpecies = pack ? pack.manifest.species : undefined;
