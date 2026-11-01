@@ -6,7 +6,7 @@ export type MenuItem =
   | { label: string; quit: true }
   | { label: string; submenu: MenuItem[] };
 
-export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; openAtLogin: boolean; name: string }
+export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; openAtLogin: boolean; debug?: boolean; name: string }
 
 const SIZE_LABELS: Record<Size, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 const ENERGY_LABELS: [Energy, string][] = [['sleepy', 'Sleepy'], ['normal', 'Normal'], ['playful', 'Playful']];
@@ -30,6 +30,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     { label: 'Stay here', command: o.stay ? 'wander' : 'stay', checked: o.stay },
     o.hideLocked ? { label: `Hide during screen sharing${LOCKED}`, command: 'hide:off', checked: true, enabled: false } : toggle('Hide during screen sharing', 'hide', o.hideInShares),
     o.screenLocked ? { label: `Notice my screen${LOCKED}`, command: 'screen:off', checked: false, enabled: false } : toggle('Notice my screen', 'screen', o.screenAware),
+    toggle(`Show what ${o.name} sees`, 'debug', o.debug ?? false),
     toggle('Open at login', 'login', o.openAtLogin),
     { label: 'Make a new pet…', command: 'new-pet' },
     { type: 'separator' },

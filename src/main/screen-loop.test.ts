@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Observation } from '../screen/decide';
 import type { Behavior } from '../overlay/behavior';
+import type { DebugInfo } from '../overlay/debug-panel';
 import { startScreenLoop, type LoopDeps } from './screen-loop';
 
 const obs = (o: Partial<Observation> = {}): Observation => ({ windows: [], slackBadge: null, terminalError: null, ...o });
@@ -123,6 +124,40 @@ describe('startScreenLoop', () => {
     await tick(4);
     expect(calls).toBe(1);
     release();
+    t.stop();
+  });
+
+  it('with the panel on, sends a debug info per tick (text cut to 80, box in overlay coords) and keeps the sniff bubble after the first tick', async () => {
+    const infos: DebugInfo[] = [];
+    let on = true;
+    const long = 'FAIL ' + 'x'.repeat(200);
+    const t = setup({ debug: { on: () => on, send: (i) => infos.push(i) } });
+    t.set(obs({ terminalError: { text: long, box: BOX } }));
+    await tick(2);
+    expect(infos).toHaveLength(2);
+    expect(infos[0]!.terminal).toEqual({ found: true, box: { x: 600, y: 275, w: 200, h: 16 }, text: long.slice(0, 80) });
+    expect(infos[0]!.decision).toMatchObject({ action: 'sniff', bubble: 'Found a bug!' });
+    expect(infos[1]!.gate).toBe('on');
+    on = false;
+    await tick();
+    expect(infos).toHaveLength(2);
+    t.stop();
+  });
+
+  it('with the panel on, reports why nothing is being read, and nothing from the screen', async () => {
+    const infos: DebugInfo[] = [];
+    const t = setup({ debug: { on: () => true, send: (i) => infos.push(i) } });
+    t.settings.screenAware = false;
+    await tick();
+    t.settings.screenAware = true;
+    t.snooze(true);
+    await tick();
+    t.snooze(false);
+    t.settings.adminDisableScreenAware = true;
+    await tick();
+    expect(infos.map((i) => i.gate)).toEqual(['off', 'snoozed', 'admin']);
+    expect(infos.every((i) => !i.terminal.found && !i.terminal.text)).toBe(true);
+    expect(t.reader.tick).not.toHaveBeenCalled();
     t.stop();
   });
 });

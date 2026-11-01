@@ -11,7 +11,7 @@ const sub = (t: MenuItem[], label: string): MenuItem[] => {
 
 describe('petMenuTemplate', () => {
   it('has the agreed order, tricks first and Quit last', () => {
-    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Open at login', 'Make a new pet…', '-', 'Quit PixyPup']);
+    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Show what Pakkun sees', 'Open at login', 'Make a new pet…', '-', 'Quit PixyPup']);
     expect(petMenuTemplate(base).at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
   });
   it('maps the tricks to overlay command strings', () => {
@@ -38,6 +38,10 @@ describe('petMenuTemplate', () => {
   it('notice-my-screen is an off-by-default checkbox; turning it on goes through the explainer command', () => {
     expect(find(petMenuTemplate(base), 'Notice my screen')).toEqual({ label: 'Notice my screen', command: 'screen:on', checked: false });
     expect(find(petMenuTemplate({ ...base, screenAware: true }), 'Notice my screen')).toMatchObject({ command: 'screen:off', checked: true });
+  });
+  it('show-what-it-sees is an unchecked checkbox named after the pet', () => {
+    expect(find(petMenuTemplate(base), 'Show what Pakkun sees')).toEqual({ label: 'Show what Pakkun sees', command: 'debug:on', checked: false });
+    expect(find(petMenuTemplate({ ...base, debug: true }), 'Show what Pakkun sees')).toMatchObject({ command: 'debug:off', checked: true });
   });
   it('an admin-locked notice-my-screen item is unchecked, disabled and says why', () => {
     expect(find(petMenuTemplate({ ...base, screenAware: true, screenLocked: true }), 'Notice my screen (set by your organisation)')).toEqual({ label: 'Notice my screen (set by your organisation)', command: 'screen:off', checked: false, enabled: false });

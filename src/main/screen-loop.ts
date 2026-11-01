@@ -3,7 +3,8 @@
 import type { BehaviorDecision } from '../../contracts/types';
 import type { Behavior } from '../overlay/behavior';
 import { toOverlayPoint } from '../overlay/behavior';
-import type { Observation } from '../screen/decide';
+import type { DebugInfo, Gate } from '../overlay/debug-panel';
+import type { Decided, Observation } from '../screen/decide';
 import type { Settings } from './settings';
 
 export const LOOP_MS = 5000;
@@ -14,7 +15,8 @@ export type LoopDeps = {
   isSnoozed: () => boolean;
   overlay: { bounds: () => { x: number; y: number; width: number; height: number } | null; send: (b: Behavior) => void };
   reader: { tick: () => Promise<{ observation: Observation; debug: { terminalKey: string; windowCount?: number } }> };
-  decider: { decide: (o: Observation, key: string) => Promise<{ decision: BehaviorDecision | null }> };
+  decider: { decide: (o: Observation, key: string) => Promise<{ decision: BehaviorDecision | null; source?: Decided['source'] }> };
+  debug?: { on: () => boolean; send: (i: DebugInfo) => void }; // the local "what Pakkun sees" panel; screen text goes nowhere else
   intervalMs?: number;
 };
 
@@ -32,6 +34,12 @@ export function startScreenLoop(d: LoopDeps): () => void {
     const s = d.getSettings();
     return s.screenAware && !s.adminDisableScreenAware && !s.offline && !d.isSnoozed();
   };
+  const gate = (): Gate => {
+    const s = d.getSettings();
+    return s.adminDisableScreenAware ? 'admin' : s.offline ? 'offline' : !s.screenAware ? 'off' : d.isSnoozed() ? 'snoozed' : 'on';
+  };
+  // Spark words a bubble once per failure; the following ticks keep showing what it said.
+  let lastSniff: { key: string; bubble?: string; source: Decided['source']; sparkMs?: number } | null = null;
   const send = (b: Omit<Behavior, 'seq'>): void => d.overlay.send({ seq: ++seq, ...b });
   const setHide = (on: boolean, reason: string): void => {
     if (on === hideOn) return;
@@ -44,9 +52,14 @@ export function startScreenLoop(d: LoopDeps): () => void {
     if (inFlight) return;
     inFlight = true;
     try {
-      if (!allowed()) return setHide(false, 'paused');
+      if (!allowed()) {
+        if (d.debug?.on()) d.debug.send({ ts: Date.now(), gate: gate(), terminal: { found: false }, slack: null, call: false, decision: null });
+        return setHide(false, 'paused');
+      }
       const { observation, debug } = await d.reader.tick();
-      const { decision } = await d.decider.decide(observation, debug.terminalKey);
+      const t0 = Date.now();
+      const { decision, source = 'rule' } = await d.decider.decide(observation, debug.terminalKey);
+      const ms = Date.now() - t0;
       if (!allowed()) return setHide(false, 'paused');
       if (decision?.action === 'hide') {
         hideOn = true;
@@ -70,6 +83,24 @@ export function startScreenLoop(d: LoopDeps): () => void {
         send({ action: 'perk_up', bubble: decision.bubble ?? '!', reason: decision.reason });
       }
       lastBadge = badge;
+      if (decision?.action === 'sniff' && decision.bubble) lastSniff = { key: debug.terminalKey, bubble: decision.bubble, source, ...(source === 'spark+rule' ? { sparkMs: ms } : {}) };
+      if (d.debug?.on()) {
+        const keep = decision?.action === 'sniff' && !decision.bubble && lastSniff?.key === debug.terminalKey ? lastSniff : null;
+        const bounds = d.overlay.bounds();
+        const box = observation.terminalError?.box;
+        const bubble = decision?.bubble ?? keep?.bubble;
+        const sparkMs = keep?.sparkMs ?? (source === 'spark+rule' ? ms : undefined);
+        const info: DebugInfo = {
+          ts: Date.now(),
+          gate: 'on',
+          terminal: { found: !!observation.terminalError, ...(box && bounds ? { box: { ...toOverlayPoint(box, bounds), w: box.w, h: box.h } } : {}), ...(observation.terminalError ? { text: observation.terminalError.text.slice(0, 80) } : {}) },
+          slack: badge,
+          call: decision?.action === 'hide',
+          decision: decision ? { action: decision.action, reason: decision.reason, ...(bubble ? { bubble } : {}), source: keep?.source ?? source } : null,
+          ...(sparkMs !== undefined ? { sparkMs } : {}),
+        };
+        d.debug.send(info);
+      }
     } catch {
       /* the next tick retries; nothing from the screen is logged */
     } finally {
