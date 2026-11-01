@@ -22,6 +22,17 @@ describe('shouldCallSpark', () => {
 });
 
 describe('createDecider', () => {
+  it('a failed terminal read between two identical failures does not re-call Spark', async () => {
+    const spark = vi.fn(async () => ({ bubble: 'x' }));
+    const d = createDecider({ spark, minIntervalMs: 0 });
+    await d.decide(fail(), 'k1');
+    await d.decide(base, 'k1'); // read failed: reader keeps the previous key
+    expect((await d.decide(fail(), 'k1')).decision?.bubble).toBeUndefined();
+    expect(spark).toHaveBeenCalledTimes(1);
+    await d.decide(base, ''); // clean read: failure really gone
+    await d.decide(fail(), 'k1');
+    expect(spark).toHaveBeenCalledTimes(2);
+  });
   it('uses Spark only for a new sniff and the rules own the action', async () => {
     const spark = vi.fn(async () => ({ bubble: 'Add is off by one' }));
     const d = createDecider({ spark });

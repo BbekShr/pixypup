@@ -97,8 +97,8 @@ export function normalizePhoto(photo: Buffer): Promise<Buffer> {
 }
 
 /** SAM-segment the pet, return a tight transparent PNG cutout. */
-export async function samCutout(client: MetaClient, png: Buffer, prompt: string): Promise<Buffer | null> {
-  const matches = await segment(client, prompt, dataUrl(png));
+export async function samCutout(client: MetaClient, png: Buffer, prompt: string, signal?: AbortSignal): Promise<Buffer | null> {
+  const matches = await segment(client, prompt, dataUrl(png), signal);
   const m = largest(matches);
   if (!m) return null;
   const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -426,7 +426,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const timeoutMs = o.timing?.timeoutMs ?? 60_000;
   const backoffMs = o.timing?.backoffMs ?? 1000;
   const photo = await normalizePhoto(o.photo);
-  const cutout = await samCutout(o.client, photo, o.species);
+  const cutout = await samCutout(o.client, photo, o.species, AbortSignal.timeout(timeoutMs));
   if (!cutout) throw new NoPetFoundError(o.species);
   emit({ stage: 'cutout', png: cutout });
 
@@ -473,6 +473,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     }, timeoutMs);
     try {
       const [img] = await editImage(o.client, prompt, refs, 1, { signal: ctl.signal });
+      clearTimeout(timer); // the timeout bounds the request; local keying after it must not abort a good reply
       const keyed = await chromaKey(img!.buffer);
       if (keyed.opaque < 0.02 || keyed.opaque > 0.9 || keyed.edge > 0.01) throw new BadOutputError('degenerate pose');
       return await finish(img!, keyed);

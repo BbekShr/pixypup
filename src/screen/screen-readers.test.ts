@@ -68,6 +68,8 @@ describe('findFailure', () => {
     mocha: ['  2 passing (9ms)', '  1 failing'],
     pytest: ['FAILED tests/test_x.py::test_a - assert 1 == 2', '=== 1 failed, 3 passed in 0.1s ==='],
     tsc: ['src/a.ts(3,5): error TS2322: Type string is not assignable to type number.'],
+    tscWatch: ['Found 3 errors. Watching for file changes.', 'Found 1 error in src/a.ts:3'],
+    rustc: ['error[E0308]: mismatched types', 'error: could not compile `app` due to 2 previous errors'],
     eslint: ['✖ 5 problems (2 errors, 3 warnings)'],
     node: ['AssertionError [ERR_ASSERTION]: expected 1 to be 2', 'TypeError: x is not a function'],
   };
@@ -88,7 +90,10 @@ describe('findFailure', () => {
     failover: 'failover ok',
     noErrors: 'no errors found',
     mochaPass: '  4 passing (12ms)',
+    foundZero: 'Found 0 errors in 2 files',
+    errorsProse: 'error handling is documented; Found the errors page',
     mathX: 'a × b = 6',
+    gitError: "error: pathspec 'main2' did not match any file(s) known to git",
   };
   for (const [name, l] of Object.entries(passes)) {
     it(`negative: ${name}`, () => expect(findFailure([l])).toBeNull());
@@ -227,6 +232,15 @@ describe('terminal reader', () => {
     windows: [win(owner), win('Safari', 5)],
   });
   const term = win('Terminal').bounds;
+  it('keeps the failure key through a failed read, and clears it on a clean read', async () => {
+    const t = createTerminalReader();
+    const a = await t(mk('Terminal', out(8, 80, 1, 1, screen)));
+    const lost = await t(mk('Terminal', null));
+    expect(lost.terminalError).toBeNull();
+    expect(lost.key).toBe(a.key);
+    expect(lost.changed).toBe(false);
+    expect((await t(mk('Terminal', out(8, 80, 1, 1, 'ok\n')))).key).toBe('');
+  });
   it('reports a green rerun below an old failure as a pass, not an error', async () => {
     const r = await createTerminalReader()(mk('Terminal', out(8, 80, 1, 1, `${screen}Tests 2 passed (2)\n`)));
     expect(r.terminalError).toBeNull();

@@ -1,6 +1,7 @@
 // "What's wrong, buddy?": asked only when the user clicks the pet after a sniff. Muse Spark reads the failure
 // (a few terminal lines, untrusted, quoted as data) and returns one short, plain-words hint. Output is validated.
 import { sparkJson } from './muse-spark.js';
+import { redactSecrets } from './redact.js';
 import { promptSpecies } from './profile-defaults.js';
 import type { MetaClient } from './meta-client.js';
 
@@ -20,7 +21,7 @@ export const hintInstructions = (species?: string): string =>
   'Be specific to this failure, kind and calm. No code blocks, no emojis, no URLs, no @. If the data is not a test or build failure, say you could not tell what broke.';
 
 export async function fixHint(client: MetaClient, failure: string, signal?: AbortSignal, species?: string): Promise<{ hint: string } | null> {
-  const data = JSON.stringify(failure.replace(/[<>]/g, '').slice(0, 1200));
+  const data = JSON.stringify(redactSecrets(failure).replace(/[<>]/g, '').slice(0, 1200));
   try {
     return await sparkJson(client, {
       instructions: hintInstructions(species),

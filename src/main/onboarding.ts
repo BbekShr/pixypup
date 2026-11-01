@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
+import { devRendererUrl } from './dev-url';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +8,7 @@ import { dataUrl, generateSpritePack, type PipelineEvent } from '../api/pose-pip
 import { openClient } from '../api/gate';
 import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
-import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, slugify, type ErrorCode } from './pet-input';
+import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, reuseOnboardingWindow, slugify, type ErrorCode } from './pet-input';
 import { loadPack } from './pack';
 import { takenSlug } from './pets';
 import { factViews, finishRun, noRuns, record, recordFailed, recordInfo, sourceFor, startRun, walkFailed, type Progress, type Runs } from './run-state';
@@ -30,6 +31,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   // Set when a pet was just made: the overlay hand-off waits until the window has shrunk away, so the old pet leaves as this one lands.
   let handoff: { x?: number } | null = null;
   let handoffTimer: NodeJS.Timeout | undefined;
+  let shown = { fromMenu: false, add: false }; // what the open window was opened for
   let adding = false; // opened to add a pet next to the others, not to replace the first
   let pendingAdd: string | null = null;
   const centreX = (): number | undefined => {
@@ -84,7 +86,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   ipcMain.handle(IPC.obPickPhoto, async (e) => {
     if (!ours(e) || !win) return { ok: false, code: 'cancelled' };
     const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Photos', extensions: PHOTO_EXTS }] });
-    return r.canceled || !r.filePaths[0] ? { ok: false, code: 'cancelled' } : photoResult(r.filePaths[0]);
+    // The window may have been replaced while the dialog was up: a late pick must not seed the new window's photo.
+    return r.canceled || !r.filePaths[0] || !ours(e) ? { ok: false, code: 'cancelled' } : photoResult(r.filePaths[0]);
   });
   ipcMain.handle(IPC.obDropPhoto, (e, path: unknown) => (ours(e) ? photoResult(path) : { ok: false, code: 'missing' }));
   if (!app.isPackaged) ipcMain.handle(IPC.obDevPhoto, (e) => (ours(e) ? photoResult(process.env['PIXY_DEV_PHOTO'] ?? join(app.getAppPath(), 'assets/pets/Pakkun/sit.png')) : { ok: false, code: 'missing' }));
@@ -213,9 +216,17 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   return {
     open(fromMenu, add = false) {
       if (win && !win.isDestroyed()) {
-        win.show();
-        return;
+        if (reuseOnboardingWindow(shown, { fromMenu, add }, !!runs.current)) {
+          win.show();
+          return;
+        }
+        const old = win;
+        const x = centreX(); // destroy() skips 'close', which records where a pending hand-off lands
+        if (handoff && x !== undefined) handoff.x = x;
+        win = null; // its 'closed' must not clear the replacement
+        old.destroy();
       }
+      shown = { fromMenu, add };
       if (!runs.current) photoBuf = null;
       adding = add;
       win = new BrowserWindow({
@@ -236,15 +247,16 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
         const x = centreX();
         if (handoff && x !== undefined) handoff.x = x;
       });
+      const w = win;
       win.on('closed', () => {
-        win = null;
+        if (win === w) win = null;
         sendHandoff();
       });
       win.once('ready-to-show', () => win?.show());
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       win.webContents.on('will-navigate', (ev) => ev.preventDefault());
       const q = fromMenu ? `?from=menu${add ? '&mode=add' : ''}` : '';
-      const devUrl = process.env['ELECTRON_RENDERER_URL'];
+      const devUrl = devRendererUrl();
       if (devUrl) void win.loadURL(`${devUrl}/onboarding/index.html${q}`);
       else void win.loadFile(join(here, '../renderer/onboarding/index.html'), { search: q });
     },

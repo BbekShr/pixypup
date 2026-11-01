@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron';
+import { devRendererUrl } from './dev-url';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC } from './ipc';
@@ -37,7 +38,7 @@ export function setupScreenExplainer(o: { getHideInShares: () => boolean; kind?:
       w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       w.webContents.on('will-navigate', (ev) => ev.preventDefault());
       const q = `?name=${encodeURIComponent(name)}&kind=${o.kind ?? 'screen'}`;
-      const devUrl = process.env['ELECTRON_RENDERER_URL'];
+      const devUrl = devRendererUrl();
       if (devUrl) void w.loadURL(`${devUrl}/onboarding/screen.html${q}`);
       else void w.loadFile(join(here, '../renderer/onboarding/screen.html'), { search: q });
       return new Promise((resolve) => {

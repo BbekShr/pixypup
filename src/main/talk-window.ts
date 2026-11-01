@@ -1,11 +1,12 @@
 import { BrowserWindow, ipcMain, screen } from 'electron';
+import { devRendererUrl } from './dev-url';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openClient } from '../api/gate';
 import { isCrisis, localReply, MAX_USER, petTalk, type TalkReply, type Turn } from '../api/pet-talk';
 import type { Settings } from './settings';
 import { IPC } from './ipc';
-import { nextHistory } from './talk-history';
+import { settleReply } from './talk-history';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const W = 380;
@@ -28,23 +29,27 @@ export interface TalkDeps {
 export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: string): void; applyProtection(): void } {
   let win: BrowserWindow | null = null;
   let history: Turn[] = [];
+  let ctl = new AbortController(); // per window: closing the chat cancels what is still in flight
   const mine = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean => !!win && !win.isDestroyed() && e.sender === win.webContents;
 
   async function reply(raw: string): Promise<TalkReply> {
     const text = raw.slice(0, MAX_USER);
+    const session = win;
+    const signal = AbortSignal.any([ctl.signal, AbortSignal.timeout(15_000)]);
     let r: TalkReply | null = null;
     if (isCrisis(text)) r = { ...localReply(text, d.species()), action: 'listen', crisis: true }; // never leaves the machine
     else {
       try {
         const key = d.key();
-        if (key) r = await petTalk(openClient('talk', d.settings(), key), { name: d.name(), species: d.species(), history, text, signal: AbortSignal.timeout(15_000) });
+        if (key) r = await petTalk(openClient('talk', d.settings(), key), { name: d.name(), species: d.species(), history, text, signal });
       } catch {
         r = null; // blocked by the gate or the call failed: the local line keeps the chat alive
       }
       r ??= localReply(text, d.species());
     }
-    history = nextHistory(history, text, r);
-    if (win && !win.isDestroyed()) d.act(r, win.getBounds());
+    const s = settleReply(session, win, history, text, r);
+    history = s.history;
+    if (s.live && win && !win.isDestroyed()) d.act(r, win.getBounds());
     return r;
   }
 
@@ -74,13 +79,14 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
     });
     win = w;
     history = [];
+    ctl = new AbortController();
     w.setAlwaysOnTop(true, 'floating');
     w.setContentProtection(d.getHideInShares());
     w.once('ready-to-show', () => { w.show(); w.focus(); });
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     w.webContents.on('will-navigate', (ev) => ev.preventDefault());
-    w.on('closed', () => { if (win === w) { win = null; history = []; } });
-    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    w.on('closed', () => { if (win === w) { win = null; history = []; ctl.abort(); } });
+    const devUrl = devRendererUrl();
     if (devUrl) void w.loadURL(`${devUrl}/onboarding/talk.html`);
     else void w.loadFile(join(here, '../renderer/onboarding/talk.html'));
   }

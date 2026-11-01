@@ -639,6 +639,17 @@ describe('generateSpritePack', () => {
     expect(await readFile(join(out, 'sit.png'))).toEqual(await readFile(join(out, 'idle_0.png')));
   });
 
+  it('rejects instead of hanging when SAM never answers', async () => {
+    const { client } = fakeClient();
+    (client as unknown as { postStream: unknown }).postStream = async function* (_p: string, _b: unknown, signal?: AbortSignal) {
+      await new Promise((_, rej) => signal?.addEventListener('abort', () => rej(new Error('aborted'))));
+      yield {};
+    };
+    await expect(
+      generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, timing: { timeoutMs: 50, backoffMs: 1 } }),
+    ).rejects.toThrow();
+  }, 3000);
+
   it('throws NoPetFoundError when SAM finds nothing', async () => {
     const { p } = await run({ sam: '' });
     await expect(p).rejects.toBeInstanceOf(NoPetFoundError);
@@ -930,6 +941,13 @@ describe('profile-driven prompts', () => {
     const w = posesFor(defaultProfile('dog')).walk_sheet8!;
     for (const part of ['exactly 8 frames', '2 rows of 4', 'Frame 1 contact', 'Frame 2 down', 'Frame 3 pass', 'Frame 4 up', 'Frames 5 to 8', 'one step behind', 'tail sways']) expect(w).toContain(part);
     expect(posesFor(defaultProfile('butterfly')).walk_sheet).toContain('exactly 4 frames');
+  });
+
+  it('does not append a 4-frame motion hint to the 8-frame sheet', () => {
+    const d = defaultProfile('dog');
+    const w = posesFor({ ...d, cycle: { ...d.cycle, prompt: 'A sprite sheet of exactly 4 frames in 4 equal columns, trotting.' } }).walk_sheet8!;
+    expect(w).not.toMatch(/exactly 4 frames|Motion notes|trotting/);
+    expect(w).toContain('exactly 8 frames');
   });
 
   it('asks a snake for body undulation', () => {

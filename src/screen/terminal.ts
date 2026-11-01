@@ -8,7 +8,7 @@ export type Osa = (args: string[], timeoutMs: number) => Promise<string | null>;
 export type Decoded = { data: Uint8Array; w: number; h: number; channels: number };
 
 const FAIL =
-  /\bFAIL(ED)?\b|✗|✖|✕|^\s*×|\b\w*Error:|^\s*\w*Error\b|\berror TS\d+|\b\d+ (failed|failing)\b/;
+  /\bFAIL(ED)?\b|✗|✖|✕|^\s*×|\b\w*Error:|^\s*\w*Error\b|\berror TS\d+|\b\d+ (failed|failing)\b|^\s*Found \d+ errors?\b|^\s*error\[E\d+\]: |^\s*error: could not compile\b/;
 const ZERO = /\b0 (failed|failing|errors?)\b|\bno errors?\b/gi;
 const ESLINT_OK = /^\s*✖ \d+ problems? \(0 errors/;
 
@@ -255,7 +255,8 @@ export function createTerminalReader() {
     if (!win || !script) return done(null);
     const out = await deps.osa(['-e', script], 3000);
     const vis = out && parseVisible(out);
-    if (!vis) return done(null);
+    // A failed read is "unknown", not "no failure": keep the previous key so the loop does not forget the last sniff.
+    if (!vis) return { terminalError: null, terminalPass: false, changed: false, key: prev };
     // The id is advisory (CGWindowID may not equal the AppleScript id); bounds decide.
     const sameId = vis.winId !== 0 && vis.winId === win.id;
     if (!sameId && overlap(vis.bounds, win.bounds) < 0.8) return done(null);

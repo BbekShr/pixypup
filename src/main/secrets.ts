@@ -12,7 +12,11 @@ export function setApiKey(key: string): void {
 
 export function getApiKey(): string | undefined {
   if (existsSync(keyFile()) && safeStorage.isEncryptionAvailable()) {
-    return safeStorage.decryptString(readFileSync(keyFile()));
+    try {
+      return safeStorage.decryptString(readFileSync(keyFile()));
+    } catch {
+      console.warn('[secrets] could not decrypt the stored key'); // fixed string: never the key or file contents
+    }
   }
   return process.env.MODEL_API_KEY;
 }

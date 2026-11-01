@@ -1,5 +1,6 @@
 // Muse Spark's visible job: one short line about a failing test. Screen text is untrusted: quoted as data, output validated.
 import { sparkJson } from './muse-spark.js';
+import { redactSecrets } from './redact.js';
 import { promptSpecies } from './profile-defaults.js';
 import type { MetaClient } from './meta-client.js';
 
@@ -16,7 +17,7 @@ export const sniffInstructions = (species?: string): string =>
   'Reply with one short, kind, playful line (max 40 characters, no emojis, no URLs, no @) that names what failed in plain words.';
 
 export async function sniffBubble(client: MetaClient, failureLine: string, signal?: AbortSignal, species?: string): Promise<{ bubble: string } | null> {
-  const data = JSON.stringify(failureLine.replace(/[<>]/g, '').slice(0, 200));
+  const data = JSON.stringify(redactSecrets(failureLine).replace(/[<>]/g, '').slice(0, 200));
   try {
     return await sparkJson(client, {
       instructions: sniffInstructions(species),

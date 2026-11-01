@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx, type Handoff } from './handoff';
-import { behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
+import { actAfterCommand, behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
@@ -436,6 +436,7 @@ function frame(now: number): void {
   if (queuedBehavior && !busyNow() && (!act || queuedBehavior.action === 'hide')) { const q = queuedBehavior; queuedBehavior = null; start(q); }
   if (queuedCmd && !act && !handoffBusy(handoff) && handoff !== 'greet') { const q = queuedCmd; queuedCmd = null; command(q); }
   if (act && act.until && now >= act.until) actTimeout(now);
+  if (act?.kind === 'talk' && act.phase === 'go' && state !== 'walk') act = null; // the walk to the chat was cut short: its only exit is arrival
   if (falling) {
     const r = airStep({ x, lift, vx, vy }, dt, window.innerWidth - W, floorY());
     ({ x, lift, vx, vy } = r);
@@ -651,6 +652,7 @@ function frame(now: number): void {
 }
 
 img.addEventListener('mouseenter', (e) => {
+  if (resting) return; // snooze fade: click-through stays on until the img is hidden
   window.pixy.setClickThrough(false);
   hoverSide = e.clientX >= x + W / 2 ? 1 : -1;
   if (!microOk()) return;
@@ -806,7 +808,12 @@ function command(raw: string): void {
   queuedCmd = r.queued;
   if (!r.now) return;
   const cmd = r.now;
-  if (act?.kind === 'hide') return;
+  if (act?.kind === 'hide') { // the flag still follows the menu (main flipped its own); no walking mid-hide
+    if (cmd === 'stay') stay = true;
+    else if (cmd === 'wander') stay = false;
+    return;
+  }
+  act = actAfterCommand(act); // before queuing: a command that waits out a hop-turn must not then wait for the whole talk act
   if (act?.kind === 'sniff' || commandMustWait({ falling, dragging, turning: state === 'walk' && performance.now() < turnUntil })) { queuedCmd = cmd; return; } // waits for the sniff, the fall, the hand or the hop-turn to finish
   lastInteraction = performance.now();
   if (cmd === 'sit') {

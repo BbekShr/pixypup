@@ -15,8 +15,15 @@ const oneOf = <T extends string>(list: readonly T[], v: unknown): T => {
   if (!list.includes(v as T)) throw new Error('Bad profile enum.');
   return v as T;
 };
+// Prose over the cap is cut at a word boundary rather than failing the whole profile.
+const fit = (v: unknown, max: number): unknown => {
+  const s = typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '';
+  if (s.length <= max) return v;
+  const cut = s.slice(0, max);
+  return cut.slice(0, cut.lastIndexOf(' ') > 0 ? cut.lastIndexOf(' ') : max);
+};
 const need = (v: unknown, max: number): string => {
-  const s = clean(v, max);
+  const s = clean(fit(v, max), max);
   if (!s) throw new Error('Bad profile text.');
   return s;
 };
