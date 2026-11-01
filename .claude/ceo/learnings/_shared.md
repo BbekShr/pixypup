@@ -12,5 +12,8 @@
 - Fail-closed tests need an fs mock that can throw ENOENT and EACCES, or they only prove what the mock can express (B2/B3).
 - Image work is verified by looking at the real output (render the frames at true scale), not by tests alone: F3's tests passed while live frames showed clipping and a wrong-eared pose.
 - Muse Image draws past its canvas edge and drifts on identity: prompts must ask for margins and pin ears/face; reject edge-touching output and retry (F3).
+- Import shared validators from a leaf module; importing from `pose-pipeline.ts` pulled sharp into the Electron main bundle (F4).
+- Every pointer path (up, cancel, lostpointercapture) restores click-through; test the invariants as pure functions, not formula re-statements (F4).
+- Before a verify run, check who owns the debug and renderer ports (the maintainer may be running the app); use a different `--remoteDebuggingPort` and never kill processes you didn't start.
 
 ## Archive

@@ -15,4 +15,5 @@ Level: **L1** (target L1) since 2026-10-31.
 |---|---|---|---|---|---|---|---|
 | 2026-10-31 | B1 | #1 | landed-clean | no | 0 | no | 1 sonnet editor run |
 | 2026-10-31 | B2+B3 | #2 | landed-clean | no | 1 (security) | no | 2 sonnet editor runs, sonnet security, haiku release |
-| 2026-10-31 | F3 | (this PR) | open | no | 7 (security 2, correctness 5) | no | sonnet plan, 2 sonnet editor runs, 2 sonnet lenses, 2 live runs (~$0.15) |
+| 2026-10-31 | F3 | #3 | landed-clean | no | 7 (security 2, correctness 5) | no | sonnet plan, 2 sonnet editor runs, 2 sonnet lenses, 2 live runs (~$0.15) |
+| 2026-10-31 | F4 | (this PR) | open | no | 14 (security 3, correctness 11) | no | 3 sonnet editor runs, 2 sonnet lenses |

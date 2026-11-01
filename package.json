@@ -7,6 +7,7 @@
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:pakkun": "PIXY_PACK_DIR=out/pack/Pakkun electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

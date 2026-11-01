@@ -22,4 +22,7 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 - 2026-10-31 (F3): `src/api/pose-pipeline.ts` `generateSpritePack` is the photo→pack entry; events cutout/pose(+fallback)/pose-failed/done; frames share one canvas (~212x288), footY ≈ 0.993. Live: 44 s clean, 66 s with one edge retry. Tests 75 in 9 files.
 - 2026-10-31 (F3): `MetaClient.postJson/postStream` accept an optional AbortSignal. `src/api/meta-client.ts`
 
+- 2026-10-31 (F4): overlay loads the pack via `pixy:get-pack` (data URLs, ≤64 frames, ≤2 MB each); `PIXY_PACK_DIR` dev-only; `npm run dev:pakkun` uses out/pack/Pakkun. Display height 140 px, stride 0.22×width, max 90 px/s, gravity 2000 px/s². Tests 105 in 10 files. `src/overlay/*`, `src/main/pack.ts`
+- 2026-10-31 (F4): dev-only `window.__pixyDebug` {state,x,dir,facing,walked,stay,menuCalls,command()} for CDP; Runtime.evaluate on promises needs awaitPromise. `src/overlay/overlay.ts`
+
 ## Clean audits (so discovery skips these grounds)
