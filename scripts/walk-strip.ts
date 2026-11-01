@@ -12,7 +12,7 @@
 
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import sharp from 'sharp';
+import sharp, { type OverlayOptions } from 'sharp';
 import { ENERGIES, SIZES, energyParams, sizeScale } from '../src/main/prefs.js';
 import { MAX_SPEED } from '../src/overlay/motion.js';
 import { strideFromFrames } from '../src/overlay/stride.js';
@@ -38,7 +38,7 @@ for (const dir of packs) {
     const cells = await Promise.all(files.map((f, k) => sharp(f).resize({ width: Math.round(raws[k]!.info.width * scale), height: Math.round(raws[k]!.info.height * scale) }).ensureAlpha().png().toBuffer({ resolveWithObject: true })));
     const W = Math.round(iw * scale);
     const cellW = Math.max(W, ...cells.map((c) => c.info.width)) + 8;
-    const overlays: sharp.OverlayOptions[] = [];
+    const overlays: OverlayOptions[] = [];
     for (const [k, c] of cells.entries()) {
       await writeFile(join(out, `${m.pet}-${size}-${k}.png`), c.data);
       const left = k * cellW + Math.round((cellW - c.info.width) / 2);
