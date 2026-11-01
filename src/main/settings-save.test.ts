@@ -25,7 +25,13 @@ describe('saveSettings', () => {
     saveSettings({ onboarded: true });
     expect(JSON.parse(readFileSync(file(), 'utf8'))).toEqual({ voice: true, future: 1, onboarded: true });
   });
-  it.each([{ onboarded: 'yes' }, { petName: '' }, { petName: 5 }, {}, null, 'x', { unknown: true }])('rejects %j and writes nothing', (bad) => {
+  it('stores snooze and clears it with null', () => {
+    saveSettings({ snoozeUntil: 99, size: 'small' });
+    expect(loadSettings()).toMatchObject({ snoozeUntil: 99, size: 'small' });
+    saveSettings({ snoozeUntil: null });
+    expect(loadSettings().snoozeUntil).toBeNull();
+  });
+  it.each([{ size: 'tiny' }, { energy: 'x' }, { snoozeUntil: 'x' }, { onboarded: 'yes' }, { petName: '' }, { petName: 5 }, {}, null, 'x', { unknown: true }])('rejects %j and writes nothing', (bad) => {
     expect(() => saveSettings(bad)).toThrow();
     expect(() => readFileSync(file(), 'utf8')).toThrow();
   });

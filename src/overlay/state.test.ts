@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { energyParams } from '../main/prefs';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 describe('next', () => {
@@ -46,6 +47,30 @@ describe('wander schedule', () => {
     expect(dwellMs('sleep', 0.5)).toBeNull();
     expect(dwellMs('drag', 0.5)).toBeNull();
     expect(dwellMs('walk', 0.5)).toBeNull();
+  });
+});
+
+describe('energy', () => {
+  const sleepy = energyParams('sleepy');
+  const playful = energyParams('playful');
+  it('scales dwell times', () => {
+    expect(dwellMs('idle', 0, sleepy)).toBeGreaterThan(dwellMs('idle', 0)!);
+    expect(dwellMs('idle', 0, playful)).toBeLessThan(dwellMs('idle', 0)!);
+    expect(dwellMs('bark', 0.5, playful)).toBe(2500 * playful.dwell);
+    expect(dwellMs('sleep', 0.5, playful)).toBeNull();
+  });
+  it('sleep-after: sleepy 30 s, playful 3 min', () => {
+    expect(onTimeout('idle', 0.5, 30_000, sleepy)).toBe('sleep');
+    expect(onTimeout('idle', 0.5, 30_000, playful)).toBe('walk');
+    expect(onTimeout('idle', 0.5, 179_000, playful)).toBe('walk');
+    expect(onTimeout('idle', 0.5, 180_000, playful)).toBe('sleep');
+  });
+  it('playful barks sometimes, sleepy sits more after a walk, normal never does a spontaneous trick', () => {
+    expect(onTimeout('idle', 0.1, 0, playful)).toBe('bark');
+    expect(onTimeout('idle', 0.5, 0, playful)).toBe('walk');
+    expect(onTimeout('idle', 0.01, 0)).toBe('walk');
+    expect(onTimeout('walk', 0.3, 0, sleepy)).toBe('sit');
+    expect(onTimeout('walk', 0.3, 0)).toBe('idle');
   });
 });
 

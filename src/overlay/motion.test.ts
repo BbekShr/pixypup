@@ -109,3 +109,15 @@ describe('blink', () => {
     expect(BLINK_MS).toBe(120);
   });
 });
+
+describe('walkSpeed cap', () => {
+  it('a custom max is reached and never exceeded, and still arrives', () => {
+    expect(walkSpeed(2000, 500, 126)).toBe(126);
+    expect(walkSpeed(2000, 500, 54)).toBe(54);
+    expect(walkSpeed(2000, 0.1, 54)).toBeGreaterThanOrEqual(8);
+  });
+  it('display width follows the chosen height', () => {
+    expect(displayWidth(200, 100, 180)).toBe(360);
+    expect(displayWidth(200, 100, 110)).toBe(220);
+  });
+});

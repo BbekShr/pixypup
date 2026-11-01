@@ -7,9 +7,9 @@ const HOP_PX = 14;
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 /** Eases in over RAMP_MS and out over the last ~RAMP_MS of travel; never 0 so it always arrives. */
-export function walkSpeed(sinceStartMs: number, remainingPx: number): number {
-  const decelPx = (MAX_SPEED * RAMP_MS) / 2000;
-  return Math.max(8, MAX_SPEED * Math.min(1, sinceStartMs / RAMP_MS, remainingPx / decelPx));
+export function walkSpeed(sinceStartMs: number, remainingPx: number, max = MAX_SPEED): number {
+  const decelPx = (max * RAMP_MS) / 2000;
+  return Math.max(8, max * Math.min(1, sinceStartMs / RAMP_MS, remainingPx / decelPx));
 }
 
 /** Wander 120-400 px from x, heading back toward home when it has strayed, always inside [0, maxX]. */

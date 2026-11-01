@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isEnergy, isSize, type Energy, type Size } from './prefs';
 
 export interface Settings {
   screenAware: boolean;
@@ -9,6 +10,11 @@ export interface Settings {
   adminDisableScreenAware: boolean;
   petName: string;
   onboarded: boolean;
+  size: Size;
+  energy?: Energy; // only an explicit choice is stored; absent = the pet's own personality.energy
+  hideInShares: boolean;
+  openAtLogin: boolean;
+  snoozeUntil: number | null; // epoch ms
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -18,6 +24,10 @@ export const DEFAULT_SETTINGS: Settings = {
   adminDisableScreenAware: false,
   petName: 'Pakkun',
   onboarded: false,
+  size: 'medium',
+  hideInShares: false,
+  openAtLogin: false,
+  snoozeUntil: null,
 };
 
 export const ADMIN_FILE = '/Library/Application Support/PixyPup/admin.json';
@@ -32,7 +42,7 @@ export function mergeSettings(
   return merged;
 }
 
-const BOOLEAN_KEYS = ['screenAware', 'voice', 'offline', 'adminDisableScreenAware', 'onboarded'] as const;
+const BOOLEAN_KEYS = ['screenAware', 'voice', 'offline', 'adminDisableScreenAware', 'onboarded', 'hideInShares', 'openAtLogin'] as const;
 
 // null = file missing. Wrong-typed or unknown keys are dropped so e.g. "false" can't read as truthy.
 export function parseSettingsFile(text: string | null | Error): {
@@ -63,6 +73,19 @@ export function parseSettingsFile(text: string | null | Error): {
     const name = obj.petName;
     if (typeof name === 'string' && name.length > 0 && name.length <= 40) values.petName = name;
     else invalid.push('petName');
+  }
+  if ('size' in obj) {
+    if (isSize(obj.size)) values.size = obj.size;
+    else invalid.push('size');
+  }
+  if ('energy' in obj) {
+    if (isEnergy(obj.energy)) values.energy = obj.energy;
+    else invalid.push('energy');
+  }
+  if ('snoozeUntil' in obj) {
+    const t = obj.snoozeUntil;
+    if (t === null || (typeof t === 'number' && Number.isFinite(t) && t >= 0)) values.snoozeUntil = t;
+    else invalid.push('snoozeUntil');
   }
   return { values, failed: false, invalid };
 }

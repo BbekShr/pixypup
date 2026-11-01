@@ -1,7 +1,9 @@
+import { energyParams, type EnergyParams } from '../main/prefs';
+
 export type PetState = 'idle' | 'walk' | 'sit' | 'sleep' | 'bark' | 'roll' | 'sniff' | 'hide' | 'drag';
 export type PetEvent = 'idle' | 'walk' | 'sit' | 'sleep' | 'bark' | 'roll' | 'dragStart' | 'dragEnd' | 'click';
 
-export const SLEEP_AFTER_MS = 60_000;
+const NORMAL = energyParams('normal');
 
 const TRICKS: Partial<Record<PetState, PetState>> = { sit: 'bark', bark: 'roll', roll: 'sit', sleep: 'bark' };
 
@@ -14,22 +16,22 @@ export function next(state: PetState, event: PetEvent): PetState {
 }
 
 /** How long a state lasts before onTimeout fires; null = until something happens. */
-export function dwellMs(state: PetState, rand: number): number | null {
+export function dwellMs(state: PetState, rand: number, p: EnergyParams = NORMAL): number | null {
   switch (state) {
-    case 'idle': return 3000 + rand * 2000;
+    case 'idle': return (3000 + rand * 2000) * p.dwell;
     case 'walk': // ends on arrival at its target
     case 'sleep':
     case 'drag': return null;
-    default: return 2500;
+    default: return 2500 * p.dwell;
   }
 }
 
-export function onTimeout(state: PetState, rand: number, sinceInteractionMs: number): PetEvent {
+export function onTimeout(state: PetState, rand: number, sinceInteractionMs: number, p: EnergyParams = NORMAL): PetEvent {
   if (state === 'sleep') return 'sleep';
   if (state === 'drag') return 'dragStart';
-  if (sinceInteractionMs >= SLEEP_AFTER_MS) return 'sleep';
-  if (state === 'walk') return rand < 0.2 ? 'sit' : 'idle';
-  return 'walk';
+  if (sinceInteractionMs >= p.sleepAfterMs) return 'sleep';
+  if (state === 'walk') return rand < p.sitChance ? 'sit' : 'idle';
+  return rand < p.trickChance ? 'bark' : 'walk';
 }
 
 /**

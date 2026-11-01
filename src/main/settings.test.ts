@@ -21,6 +21,10 @@ const defaults: Settings = {
   adminDisableScreenAware: false,
   petName: 'Pakkun',
   onboarded: false,
+  size: 'medium',
+  hideInShares: false,
+  openAtLogin: false,
+  snoozeUntil: null,
 };
 
 describe('mergeSettings', () => {
@@ -51,6 +55,18 @@ describe('loadSettings (real read/merge path)', () => {
   it('drops wrong-typed values: "false" string does not enable screenAware', async () => {
     const s = await load({ [USER]: '{"screenAware":"false","voice":1,"petName":"","extra":true}' });
     expect(s).toEqual(defaults);
+  });
+  it('reads the calm keys; wrong types are dropped from the user file', async () => {
+    const ok = await load({ [USER]: '{"size":"large","energy":"sleepy","hideInShares":true,"openAtLogin":true,"snoozeUntil":1234}' });
+    expect(ok).toMatchObject({ size: 'large', energy: 'sleepy', hideInShares: true, openAtLogin: true, snoozeUntil: 1234 });
+    const bad = await load({ [USER]: '{"size":"huge","energy":3,"hideInShares":"y","openAtLogin":1,"snoozeUntil":"x"}' });
+    expect(bad).toEqual(defaults);
+    expect(bad.energy).toBeUndefined();
+  });
+  it('admin overrides the calm keys', async () => {
+    const { ADMIN_FILE } = await import('./settings');
+    const s = await load({ [USER]: '{"size":"large","hideInShares":false}', [ADMIN_FILE]: '{"size":"small","hideInShares":true}' });
+    expect(s).toMatchObject({ size: 'small', hideInShares: true });
   });
   it('rejects petName over 40 chars, accepts valid one', async () => {
     expect((await load({ [USER]: JSON.stringify({ petName: 'x'.repeat(41) }) })).petName).toBe('Pakkun');
@@ -83,6 +99,11 @@ describe('loadSettings (real read/merge path)', () => {
     '{"adminDisableScreenAware":1}',
     '{"screenAware":"false"}',
     '{"petName":""}',
+    '{"size":"huge"}',
+    '{"energy":"hyper"}',
+    '{"hideInShares":"yes"}',
+    '{"openAtLogin":1}',
+    '{"snoozeUntil":"soon"}',
   ])('admin file with invalid known key %s fails closed', async (admin) => {
     const { ADMIN_FILE } = await import('./settings');
     const s = await load({ [USER]: '{"screenAware":true,"voice":true}', [ADMIN_FILE]: admin });

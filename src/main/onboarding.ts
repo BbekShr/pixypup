@@ -20,7 +20,7 @@ const fast = process.env['PIXY_FAKE_FAST'] === '1';
 
 const thumb = async (png: Buffer, h: number): Promise<string> => dataUrl(await sharp(png).resize({ height: h, withoutEnlargement: true }).png().toBuffer());
 
-export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onSettingsChanged: () => void; getPetName: () => string }): { open(fromMenu: boolean): void } {
+export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onSettingsChanged: () => void; getPetName: () => string; getHideInShares: () => boolean }): { open(fromMenu: boolean): void; applyProtection(): void } {
   let win: BrowserWindow | null = null;
   let photoBuf: Buffer | null = null; // read once at pick time; the page never names a path for create-pet
   let runs: Runs = noRuns;
@@ -216,6 +216,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
         webPreferences: { preload: join(here, '../preload/onboarding-preload.mjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
       });
       win.setAlwaysOnTop(true, 'floating');
+      win.setContentProtection(o.getHideInShares());
       win.on('close', () => {
         const x = centreX();
         if (handoff && x !== undefined) handoff.x = x;
@@ -231,6 +232,9 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
       const devUrl = process.env['ELECTRON_RENDERER_URL'];
       if (devUrl) void win.loadURL(`${devUrl}/onboarding/index.html${q}`);
       else void win.loadFile(join(here, '../renderer/onboarding/index.html'), { search: q });
+    },
+    applyProtection() {
+      win?.setContentProtection(o.getHideInShares());
     },
   };
 }
