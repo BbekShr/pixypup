@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getSlackBadge, parseBadges, slackBadge } from './dock-badge';
+import { badgeBump, getBadges, parseBadges } from './dock-badge';
 import type { Run } from './helper';
 import { createScreenReader } from './reader';
 import { clean, createTerminalReader, findFailure, findRedLines, lineToScreen, overlap, parseVisible } from './terminal';
@@ -43,15 +43,20 @@ describe('badges', () => {
     expect(parseBadges({ badges: [] })).toBeNull();
     expect(parseBadges(null)).toBeNull();
   });
-  it('slackBadge is case-insensitive and short only', () => {
-    expect(slackBadge({ slack: '99+' })).toBe('99+');
-    expect(slackBadge({ Slack: '•' })).toBe('•');
-    expect(slackBadge({ Slack: 'Bob: lunch?' })).toBeNull();
-    expect(slackBadge({ Mail: '3' })).toBeNull();
+  it('badgeBump: new or increased, not PixyPup, not unchanged', () => {
+    expect(badgeBump({}, { Mail: '3' })).toEqual({ app: 'Mail', label: '3' });
+    expect(badgeBump({ Mail: '3' }, { Mail: '3' })).toBeNull();
+    expect(badgeBump({ Mail: '3' }, { Mail: '2' })).toBeNull();
+    expect(badgeBump({ Mail: '3' }, { Mail: '4' })).toEqual({ app: 'Mail', label: '4' });
+    expect(badgeBump({ Slack: '98' }, { Slack: '99+' })).toEqual({ app: 'Slack', label: '99+' });
+    expect(badgeBump({}, { Slack: '•' })).toEqual({ app: 'Slack', label: '•' });
+    expect(badgeBump({ Slack: '•' }, { Slack: '•' })).toBeNull();
+    expect(badgeBump({ Mail: '3' }, {})).toBeNull();
+    expect(badgeBump({}, { PixyPup: '1', pixypup: '2' })).toBeNull();
   });
-  it('getSlackBadge', async () => {
-    expect(await getSlackBadge(json({ badges: { Slack: '2' } }))).toBe('2');
-    expect(await getSlackBadge(json({ error: 'permission' }))).toBeNull();
+  it('getBadges', async () => {
+    expect(await getBadges(json({ badges: { Slack: '2' } }))).toEqual({ Slack: '2' });
+    expect(await getBadges(json({ error: 'permission' }))).toBeNull();
   });
 });
 
@@ -296,12 +301,24 @@ describe('createScreenReader', () => {
     let wins = [win('Terminal'), { ...win('Safari', 5), title: 'tab one' }];
     const rd = createScreenReader({ run: (a, o) => mkRun(wins)(a, o), osa });
     const a = await rd.tick();
-    expect(a.observation.slackBadge).toBe('1');
+    expect(a.observation.badge).toBeNull(); // first read only seeds
     expect(a.observation.terminalError?.text).toBe('FAIL x');
     expect(a.changed).toBe(true);
     expect((await rd.tick()).changed).toBe(false);
     wins = [win('Terminal'), { ...win('Safari', 5), title: 'tab two' }];
     expect((await rd.tick()).changed).toBe(false);
+  });
+  it('reports a badge bump once, relative to the previous tick', async () => {
+    let badges: Record<string, string> = { Mail: '1' };
+    const run: Run = async (args) => {
+      const o = args[0] === 'windows' ? { windows: [], titlesRedacted: false } : { badges };
+      return { code: 0, stdout: Buffer.from(JSON.stringify(o)), stderr: '' };
+    };
+    const rd = createScreenReader({ run, osa });
+    await rd.tick();
+    badges = { Mail: '2' };
+    expect((await rd.tick()).observation.badge).toEqual({ app: 'Mail', label: '2' });
+    expect((await rd.tick()).observation.badge).toBeNull();
   });
   it('leaves unrelated window titles out; keeps call windows', async () => {
     const wins = [win('Terminal'), { ...win('Safari', 5), title: 'secret doc' }, { ...win('zoom.us', 6), title: 'x' }];

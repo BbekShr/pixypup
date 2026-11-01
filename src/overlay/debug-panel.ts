@@ -7,7 +7,7 @@ export type DebugInfo = {
   ts: number;
   gate: Gate;
   terminal: { found: boolean; box?: Rect; text?: string };
-  slack: string | null;
+  badge: string | null;
   call: boolean;
   decision: { action: string; reason: string; bubble?: string; source: 'rule' | 'spark+rule' | 'none' } | null;
   sparkMs?: number;
@@ -23,7 +23,7 @@ function parseInfo(raw: unknown): DebugInfo | null {
   const r = obj(raw);
   const t = obj(r?.['terminal']);
   if (!r || !t || !num(r['ts']) || !GATES.includes(r['gate'] as Gate) || typeof t['found'] !== 'boolean' || typeof r['call'] !== 'boolean') return null;
-  const info: DebugInfo = { ts: r['ts'], gate: r['gate'] as Gate, terminal: { found: t['found'] }, slack: str(r['slack'], 40) ?? null, call: r['call'], decision: null };
+  const info: DebugInfo = { ts: r['ts'], gate: r['gate'] as Gate, terminal: { found: t['found'] }, badge: str(r['badge'], 40) ?? null, call: r['call'], decision: null };
   const b = obj(t['box']);
   if (b && num(b['x']) && num(b['y']) && num(b['w']) && num(b['h'])) info.terminal.box = { x: b['x'], y: b['y'], w: b['w'], h: b['h'] };
   const text = str(t['text'], 80);
@@ -60,7 +60,7 @@ export function panelRows(i: DebugInfo | null): [string, string, boolean?][] {
   if (i.gate !== 'on') return rows;
   rows.push(['Terminal', i.terminal.found ? 'failing line found' : 'nothing failing']);
   if (i.terminal.found && i.terminal.text) rows.push(['', i.terminal.text, true]);
-  rows.push(['Slack', i.slack ?? '—'], ['Call', i.call ? 'yes' : 'no']);
+  rows.push(['Badge', i.badge ?? '—'], ['Call', i.call ? 'yes' : 'no']);
   const d = i.decision;
   rows.push(['Decision', d ? `${d.action} · ${d.source}` : 'nothing to do']);
   if (d?.bubble) rows.push(['Bubble', `“${d.bubble}”`]);

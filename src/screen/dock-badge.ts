@@ -10,16 +10,23 @@ export function parseBadges(json: unknown): Record<string, string> | 'permission
   return out;
 }
 
-// Only short labels ("3", "•", "99+") are counts; longer strings are arbitrary app text.
-export function slackBadge(badges: Record<string, string>): string | null {
-  for (const [name, label] of Object.entries(badges)) {
-    if (name.toLowerCase() === 'slack' && label.length > 0 && label.length <= 4) return label;
+const count = (label: string) => (/^\d+/.test(label) ? parseInt(label, 10) : NaN); // "99+" -> 99
+
+// A badge that is new, or whose count went up. Labels are untrusted app text.
+export function badgeBump(
+  prev: Record<string, string>,
+  next: Record<string, string>,
+): { app: string; label: string } | null {
+  for (const [app, label] of Object.entries(next)) {
+    if (!label || app.toLowerCase() === 'pixypup') continue;
+    const old = prev[app];
+    if (old === undefined || count(label) > count(old)) return { app, label };
   }
   return null;
 }
 
-export async function getSlackBadge(run: Run): Promise<string | null> {
+export async function getBadges(run: Run): Promise<Record<string, string> | null> {
   const r = await run(['badges']);
   const b = parseBadges(r.code === 0 ? parseJson(r.stdout) : null);
-  return b && b !== 'permission' ? slackBadge(b) : null;
+  return b && b !== 'permission' ? b : null;
 }

@@ -9,3 +9,4 @@ assets/photos/*
 !assets/photos/.gitkeep
 .claude/scheduled_tasks.lock
 .claude/launch.json
+demo/bin
