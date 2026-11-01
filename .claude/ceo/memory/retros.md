@@ -13,3 +13,4 @@ One line per run: `- YYYY-MM-DD <mode/ID>: <friction observed> → <fix made or 
 - 2026-10-31 F5a: correctness lens found 3 CONFIRMED flow races no test covered; a reviewer ran git checkout in the shared tree (restored) → lesson added; the real-key run needed a PIXY_DEV_PHOTO hook the brief hadn't asked for
 - 2026-11-01 F5b: one combined correctness+security lens was enough for a UI-heavy diff; it found 2 wedge paths in the hand-off → fixed with a busy gate
 - 2026-11-01 F18: docs left two behaviours unspecified (narrated JSON with search; annotations absent on JSON) → only live probes found them; probe scripts in out/ are now a standard step for any new Meta API capability
+- 2026-11-01 F16: review caught an OS-fighting login-item sync and an admin-forcing hole; resolved with a product principle (admin restricts only) rather than patches

@@ -33,4 +33,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F18): `src/api/muse-spark.ts` (sparkJson, extractJson, citedUrls), `src/api/personality.ts` (meetPet, breedFacts); manifest.personality optional; overlay chatter `src/overlay/chatter.ts` every 3-6 min, idle/sit only; `PIXY_CHATTY=1` dev. Tests 223 in 20 files.
 
+- 2026-11-01 (F16): main owns prefs (`run()` → saveSettings → loadSettings → `sync()` → `pixy:prefs`); `src/main/prefs.ts` pure; dev hook `__pixyDebug.pref('size:large'|'snooze:1h'|'wake'…)`; port 9229 may be taken by an unrelated workerd. Tests 257 in 21 files.
+
 ## Clean audits (so discovery skips these grounds)

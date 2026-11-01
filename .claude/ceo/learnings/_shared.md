@@ -22,5 +22,7 @@
 - Reduced motion: never `animation-duration:1ms` on infinite animations without `animation-iteration-count:1` (strobe); WAAPI loops need their own check.
 - Muse Spark: use `strict: true` schemas (strict:false garbled keys live); with web_search on, extract the last JSON object from narrated text; JSON output carries no url_citation annotations, so ground sources against web_search_call results (F18).
 - Side tasks that must not outlive a pipeline share one AbortController aborted in a catch around the main stage; bound how long the main result waits for them (F18).
+- Prefs that mirror OS settings (login item) write to the OS only on the explicit user action, never from a general sync (F16).
+- The admin file is a whitelist of privacy restrictions (`ADMIN_KEYS`); every new setting is user-owned unless deliberately added (F16).
 
 ## Archive
