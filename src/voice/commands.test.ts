@@ -15,3 +15,25 @@ describe('matchCommand', () => {
     expect(matchCommand('pakkun dance', 'Pakkun')).toBeNull();
   });
 });
+
+describe('matchCommand hardening', () => {
+  it('tolerates punctuation and filler', () => {
+    expect(matchCommand('Pakkun, can you sit?', 'Pakkun')).toBe('sit');
+    expect(matchCommand('hey pakkun... please go to bed.', 'Pakkun')).toBe('bed');
+  });
+  it('fuzzy-matches long names within edit distance 1', () => {
+    expect(matchCommand('pakun sit', 'Pakkun')).toBe('sit');
+    expect(matchCommand('paku sit', 'Pakkun')).toBeNull();
+    expect(matchCommand('rex sit', 'Rexx')).toBeNull();
+    expect(matchCommand('rx sit', 'Rexx')).toBeNull();
+  });
+  it('maps synonyms', () => {
+    expect(matchCommand('Pakkun nap', 'Pakkun')).toBe('bed');
+    expect(matchCommand('Pakkun speak', 'Pakkun')).toBe('bark');
+    expect(matchCommand('Pakkun bark!', 'Pakkun')).toBe('bark');
+  });
+  it('returns the last command', () => {
+    expect(matchCommand('Pakkun sit, no wait, roll over', 'Pakkun')).toBe('roll');
+    expect(matchCommand('Pakkun come here and sit', 'Pakkun')).toBe('sit');
+  });
+});
