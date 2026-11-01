@@ -38,8 +38,10 @@ function createWindow(): void {
   win.setIgnoreMouseEvents(true, { forward: true });
 
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
-  if (devUrl) void win.loadURL(`${devUrl}/overlay/index.html`);
-  else void win.loadFile(join(here, '../renderer/overlay/index.html'));
+  // Dev rehearsal only: PIXY_CHATTY=1 makes the pet speak every ~5 s.
+  const search = !app.isPackaged && process.env['PIXY_CHATTY'] === '1' ? '?chatty=1' : '';
+  if (devUrl) void win.loadURL(`${devUrl}/overlay/index.html${search}`);
+  else void win.loadFile(join(here, '../renderer/overlay/index.html'), { search });
 }
 
 function createTray(): void {

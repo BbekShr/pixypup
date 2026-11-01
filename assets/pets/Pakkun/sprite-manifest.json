@@ -54,5 +54,23 @@
       "fps": 1,
       "footY": 0.9922779922779923
     }
+  },
+  "personality": {
+    "breed": "Golden Retriever",
+    "coat": "Fluffy golden fur with a cream chest",
+    "traits": [
+      "Gentle",
+      "Goofy",
+      "Foodie"
+    ],
+    "energy": "playful",
+    "lines": [
+      "Hi, I'm Pakkun! Got snacks?",
+      "I love belly rubs the most!",
+      "Is it treat time yet?",
+      "I'll guard your desk, promise!",
+      "Wanna play fetch later?",
+      "You're my favourite human!"
+    ]
   }
 }

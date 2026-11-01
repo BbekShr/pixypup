@@ -9,7 +9,7 @@ import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
 import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, slugify, type ErrorCode } from './pet-input';
 import { loadPack } from './pack';
-import { finishRun, noRuns, record, startRun, type Progress, type Runs } from './run-state';
+import { factViews, finishRun, noRuns, record, recordInfo, sourceFor, startRun, type Progress, type Runs } from './run-state';
 import { getApiKey, setApiKey } from './secrets';
 import { saveSettings } from './settings';
 
@@ -65,7 +65,15 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
     }
   };
 
-  ipcMain.handle(IPC.obState, (e) => ours(e) && { needsKey: apiKey() === undefined, running: runs.current });
+  ipcMain.handle(IPC.obState, (e) => {
+    if (!ours(e)) return false;
+    const c = runs.current;
+    return { needsKey: apiKey() === undefined, running: c && { ...c, facts: c.facts && factViews(c.facts) } };
+  });
+  ipcMain.on(IPC.obOpenSource, (e, index: unknown) => {
+    const url = ours(e) ? sourceFor(runs, index) : null;
+    if (url) void shell.openExternal(url);
+  });
   ipcMain.handle(IPC.obPickPhoto, async (e) => {
     if (!ours(e) || !win) return { ok: false, code: 'cancelled' };
     const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Photos', extensions: PHOTO_EXTS }] });
@@ -130,6 +138,13 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
     const settled: Promise<void>[] = [];
     let idle: string | undefined; // the generated 3D idle frame, for the reveal
     const emit = (ev: PipelineEvent): void => {
+      if (ev.stage === 'personality') {
+        runs = recordInfo(runs, id, { personality: ev.personality });
+        toWin(IPC.obPersonality, ev.personality);
+      } else if (ev.stage === 'facts') {
+        runs = recordInfo(runs, id, { facts: ev.facts });
+        toWin(IPC.obFacts, factViews(runs.current?.facts ?? []));
+      }
       if (ev.stage !== 'cutout' && ev.stage !== 'pose') return;
       if (ev.stage === 'cutout' && !fake && pendingKey === key) {
         // The first Meta call worked, so the key is real: now it may be stored.

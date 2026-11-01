@@ -17,4 +17,7 @@ export const IPC = {
   obShrink: 'pixy:ob-shrink',
   obProgress: 'pixy:ob-progress',
   obFinished: 'pixy:ob-finished',
+  obPersonality: 'pixy:ob-personality',
+  obFacts: 'pixy:ob-facts',
+  obOpenSource: 'pixy:ob-open-source',
 } as const;
