@@ -1,6 +1,7 @@
 # Shared lessons (every agent)
 
 ## Active
+- When a PR changes walk or animation behaviour, grep README.md and docs/index.html for wag/rig/baked/model counts and re-copy `assets/pets/*/side_*` into `docs/img` (cmp) before closing: docs went stale within hours of #39.
 - A generated bundle committed under `docs/` must be regenerated from the real source (`npm run site-js`), never hand-ported: the site's walk drifted from the app once already (docs-latest).
 - After scripting inline JS into `docs/index.html`, extract it and `node --check` it: one redeclaration silently kills the whole page (docs-latest).
 - A "never sent" promise covers every later-turn buffer (history, retries), not just the first request: F31 crisis text leaked via chat history on the next turn (`src/main/talk-history.ts`).

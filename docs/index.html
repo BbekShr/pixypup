@@ -270,7 +270,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
 <section id="how" class="wrap center">
   <span class="eyebrow">✨ How it works</span>
   <h2 class="reveal">One photo in.<br>One very good pup out.</h2>
-  <p class="lede reveal" style="margin-top:16px">No 3D artist, no rigging, about a minute of waiting. Meta's models do the drawing while you watch each pose pop in.</p>
+  <p class="lede reveal" style="margin-top:16px">No 3D artist, no rigging, about a minute and a half of waiting. Meta's models do the drawing while you watch each pose pop in.</p>
   <div class="steps">
     <div class="card reveal"><div class="num">1</div><h3>📸 Drop a photo</h3><p>Any photo of your dog or cat, whole body in view. Give them a name. That's the whole form.</p></div>
     <div class="card reveal"><div class="num">2</div><h3>🎨 Watch them come alive</h3><p><b>SAM 3.1</b> cuts your pet out, <b>Muse Image</b> draws a matching set of 3D poses: standing, stepping, sitting, napping, barking, rolling, blinking.</p></div>
@@ -285,7 +285,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
       <h2>A little personality, from the first second.</h2>
       <p class="lede" style="margin-top:16px">While the poses are drawn, Pakkun learns your pet's breed and quirks ("Gentle · Goofy · Foodie") and shares a fun fact. Every pose fills its own bubble as it arrives.</p>
       <ul class="list">
-        <li><span>⏱️</span>About 60 to 90 seconds from photo to pet</li>
+        <li><span>⏱️</span>About 90 seconds from photo to pet</li>
         <li><span>🔑</span>Your own Meta key, kept in the macOS Keychain, never in a file</li>
         <li><span>🧸</span>No key? Pakkun is built in and ready to play</li>
       </ul>
@@ -308,7 +308,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
       <img class="shot reveal" src="sniff.png" alt="Pakkun under a terminal with a failing test, saying Found a bug!" loading="lazy">
       <div class="reveal">
         <h3 style="font-size:30px">"Found a bug!"</h3>
-        <p class="lede" style="margin-top:12px">He reads only the front Terminal's text and the list of open windows. The one failing line is quoted to Muse Spark as data, never as instructions, and nothing is saved. Want to see his brain? "Show what Pakkun sees" opens a little card with his every decision.</p>
+        <p class="lede" style="margin-top:12px">He reads only the front Terminal's text and the list of open windows. The one failing line is quoted to Muse Spark as data, never as instructions, and nothing is saved. API keys, tokens and secrets in it are blanked out on your Mac first. He sniffs test failures, tsc errors and rustc errors. Want to see his brain? "Show what Pakkun sees" opens a little card with his every decision.</p>
       </div>
     </div>
   </div>
@@ -363,7 +363,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
         <li><span>👀</span>Hover and he turns to look at you</li>
         <li><span>🤲</span>Wiggle the cursor over him to pet him: hearts!</li>
         <li><span>🥱</span>He yawns before a nap and stretches when he wakes</li>
-        <li><span>🐕</span>Dogs wag their tail while they trot; cats give a slow, smug sway</li>
+        <li><span>🐾</span>Every pet trots on a drawn 8-frame walk, and the feet never slide</li>
         <li><span>😉</span>He blinks, sits, barks, rolls over</li>
         <li><span>🖐️</span>Drag him anywhere; he never steals a click from your work</li>
       </ul>
@@ -408,11 +408,12 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
 <section class="band">
   <div class="wrap center">
     <span class="eyebrow">🦙 Built with Meta AI</span>
-    <h2 class="reveal">Four Meta models, one good boy.</h2>
+    <h2 class="reveal">Five Meta models, one good boy.</h2>
     <div class="grid4" style="text-align:left">
       <div class="mini model reveal"><b>SAM 3.1</b><p>Cuts your pet cleanly out of the photo and tidies every pose.</p><p style="margin-top:10px"><code>sam-3.1</code></p></div>
-      <div class="mini model reveal"><b>Muse Image</b><p>Draws a consistent set of 3D poses from one photo. Walk frames are baked from the standing pose, so his face never pops between steps.</p><p style="margin-top:10px"><code>muse-image-1.0</code></p></div>
+      <div class="mini model reveal"><b>Muse Image</b><p>Draws a consistent set of 3D poses from one photo, plus three candidate walk cycles of eight frames each.</p><p style="margin-top:10px"><code>muse-image-1.0</code></p></div>
       <div class="mini model reveal"><b>Muse Spark 1.3</b><p>Reads the failing line, decides how to react and writes his speech bubble and hints.</p><p style="margin-top:10px"><code>muse-spark-1.3</code></p></div>
+      <div class="mini model reveal"><b>Muse Wonder</b><p>Watches the drawn walk cycles and picks the most natural one, so he trots instead of shuffling.</p><p style="margin-top:10px"><code>muse-wonder-1.0</code></p></div>
       <div class="mini model reveal"><b>Voice Transcribe</b><p>Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space.</p><p style="margin-top:10px"><code>muse-voice-transcribe-1.0</code></p></div>
     </div>
     <img class="shot reveal" style="margin-top:48px" src="pack-sheet.png" alt="Ten Pakkun poses generated from one photo: standing, blinking, walking, sitting, sleeping, barking, rolling" loading="lazy">
@@ -446,29 +447,30 @@ document.documentElement.classList.add("js");
 (() => {
   const P = 'img/pakkun/';
   const PETS = [{ d: P, poses: ['sit', 'bark', 'roll'] }, { d: 'img/mochi/', poses: ['sit', 'bark'] }, { d: 'img/kuma/', poses: ['sit', 'bark'] }];
-  PETS.slice(1).forEach(q => ['sit', 'bark', 'side_0', 'side_1', 'side_2', 'side_3'].forEach(n => { new Image().src = q.d + n + '.png'; }));
-  const F = { idle: 'idle_0', blink: 'idle_blink', sit: 'sit', bark: 'bark', roll: 'roll', sleep: 'sleep', walk: ['side_0', 'side_1', 'side_2', 'side_3'] };
+  const F = { idle: 'idle_0', blink: 'idle_blink', sit: 'sit', bark: 'bark', roll: 'roll', sleep: 'sleep', walk: [0, 1, 2, 3, 4, 5, 6, 7].map(i => 'side_' + i) };
+  PETS.slice(1).forEach(q => ['sit', 'bark', ...F.walk].forEach(n => { new Image().src = q.d + n + '.png'; }));
   const all = ['idle_0', 'idle_blink', 'sit', 'bark', 'roll', 'sleep', ...F.walk];
   all.forEach(n => { new Image().src = P + n + '.png'; });
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // the app's own baked walk rig (js/puppet.js, built from src/overlay/puppet.ts); the side_* flip-book is the fallback, as in the app
+  // the app's own walk maths (js/puppet.js, built from src/overlay/stride.ts + motion.ts): drawn frames, one per measured stride of distance walked
   const K = window.PixyPuppet;
-  const SPECIES = { 'img/pakkun/': 'dog', 'img/mochi/': 'cat', 'img/kuma/': 'dog' };
   const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
-  const bake = async d => {
+  const measure = async d => {
     try {
-      const gait = K.GAITS[K.puppetSpecies(SPECIES[d])], im = await loadImg(d + 'idle_0.png'), w = im.naturalWidth, h = im.naturalHeight;
-      const a = K.alphaPlane(im), band = a && K.legBand(a, w, h, 4);
-      if (!band) return null;
-      const b = await K.bakeWalk(im, band, gait, a);
-      return { srcs: b.srcs, step: b.cycleNat / gait.frames, nw: w, nh: h };
-    } catch (e) { console.warn('Walk rig unavailable, using the flip-book', d, e && e.target ? e.target.src : e); return null; }
+      const names = [0, 1, 2, 3, 4, 5, 6, 7].map(i => d + 'side_' + i + '.png');
+      const [idle, ...fr] = await Promise.all([d + 'idle_0.png', ...names].map(loadImg));
+      const w = fr[0].naturalWidth, h = fr[0].naturalHeight;
+      const alphas = fr.map(K.alphaPlane);
+      const same = fr.every(f => f.naturalWidth === w && f.naturalHeight === h) && alphas.every(Boolean);
+      const frac = same ? K.strideFromFrames(alphas, w, h, 4, idle.naturalWidth) / idle.naturalWidth : 0.22;
+      return { srcs: names, frac, nw: idle.naturalWidth, nh: idle.naturalHeight };
+    } catch (e) { console.warn('Walk stride unavailable, using a timed flip-book', d, e && e.target ? e.target.src : e); return null; }
   };
   const rigs = {};
-  ['img/pakkun/', 'img/mochi/', 'img/kuma/'].forEach(d => bake(d).then(rg => { rigs[d] = rg; }));
-  // one frame per stride of distance walked, so the feet only move when the body does
-  const rigSrc = (rg, walked, w, h) => rg.srcs[K.walkFrame(walked, rg.srcs.length, rg.step * Math.min(w / rg.nw, h / rg.nh))];
+  ['img/pakkun/', 'img/mochi/', 'img/kuma/'].forEach(d => measure(d).then(rg => { rigs[d] = rg; }));
+  // one frame per stride of distance walked, so the feet only move when the body does (w x h is the box the idle art is fitted into)
+  const rigSrc = (rg, walked, w, h) => rg.srcs[K.walkFrame(walked, rg.srcs.length, rg.frac * rg.nw * Math.min(w / rg.nw, h / rg.nh))];
 
   // pose marquee
   const track = document.getElementById('track');
@@ -481,7 +483,7 @@ document.documentElement.classList.add("js");
   let x = 60, dir = 1, target = 400, mode = 'walk', until = 0, frame = 0, lastStep = 0, walked = 0, speed = 70, trick = 'sit', bubbleTimer;
   const TRICKS = { sit: 'bark', bark: 'roll', roll: 'sit' };
   const LINES = { sit: 'Sitting pretty!', bark: 'Woof woof!', roll: 'Belly rubs?' };
-  const set = n => { const s = n.startsWith('blob:') ? n : P + n + '.png'; if (n.startsWith('blob:') ? img.src !== s : !img.src.endsWith(s)) img.src = s; };
+  const set = n => { const s = n.includes('/') ? n : P + n + '.png'; if (!img.src.endsWith(s)) img.src = s; };
   const say = (t, ms = 1800) => { bubble.textContent = t; bubble.classList.add('show'); clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => bubble.classList.remove('show'), ms); };
   const W = () => desk.clientWidth - pet.clientWidth;
   const pick = () => { target = 20 + Math.random() * (W() - 40); };
@@ -502,7 +504,7 @@ document.documentElement.classList.add("js");
         const mv = Math.min(Math.abs(d), speed * dt / 1000);
         x += dir * mv; walked += mv;
         if (rigs[P]) set(rigSrc(rigs[P], walked, pet.clientWidth, pet.clientHeight));
-        else if (now - lastStep > 125) { frame = (frame + 1) % 4; lastStep = now; set(F.walk[frame]); }
+        else if (now - lastStep > 125) { frame = (frame + 1) % 8; lastStep = now; set(F.walk[frame]); }
       }
     } else if (now > until) {
       if (mode === 'sleep') { say('*stretch* ~'); }
@@ -583,7 +585,7 @@ document.documentElement.classList.add("js");
     for (let i = 0; i < N; i++) {
       const im = new Image(); const h = 70 + Math.random() * 110;
       im.style.height = h + 'px'; im.style.width = (h * 1.03) + 'px';
-      const p = { im, x: Math.random() * vw, dir: Math.random() < .5 ? -1 : 1, v: 40 + Math.random() * 120, y: innerHeight + Math.random() * 300, vy: 0, f: Math.floor(Math.random() * 4), pose: null, delay: i * 90, pet: PETS[i % 3], walked: 0, h };
+      const p = { im, x: Math.random() * vw, dir: Math.random() < .5 ? -1 : 1, v: 40 + Math.random() * 120, y: innerHeight + Math.random() * 300, vy: 0, f: Math.floor(Math.random() * 8), pose: null, delay: i * 90, pet: PETS[i % 3], walked: 0, h };
       rain.append(im); pups.push(p);
     }
     const start = performance.now(); let last = start;
@@ -597,7 +599,7 @@ document.documentElement.classList.add("js");
         if (Math.random() < .004 && !p.pose) { p.pose = p.pet.poses[Math.floor(Math.random() * p.pet.poses.length)]; p.poseEnd = t + 900; }
         if (p.pose && t > p.poseEnd) p.pose = null;
         if (!p.pose) { p.x += p.dir * p.v * dt; p.walked += p.v * dt; if (p.x < -60 || p.x > vw - 60) p.dir *= -1; }
-        p.f = (p.f + dt * 9) % 4;
+        p.f = (p.f + dt * 9) % 8;
         const rg = rigs[p.pet.d];
         p.im.src = p.pose ? p.pet.d + p.pose + '.png' : rg ? rigSrc(rg, p.walked, p.h * 1.03, p.h) : p.pet.d + F.walk[Math.floor(p.f)] + '.png';
         p.im.style.opacity = t > 6200 ? Math.max(0, 1 - (t - 6200) / 800) : 1;
@@ -625,7 +627,7 @@ document.documentElement.classList.add("js");
         if (id !== zoomId) return;
         walked += 240 * Math.min(50, now - last) / 1000; last = now;
         const rg = rigs[P];
-        cpet.src = rg ? rigSrc(rg, walked, 120, 120) : P + F.walk[Math.floor(walked / 20) % 4] + '.png';
+        cpet.src = rg ? rigSrc(rg, walked, 120, 120) : P + F.walk[Math.floor(walked / 20) % 8] + '.png';
         cpet.style.transform = `translateY(${-Math.abs(Math.sin((now - t0) / 120)) * 10}px)`;
         if (now - t0 < 1800) requestAnimationFrame(loop); else { cpet.style.transform = ''; cpet.src = P + 'sit.png'; }
       })(t0);
