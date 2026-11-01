@@ -31,7 +31,7 @@ PixyPup puts a tiny, very good pup on your Mac. Meet **Pakkun**: he lives along 
 Then the magic part: **give him a photo of _your_ pet**, and about a minute and a half later your own dog or cat is the one trotting across your Mac.
 
 <div align="center">
-<img src="docs/little-moments.png" alt="Pakkun sitting, saying I love belly rubs the most!, and yawning" width="90%">
+<img src="docs/little-moments.png" alt="Four Pakkun moments: hearts when you pet him, I love belly rubs the most!, a nap and a roll-over trick" width="70%">
 </div>
 
 ## ✨ Features
@@ -59,7 +59,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute and 
 Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia photos. Credits: [assets/pets/CREDITS.md](assets/pets/CREDITS.md).
 
 <div align="center">
-<img src="docs/sniff.png" alt="Pakkun finds a failing test in the terminal and says Found a bug!" width="70%">
+<img src="docs/sniff.png" alt="Pakkun next to a Terminal with a failing test highlighted, saying Found a bug!" width="80%">
 <br><sub>🐶 <i>"Found a bug!"</i></sub>
 </div>
 
