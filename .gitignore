@@ -5,3 +5,5 @@ release
 .DS_Store
 *.bin
 native/bin
+assets/photos/*
+!assets/photos/.gitkeep

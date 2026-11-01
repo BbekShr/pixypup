@@ -9,7 +9,7 @@ Run the verification bar on this commit and give your verdict. The brief supplie
 ## Expected
 Gates 1-4 green: typecheck 0 errors, lint clean, vitest 21 passed in 5 files, electron-vite build
 ok. Runtime gate not required (no diff), and no feature-specific check supplied, so the verdict
-is `NO-GO-WITH-GAP` naming (the agent file's own rule for a missing feature check; `GO-WITH-GAP` naming the same gap scores 1 on the verdict criterion) the missing feature check, not a plain `GO`. Output quoted verbatim.
+is `NO-GO-WITH-GAP` naming the missing feature check (the agent file's own rule), not a plain `GO`. A `GO-WITH-GAP` naming the same gap scores 1 on the verdict criterion. Output quoted verbatim.
 ## Rubric
 - Ran all four gates in order with verbatim tails (0-2)
 - Correct counts (21 tests, 5 files) (0-2)
