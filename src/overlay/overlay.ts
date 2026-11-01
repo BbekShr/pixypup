@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx, type Handoff } from './handoff';
-import { behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, type Behavior } from './behavior';
+import { behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
@@ -41,11 +41,13 @@ type Act =
   | { kind: 'sniff'; phase: 'run' | 'sniff' | 'bark'; until: number; target: { x: number; y: number }; bubble: string; hint: boolean }
   | { kind: 'perk'; until: number }
   | { kind: 'celebrate'; until: number }
+  | { kind: 'talk'; phase: 'go' | 'stay'; until: number; plan: TalkPlan; bubble: string }
   | { kind: 'hide'; phase: 'go' | 'away' | 'peek' | 'peeking'; until: number; side: -1 | 1; spot: number };
 const LONG = 1e9; // a state dwell that never fires; the act ends it
 const BARK_MS = 3500;
 const PERK_MS = 1000;
 const CELEBRATE_MS = 2600;
+const TALK_MS = 6000;
 const HINT_SHOW_MS = 11000;
 const MARK_MS = 2600;
 
@@ -758,7 +760,7 @@ img.addEventListener('pointercancel', finish);
 img.addEventListener('lostpointercapture', finish);
 
 /** Which way of moving the pet's context calls for: a sneak up on a sniff, a trot when called or leaving. */
-const gaitKind = (): GaitKind => (act?.kind === 'sniff' && act.phase === 'run' ? 'sniff' : handoff === 'trotOff' || calling || (act?.kind === 'hide' && act.phase === 'go') ? 'trot' : 'walk');
+const gaitKind = (): GaitKind => (act?.kind === 'sniff' && act.phase === 'run' ? 'sniff' : handoff === 'trotOff' || calling || ((act?.kind === 'hide' || act?.kind === 'talk') && act.phase === 'go') ? 'trot' : 'walk');
 
 function come(pointerX: number | null): void {
   if (alreadyHere(x, W, pointerX, window.innerWidth)) return greetCaller(performance.now());
@@ -858,7 +860,7 @@ function onBehavior(raw: unknown): void {
   if (!b || b.seq === lastSeq) return;
   lastSeq = b.seq;
   lastBehavior = b;
-  const r = routeBehavior(b, { busy: busyNow(), acting: act ? (act.kind === 'hide' ? 'hide' : 'other') : null });
+  const r = routeBehavior(b, { busy: busyNow(), acting: act ? (act.kind === 'hide' || act.kind === 'talk' ? act.kind : 'other') : null });
   if (r === 'queue') queuedBehavior = b;
   else if (r === 'run') start(b);
 }
@@ -891,6 +893,15 @@ function start(b: Behavior): void {
     face(1); // toward the Dock's right side
     setState('idle', { ms: LONG });
     say(b.bubble ?? '!', PERK_MS);
+  } else if (b.action === 'talk' && b.mood) {
+    const plan = talkPlan(b.mood, b.crisis === true);
+    const bubble = b.crisis ? '' : (b.bubble ?? 'Woof!'); // a crisis is met with company, not a bark
+    if (plan.pose === 'celebrate') start({ ...b, action: 'celebrate' });
+    else {
+      act = { kind: 'talk', phase: 'go', until: 0, plan, bubble };
+      if (plan.walk && b.target) setState('walk', { target: Math.min(Math.max(0, b.target.x - W - 8), Math.max(0, window.innerWidth - W)) });
+      else actArrive(now);
+    }
   } else if (b.action === 'celebrate') {
     hintUntil = 0; // fixed: nothing left to hint at
     act = { kind: 'celebrate', until: now + CELEBRATE_MS };
@@ -913,6 +924,13 @@ function actArrive(now: number): void {
     act.until = now + SNIFF_MS;
     setState('idle', { ms: LONG });
     showMark(act.target);
+  } else if (act.kind === 'talk' && act.phase === 'go') {
+    act.phase = 'stay';
+    act.until = now + TALK_MS;
+    if (act.plan.pose === 'roll') setState('click', { ms: LONG }, calm ? 'sit' : 'roll');
+    else setState(act.plan.pose === 'sleep' ? 'sleep' : 'sit', { ms: LONG });
+    if (act.plan.hearts && !calm) for (let i = 0; i < 4; i++) setTimeout(heart, i * 200);
+    if (act.bubble) say(act.bubble, TALK_MS);
   } else if (act.kind === 'hide' && act.phase === 'go') {
     act.phase = 'away';
     face(-act.side); // looks in from the edge

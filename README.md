@@ -127,6 +127,9 @@ Off by default; turn it on from the pet's right-click menu ("Notice my screen"),
 ### Listen for my voice
 Off by default; turn it on from the right-click menu ("Listen for my voice"), after a short explainer. Then press ⌥ Space and say "Pakkun, sit" (also roll over, go to bed, come here, bark). He listens for up to 4 seconds, or until you stop talking, or until you press again; the microphone is on only during that window. The audio goes to Meta's speech model just for that moment and nothing is saved. macOS asks once for the microphone. It stops while snoozed, and an organisation's admin file can lock it off. Rehearse without a mic or key (dev builds): `PIXY_FAKE_MIC=<24 kHz 16-bit mono WAV> npm run dev`, then `__pixyDebug.pref('voice:fake:Pakkun, sit')` and `__pixyDebug.pref('voice:listen')`.
 
+### Talk to Pakkun
+A desk buddy for rough days. Right-click him (or the menu-bar icon) and choose "Talk to Pakkun…", then type how your day is going. He answers in woofs, with a small action like *leans against you*, and acts it out beside the chat window. Your text goes to Meta's model only when you press Send, the last few turns stay in memory until you close the window, and nothing is saved. Common phrasings about self-harm are recognised on your Mac: those messages aren't sent, and a help card with 988 and findahelpline.com appears. With no key he still keeps you company with a canned woof. An organisation's offline mode turns it off. Rehearse with no key (dev builds): `__pixyDebug.pref('talk')` opens the chat.
+
 </details>
 
 ---

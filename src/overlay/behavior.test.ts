@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, toOverlayPoint, type Behavior } from './behavior';
+import { behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
 
 const sniff: Behavior = { seq: 1, action: 'sniff', target: { x: 10, y: 10 }, reason: 'r' };
 const free = { dragging: false, falling: false, resting: false, snoozed: false, handoff: null };
@@ -48,6 +48,12 @@ describe('routeBehavior', () => {
     expect(routeBehavior({ ...sniff, action: 'hide', on: false }, { busy: false, acting: 'other' })).toBe('run');
     expect(routeBehavior(sniff, { busy: false, acting: null })).toBe('run');
   });
+  it('a crisis talk replaces a running talk at once, but waits behind other acts', () => {
+    const talk: Behavior = { seq: 9, action: 'talk', mood: 'comfort', reason: 'talk' };
+    expect(routeBehavior({ ...talk, crisis: true }, { busy: false, acting: 'talk' })).toBe('run');
+    expect(routeBehavior(talk, { busy: false, acting: 'talk' })).toBe('queue');
+    expect(routeBehavior({ ...talk, crisis: true }, { busy: false, acting: 'other' })).toBe('queue');
+  });
 });
 
 describe('hide geometry', () => {
@@ -76,5 +82,22 @@ describe('toOverlayPoint', () => {
     expect(toOverlayPoint({ x: -50, y: 10 }, b)).toEqual({ x: 0, y: 0 });
     expect(toOverlayPoint({ x: 3000, y: 5000 }, b)).toEqual({ x: 1440, y: 875 });
     expect(toOverlayPoint({ x: 10, y: 10 }, { ...b, x: 1440 })).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('talk behavior', () => {
+  it('parseBehavior needs a known mood and keeps crisis only when true', () => {
+    expect(parseBehavior({ seq: 1, action: 'talk', mood: 'cheer', bubble: 'Woof woof!', reason: 'talk' })).toMatchObject({ action: 'talk', mood: 'cheer', bubble: 'Woof woof!' });
+    expect(parseBehavior({ seq: 2, action: 'talk', mood: 'listen', crisis: true, reason: '' })?.crisis).toBe(true);
+    expect(parseBehavior({ seq: 3, action: 'talk', mood: 'listen', crisis: 'yes', reason: '' })?.crisis).toBeUndefined();
+    for (const mood of [undefined, 'dance', 5]) expect(parseBehavior({ seq: 4, action: 'talk', mood, reason: '' })).toBeNull();
+  });
+  it('talkPlan maps each mood to existing poses, and a crisis never celebrates', () => {
+    expect(talkPlan('comfort', false)).toEqual({ walk: true, pose: 'sit', hearts: true });
+    expect(talkPlan('cheer', false)).toEqual({ walk: false, pose: 'celebrate', hearts: true });
+    expect(talkPlan('play', false)).toEqual({ walk: false, pose: 'roll', hearts: true });
+    expect(talkPlan('nap', false)).toEqual({ walk: true, pose: 'sleep', hearts: false });
+    expect(talkPlan('listen', false)).toEqual({ walk: true, pose: 'sit', hearts: false });
+    for (const m of ['comfort', 'cheer', 'play', 'nap', 'listen'] as const) expect(talkPlan(m, true)).toEqual({ walk: true, pose: 'sit', hearts: false });
   });
 });

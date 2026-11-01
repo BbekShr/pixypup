@@ -25,6 +25,8 @@ import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
 import { startScreenLoop } from './screen-loop';
 import { setupScreenExplainer } from './screen-explainer';
+import { setupTalkWindow } from './talk-window';
+import { toOverlayPoint } from '../overlay/behavior';
 import { getApiKey } from './secrets';
 import { hideLockedByAdmin, loadSettings, saveSettings, voiceLockedByAdmin } from './settings';
 
@@ -46,6 +48,7 @@ const petIcons = new Map<string, { icon: Electron.NativeImage; dim: Electron.Nat
 let lastFailure: { text: string; at: number } | null = null; // the sniffed failure, in memory only, for a hint the user asks for
 let fakeScreen: ReturnType<typeof fakeReader> | undefined;
 let debugOn = false; // "Show what <name> sees": not persisted, resets each launch
+let talkSeq = 1_000_000; // above the screen loop's seq so the overlay never drops a reply as already seen
 let stay = false; // mirrors the overlay's stay flag for the menu checkbox; not persisted
 
 function createWindow(slug: string, enterDrop = false): void {
@@ -152,6 +155,7 @@ let overload: ReturnType<typeof setupOverload> | undefined;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
 let voiceExplainer: ReturnType<typeof setupScreenExplainer>;
 let voice: ReturnType<typeof createVoiceSession>;
+let talk: ReturnType<typeof setupTalkWindow>;
 let micWin: ReturnType<typeof setupMic>;
 let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech model when there is no key
 
@@ -180,6 +184,7 @@ function sync(): void {
   const s = snoozed();
   for (const [slug, w] of wins) if (!w.isDestroyed()) { w.webContents.send(IPC.prefs, prefs(s, slug)); w.setContentProtection(settings.hideInShares); }
   onboarding.applyProtection();
+  talk?.applyProtection();
   clearTimeout(wakeTimer);
   // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
   if (s) wakeTimer = setTimeout(sync, Math.min(MAX_TIMER, Math.max(0, (settings.snoozeUntil ?? 0) - Date.now()) + 50));
@@ -202,6 +207,11 @@ function run(cmd: string, from?: BrowserWindow): void {
   if (cmd === 'debug:on' || cmd === 'debug:off') {
     debugOn = cmd === 'debug:on';
     primary()?.webContents.send(IPC.debug, { on: debugOn, name: displayName() });
+    return;
+  }
+  if (cmd === 'talk') {
+    if (snoozed()) run('wake');
+    talk.open();
     return;
   }
   if (cmd === 'new-pet') {
@@ -338,6 +348,7 @@ function startVoice(): void {
     mic: micWin,
     ui: tell,
     command: (c) => run(c),
+    prefill: (text) => talk.prefill(text),
     heard: (text) => { if (debugOn) primary()?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
   });
 }
@@ -354,6 +365,21 @@ void app.whenReady().then(async () => {
   overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
   voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });
+  talk = setupTalkWindow({
+    name: displayName,
+    species: speciesOf,
+    key: getApiKey,
+    settings: loadSettings,
+    getHideInShares: () => settings.hideInShares,
+    avatar: () => petIcons.get(primarySlug())?.icon.toDataURL(),
+    // The reply moves the pet beside the chat window; a snoozed pet stays asleep.
+    act: (r, b) => {
+      const w = primary();
+      if (!w || snoozed()) return;
+      const wb = w.getBounds();
+      w.webContents.send(IPC.behavior, { seq: ++talkSeq, action: 'talk', mood: r.action, crisis: r.crisis, bubble: r.crisis ? undefined : r.woof, target: toOverlayPoint({ x: b.x, y: b.y + b.height }, wb), reason: 'talk' });
+    },
+  });
   startVoice();
   ipcMain.handle(IPC.getPack, async (ev) => {
     const slug = senderSlug.get(ev.sender) ?? primarySlug();

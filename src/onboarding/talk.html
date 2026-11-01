@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'" />
+    <title>Talk</title>
+  </head>
+  <body>
+    <main class="card chat">
+      <header>
+        <span class="who"><img id="face" alt="" /><span id="title">Talk</span></span>
+        <button class="x" id="close" aria-label="Close" title="Close">&times;</button>
+      </header>
+      <div class="log" id="log" role="log" aria-live="polite"></div>
+      <form class="bar" id="form" autocomplete="off">
+        <input type="text" id="text" maxlength="500" aria-label="Your message" />
+        <button class="btn primary send" id="send" type="submit">Send</button>
+      </form>
+      <p class="fine">Sent to Meta only when you press Send. Nothing is saved.</p>
+    </main>
+    <script type="module" src="./talk.ts"></script>
+  </body>
+</html>
