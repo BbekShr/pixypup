@@ -265,9 +265,24 @@ describe('sliceSheet', () => {
     const { buf, W, H } = sheet([[10, 50], [110, 50], [210, 50], [310, 50]]);
     expect(sliceSheet(buf, W, H, 4)).toEqual([{ x0: 10, x1: 59 }, { x0: 110, x1: 159 }, { x0: 210, x1: 259 }, { x0: 310, x1: 359 }]);
   });
-  it('merges runs split by a gap under 8 columns (a tail or ear gap is not a frame boundary)', () => {
-    const { buf, W, H } = sheet([[10, 20], [35, 25], [110, 50], [210, 50], [310, 50]]);
-    expect(sliceSheet(buf, W, H, 4)).toHaveLength(4);
+  it('splits frames that nearly touch (1-px gutters) and keeps each frame whole', () => {
+    const { buf, W, H } = sheet([[5, 90], [96, 99], [196, 99], [296, 99]]);
+    expect(sliceSheet(buf, W, H, 4)).toEqual([{ x0: 5, x1: 94 }, { x0: 96, x1: 194 }, { x0: 196, x1: 294 }, { x0: 296, x1: 394 }]);
+  });
+  it('rejects a cut through a solid body (no gap near a boundary)', () => {
+    const { buf, W, H } = sheet([[0, 400]]);
+    expect(sliceSheet(buf, W, H, 4)).toBeNull();
+  });
+  it('slices a real Muse walk sheet (frames nearly touch)', async () => {
+    const { data, info } = await sharp(new URL('./fixtures/walk-sheet-keyed.png', import.meta.url).pathname)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const runs = sliceSheet(data, info.width, info.height, 4);
+    expect(runs).toHaveLength(4);
+    for (const r of runs!) expect(r.x1 - r.x0 + 1).toBeGreaterThanOrEqual(120);
+    for (const r of runs!) expect(r.x1 - r.x0 + 1).toBeLessThanOrEqual(200);
+    for (let i = 1; i < 4; i++) expect(runs![i]!.x0).toBeGreaterThan(runs![i - 1]!.x1);
   });
   it('rejects 3 blobs, 5 blobs and unequal widths', () => {
     const three = sheet([[10, 50], [110, 50], [210, 50]]);

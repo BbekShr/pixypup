@@ -261,29 +261,42 @@ export async function layoutFrames(
 }
 
 /**
- * Find the n subject column-runs of a keyed sprite sheet (RGBA). Runs are split by >= 8 fully empty
- * columns; they must be exactly n and each within 35% of the median width, else null.
+ * Cut a keyed sprite sheet (RGBA) into n frames. Muse draws frames that nearly touch, so there is no
+ * reliable empty gutter: each of the n-1 cuts goes at the emptiest column (fewest alpha >= 32 pixels)
+ * within 18% of a frame width of k*W/n. Null unless every cut column holds <= 15% of the busiest
+ * column's pixels and the n frames' alpha-bbox widths are within 35% of the median.
  */
 export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0: number; x1: number }[] | null {
-  const filled: boolean[] = [];
+  const count: number[] = [];
   for (let x = 0; x < w; x++) {
-    let any = false;
-    for (let y = 0; y < h && !any; y++) any = (rgba[(y * w + x) * 4 + 3] as number) >= 32;
-    filled.push(any);
+    let c = 0;
+    for (let y = 0; y < h; y++) if ((rgba[(y * w + x) * 4 + 3] as number) >= 32) c++;
+    count.push(c);
   }
-  const runs: { x0: number; x1: number }[] = [];
-  let gap = Infinity;
-  for (let x = 0; x < w; x++) {
-    if (!filled[x]) {
-      gap++;
-      continue;
+  const max = Math.max(...count);
+  const half = Math.round((0.18 * w) / n);
+  const cuts = [0];
+  for (let k = 1; k < n; k++) {
+    const mid = Math.round((k * w) / n);
+    let best = mid;
+    for (let x = Math.max(1, mid - half); x <= Math.min(w - 1, mid + half); x++) {
+      const c = count[x] as number;
+      const bc = count[best] as number;
+      if (c < bc || (c === bc && Math.abs(x - mid) < Math.abs(best - mid))) best = x;
     }
-    const last = runs[runs.length - 1];
-    if (last && gap < 8) last.x1 = x;
-    else runs.push({ x0: x, x1: x });
-    gap = 0;
+    if ((count[best] as number) > 0.15 * max) return null;
+    cuts.push(best);
   }
-  if (runs.length !== n) return null;
+  cuts.push(w);
+  const runs: { x0: number; x1: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    let x0 = cuts[i] as number;
+    let x1 = (cuts[i + 1] as number) - 1;
+    while (x0 <= x1 && !count[x0]) x0++;
+    while (x1 >= x0 && !count[x1]) x1--;
+    if (x1 < x0) return null;
+    runs.push({ x0, x1 });
+  }
   const widths = runs.map((r) => r.x1 - r.x0 + 1).sort((a, b) => a - b);
   const median = widths[Math.floor(n / 2)] as number;
   return runs.every((r) => Math.abs(r.x1 - r.x0 + 1 - median) <= 0.35 * median) ? runs : null;
