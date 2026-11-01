@@ -10,6 +10,16 @@ export const addPet = (list: string[], slug: string): string[] | null => (list.l
 /** The list without `slug`, or null if it isn't there or is the last pet. */
 export const removePet = (list: string[], slug: string): string[] | null => (list.length < 2 || !list.includes(slug) ? null : list.filter((s) => s !== slug));
 
+/**
+ * Windows whose slug is no longer in the list, paired with a listed slug that has no window yet, in order:
+ * replace-mode onboarding renames the primary, and its window must follow.
+ */
+export function rekeyWins<T>(wins: ReadonlyMap<string, T>, list: string[]): [string, string][] {
+  const orphans = [...wins.keys()].filter((k) => !list.includes(k));
+  const free = list.filter((s) => !wins.has(s));
+  return orphans.slice(0, free.length).map((k, i) => [k, free[i]!]);
+}
+
 /** Only a window main created for exactly this slug; an unknown or missing sender must never reach another pet's window. */
 export const pickWindow = <T>(wins: ReadonlyMap<string, T>, slug: string | undefined): T | undefined => (slug === undefined ? undefined : wins.get(slug));
 

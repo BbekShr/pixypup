@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addPet, MAX_PETS, petList, pickWindow, removePet, routeReaction } from './pets';
+import { addPet, MAX_PETS, petList, pickWindow, rekeyWins, removePet, routeReaction } from './pets';
 
 describe('pet list', () => {
   it('empty or missing pets means just the primary', () => {
@@ -41,5 +41,23 @@ describe('routeReaction', () => {
   });
   it('hiding for a call reaches every pet', () => {
     expect(routeReaction(slugs, { seq: 1, action: 'hide' }).map((x) => x[1].action)).toEqual(['hide', 'hide', 'hide']);
+  });
+});
+
+describe('rekeyWins (replace-mode keeps the primary window)', () => {
+  it('moves the window of a renamed primary to the new slug, so primary() is not null', () => {
+    const wins = new Map([['old', 'WIN']]);
+    const moves = rekeyWins(wins, petList({ petName: 'new' }));
+    expect(moves).toEqual([['old', 'new']]);
+    for (const [from, to] of moves) { wins.set(to, wins.get(from)!); wins.delete(from); }
+    expect(pickWindow(wins, petList({ petName: 'new' })[0])).toBe('WIN');
+  });
+  it('leaves matching windows alone and only renames the orphan', () => {
+    const wins = new Map([['old', 'A'], ['b', 'B']]);
+    expect(rekeyWins(wins, ['new', 'b'])).toEqual([['old', 'new']]);
+    expect(rekeyWins(wins, ['old', 'b'])).toEqual([]);
+  });
+  it('does not guess when nothing is free', () => {
+    expect(rekeyWins(new Map([['a', 1], ['b', 2]]), ['b'])).toEqual([]);
   });
 });

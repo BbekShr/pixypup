@@ -19,7 +19,7 @@ import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
 import { comeCommand } from '../overlay/call';
 import { headCrop } from './head-crop';
-import { addPet, MAX_PETS, petList, pickWindow, removePet, routeReaction } from './pets';
+import { addPet, MAX_PETS, petList, pickWindow, removePet, rekeyWins, routeReaction } from './pets';
 import { setupOnboarding } from './onboarding';
 import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
@@ -31,6 +31,7 @@ import { hideLockedByAdmin, loadSettings, saveSettings, voiceLockedByAdmin } fro
 const here = fileURLToPath(new URL('.', import.meta.url));
 const wins = new Map<string, BrowserWindow>(); // one transparent overlay window per pet, keyed by folder slug
 const senderSlug = new WeakMap<Electron.WebContents, string>();
+const petSpecies = new Map<string, string>();
 const petNames = new Map<string, string>(); // slug -> display name, learnt as each pack loads
 const packEnergies = new Map<string, Energy>();
 const primarySlug = (): string => petList(settings)[0]!;
@@ -73,6 +74,8 @@ function createWindow(slug: string, enterDrop = false): void {
   win.setIgnoreMouseEvents(true, { forward: true }); // every pet window starts, and after any menu returns to, click-through
   win.setContentProtection(settings.hideInShares);
   wins.set(slug, win);
+  // A crashed or hung page can't toggle click-through itself: until it recovers, nothing on screen may swallow clicks.
+  for (const ev of ['render-process-gone', 'unresponsive'] as const) win.webContents.on(ev as 'render-process-gone', () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); });
   senderSlug.set(win.webContents, slug);
   win.on('closed', () => { if (wins.get(slug) === win) wins.delete(slug); });
 
@@ -139,10 +142,9 @@ function toNative(items: MenuItem[], run: (cmd: string) => void): MenuItemConstr
 }
 
 let settings = loadSettings(); // TODO(F1): feed settings to feature gates
-let packSpecies: string | undefined; // the loaded pet's species, so Spark's lines suit it
-let packPetName: string | undefined; // the loaded pet's display name, boosted as a speech keyword
 /** What the user called their pet (manifest), not the folder slug in settings. */
-const displayName = (): string => packPetName ?? settings.petName;
+const displayName = (): string => petNames.get(primarySlug()) ?? settings.petName; // the primary's own name, boosted as a speech keyword
+const speciesOf = (): string | undefined => petSpecies.get(primarySlug()); // so Spark's lines suit the pet
 const nameOf = (slug: string): string => petNames.get(slug) ?? slug;
 let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
@@ -162,7 +164,19 @@ const MAX_TIMER = 2 ** 31 - 1; // setTimeout wraps to 1 ms above this
 const loginOn = (): boolean => (app.isPackaged ? app.getLoginItemSettings().openAtLogin : settings.openAtLogin);
 
 /** Apply every effect of the current settings; the one place main reacts to a change. */
+/** Replace-mode onboarding changes the primary's slug: its window moves to the new key instead of being orphaned. */
+function rekeyPrimary(): void {
+  for (const [from, to] of rekeyWins(wins, petList(settings))) {
+    const w = wins.get(from)!;
+    wins.delete(from);
+    wins.set(to, w);
+    senderSlug.set(w.webContents, to);
+    for (const m of [petNames, petSpecies, petIcons, packEnergies] as Map<string, unknown>[]) m.delete(from);
+  }
+}
+
 function sync(): void {
+  rekeyPrimary();
   const s = snoozed();
   for (const [slug, w] of wins) if (!w.isDestroyed()) { w.webContents.send(IPC.prefs, prefs(s, slug)); w.setContentProtection(settings.hideInShares); }
   onboarding.applyProtection();
@@ -261,6 +275,8 @@ function sendHome(slug: string): void {
   const w = wins.get(slug);
   wins.delete(slug);
   petIcons.delete(slug);
+  petNames.delete(slug);
+  petSpecies.delete(slug);
   w?.destroy();
   sync();
 }
@@ -276,7 +292,7 @@ function startScreenAwareLoop(): void {
   const spark = async (input: { failureLine: string }, signal?: AbortSignal): Promise<{ bubble: string } | null> => {
     try {
       const key = getApiKey();
-      return key ? await sniffBubble(openClient('screen', loadSettings(), key), input.failureLine, signal, packSpecies) : null;
+      return key ? await sniffBubble(openClient('screen', loadSettings(), key), input.failureLine, signal, speciesOf()) : null;
     } catch {
       return null;
     }
@@ -303,7 +319,7 @@ function askHint(): Promise<string | null> {
     const key = getApiKey();
     if (!key) return fakeScreen ? 'Rehearsal hint: add(2, 2) returns 4, but the test in demo/math.test.ts expects 5.' : null;
     try {
-      return (await fixHint(openClient('screen', loadSettings(), key), f, AbortSignal.timeout(15_000), packSpecies))?.hint ?? null;
+      return (await fixHint(openClient('screen', loadSettings(), key), f, AbortSignal.timeout(15_000), speciesOf()))?.hint ?? null;
     } catch {
       return null;
     }
@@ -347,16 +363,17 @@ void app.whenReady().then(async () => {
     if (isPlainName(slug)) candidates.unshift(join(app.getPath('userData'), 'pets', slug));
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
     const pack = dir && (await loadPack(dir));
-    if (pack) {
+    if (!pack) { // a reload that finds nothing must not leave the old name, species or face behind
+      petNames.delete(slug);
+      petSpecies.delete(slug);
+      petIcons.delete(slug);
+    } else {
       petNames.set(slug, pack.manifest.pet);
+      petSpecies.set(slug, pack.manifest.species);
       const idle = pack.frames[pack.manifest.poses['idle']?.frames[0] ?? ''];
       const icons = idle ? petTrayIcons(idle) : null;
       if (icons) petIcons.set(slug, icons);
       else petIcons.delete(slug);
-    }
-    if (slug === primarySlug()) {
-      packPetName = pack ? pack.manifest.pet : undefined;
-      packSpecies = pack ? pack.manifest.species : undefined;
     }
     const e = pack ? pack.manifest.personality?.energy : undefined;
     if (e !== packEnergies.get(slug)) {
