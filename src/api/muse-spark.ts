@@ -13,6 +13,7 @@ export const SPARK_MODEL = 'muse-spark-1.3';
 //   Reasoning tokens count against `max_output_tokens`.
 // https://dev.meta.ai/docs/search-grounding  `tools: [{type:'web_search'}]`; the model decides whether to search; output has a
 //   `web_search_call` item and `url_citation` annotations ({url, title, start_index, end_index}) on output_text parts;
+//   `include: ['web_search_call.results']` adds `results: [{type:'text_result', title, url, snippet}]` to the call item.
 
 export type Effort = 'minimal' | 'low' | 'medium' | 'high';
 
