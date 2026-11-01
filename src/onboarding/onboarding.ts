@@ -2,12 +2,14 @@ import '../ui/tokens.css';
 import './onboarding.css';
 import sitUrl from '../../assets/pets/Pakkun/sit.png';
 import type { CreateResult, PhotoResult, Progress } from '../main/onboarding-preload';
+import type { Run } from '../main/run-state';
 import { advance, initialFlow, type Code, type Flow, type FlowEvent } from './flow';
 
 declare global {
   interface Window {
     pixyOb: {
-      state(): Promise<{ needsKey: boolean }>;
+      state(): Promise<{ needsKey: boolean; running: Run | null }>;
+      onFinished(cb: (r: CreateResult) => void): void;
       pickPhoto(): Promise<PhotoResult>;
       dropPhoto(file: File): Promise<PhotoResult>;
       devPhoto(): Promise<PhotoResult>;
@@ -42,6 +44,7 @@ let petName = '';
 let cutoutUrl = '';
 let photoMsg = '';
 let copyTimer = 0;
+let typedKey = ''; // renderer-side only until a bad key needs it back in the field
 
 const nameEl = $<HTMLInputElement>('name');
 const keyEl = $<HTMLInputElement>('key');
@@ -80,7 +83,7 @@ function usePhoto(r: PhotoResult): void {
   go({ t: 'photo' });
 }
 
-async function make(): Promise<void> {
+function setupMaking(): void {
   cutoutUrl = '';
   $('cutout').innerHTML = '<svg class="ico big"><use href="#paw" /></svg>';
   $('tiles').innerHTML = TILES.map(([k, label]) => `<div class="tile" data-tile="${k}"><div class="box"><svg class="ico"><use href="#paw" /></svg></div>${label}</div>`).join('');
@@ -89,21 +92,32 @@ async function make(): Promise<void> {
   let i = 0;
   const copy = $('copy');
   copy.textContent = lines[0]!;
+  clearInterval(copyTimer);
   copyTimer = window.setInterval(() => {
     copy.classList.add('swap');
     setTimeout(() => { copy.textContent = lines[++i % lines.length]!; copy.classList.remove('swap'); }, 180);
   }, 4200);
+}
+
+function finished(r: CreateResult): void {
+  const code = r.ok ? null : r.code;
+  if (code === 'busy' || flow.step !== 'making') return; // busy: a run is already going, not a failure
+  clearInterval(copyTimer);
+  if (code !== 'bad-key') typedKey = '';
+  else keyEl.value = typedKey; // a bad key comes back in the field so a typo is one edit away
+  go(code === null ? { t: 'success' } : { t: 'fail', code });
+}
+
+async function make(): Promise<void> {
+  setupMaking();
   try {
-    const r = await window.pixyOb.createPet(petName, species);
-    go(r.ok ? { t: 'success' } : { t: 'fail', code: r.code });
+    finished(await window.pixyOb.createPet(petName, species));
   } catch {
-    go({ t: 'fail', code: 'generation-failed' });
-  } finally {
-    clearInterval(copyTimer);
+    finished({ ok: false, code: 'generation-failed' });
   }
 }
 
-window.pixyOb.onProgress((p) => {
+function applyProgress(p: Progress): void {
   if (p.kind === 'cutout') {
     cutoutUrl = p.url;
     $('cutout').innerHTML = `<img alt="" src="${p.url}" />`;
@@ -118,10 +132,13 @@ window.pixyOb.onProgress((p) => {
   img.alt = '';
   img.src = p.url;
   box.append(img);
-});
+}
+window.pixyOb.onProgress(applyProgress);
+window.pixyOb.onFinished(finished);
 
 $('hero').setAttribute('src', sitUrl);
-$('close').addEventListener('click', () => window.pixyOb.close());
+// Closing the welcome is the same as "Keep Pakkun for now": the app never nags.
+$('close').addEventListener('click', () => (flow.step === 'welcome' ? window.pixyOb.keep() : window.pixyOb.close()));
 $('start').addEventListener('click', () => go({ t: 'start' }));
 $('keep').addEventListener('click', () => window.pixyOb.keep());
 $('choose').addEventListener('click', () => void window.pixyOb.pickPhoto().then(usePhoto));
@@ -155,7 +172,11 @@ $('getkey').addEventListener('click', () => window.pixyOb.openKeyPage());
 $('savekey').addEventListener('click', () => {
   // The field keeps its text on a bad key so a typo is one edit away.
   void window.pixyOb.saveKey(keyEl.value.trim()).then((ok) => {
-    if (ok) go({ t: 'key-saved' });
+    if (ok) {
+      typedKey = keyEl.value.trim();
+      keyEl.value = ''; // the key now lives in main only
+      go({ t: 'key-saved' });
+    }
     else $('key-msg').textContent = "I couldn't store that safely. Try again?";
   });
 });
@@ -164,6 +185,14 @@ $('otherphoto').addEventListener('click', () => { flow = { ...flow, step: 'name'
 
 void window.pixyOb.state().then((s) => {
   flow = { ...flow, needsKey: s.needsKey };
+  if (s.running) {
+    // Reopened while a pet is still being made: pick the scene up where it is.
+    petName = s.running.name;
+    species = s.running.species;
+    flow = { ...flow, step: 'making' };
+    setupMaking();
+    s.running.progress.forEach(applyProgress);
+  }
   render();
 });
 

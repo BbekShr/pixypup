@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MetaApiError } from '../api/meta-client';
 import { NoPetFoundError } from '../api/pose-pipeline';
-import { checkCreateArgs, checkKey, checkPhoto, errorCode, MAX_PHOTO_BYTES, slugify } from './pet-input';
+import { checkCreateArgs, checkKey, checkPhoto, errorCode, loadPhoto, MAX_PHOTO_BYTES, pickSlug, slugify } from './pet-input';
 
 describe('slugify', () => {
   it.each([
@@ -12,8 +12,6 @@ describe('slugify', () => {
     ['  Mr. Biscuit!! ', 'mr-biscuit'],
     ['Zoë', 'zoe'],
     ['../../etc', 'etc'],
-    ['🐶🐶', 'pet'],
-    ['', 'pet'],
   ])('%j -> %j', (i, o) => expect(slugify(i)).toBe(o));
   it('only ever yields [a-z0-9-], at most 24 chars, no edge dashes', () => {
     for (const n of ['a'.repeat(24) + '-b', 'Ünï cödé / name', '\\..\\x', 'x y z']) {
@@ -21,6 +19,33 @@ describe('slugify', () => {
       expect(s).toMatch(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/);
       expect(s.length).toBeLessThanOrEqual(24);
     }
+  });
+});
+
+describe('slugify fallback and pickSlug', () => {
+  it('gives non-Latin names a stable short hash, different per name', () => {
+    expect(slugify('🐶🐶')).toMatch(/^pet-[0-9a-f]{4}$/);
+    expect(slugify('🐶🐶')).toBe(slugify(' 🐶🐶 '));
+    expect(slugify('🐱')).not.toBe(slugify('🐶'));
+  });
+  it('appends -2, -3 for a taken slug but lets the current pet reuse its own', async () => {
+    const taken = new Set(['milo', 'milo-2']);
+    const exists = async (s: string) => taken.has(s);
+    expect(await pickSlug('milo', 'pakkun', exists)).toBe('milo-3');
+    expect(await pickSlug('milo', 'milo', exists)).toBe('milo');
+    expect(await pickSlug('rex', 'milo', exists)).toBe('rex');
+    expect(await pickSlug('milo', 'milo-2', exists)).toBe('milo-2');
+  });
+});
+
+describe('loadPhoto', () => {
+  it('returns the bytes it read once, and rejects what checkPhoto rejects', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pixy-load-'));
+    writeFileSync(join(dir, 'a.png'), Buffer.from([1, 2, 3]));
+    const r = await loadPhoto(join(dir, 'a.png'));
+    expect(r.ok && [...r.buf]).toEqual([1, 2, 3]);
+    expect(await loadPhoto(join(dir, 'a.gif'))).toEqual({ ok: false, code: 'type' });
+    expect(await loadPhoto(join(dir, 'nope.png'))).toEqual({ ok: false, code: 'missing' });
   });
 });
 
@@ -71,6 +96,9 @@ describe('errorCode', () => {
     expect(errorCode(new MetaApiError(500, '', '/x'))).toBe('generation-failed');
     expect(errorCode(new NoPetFoundError('dog'))).toBe('no-pet-found');
     expect(errorCode(new TypeError('fetch failed'))).toBe('network');
+    expect(errorCode(new TypeError('x', { cause: new Error('ENOTFOUND') }))).toBe('network');
+    expect(errorCode(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toBe('network');
+    expect(errorCode(new TypeError("Cannot read properties of undefined (reading 'x')"))).toBe('generation-failed');
     expect(errorCode(new Error('boom'))).toBe('generation-failed');
     expect(errorCode('weird')).toBe('generation-failed');
   });

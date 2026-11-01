@@ -15,4 +15,5 @@ export const IPC = {
   obKeep: 'pixy:ob-keep',
   obClose: 'pixy:ob-close',
   obProgress: 'pixy:ob-progress',
+  obFinished: 'pixy:ob-finished',
 } as const;

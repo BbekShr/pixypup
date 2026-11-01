@@ -7,3 +7,5 @@ release
 native/bin
 assets/photos/*
 !assets/photos/.gitkeep
+.claude/scheduled_tasks.lock
+.claude/launch.json

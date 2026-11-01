@@ -55,7 +55,7 @@ app.dock?.hide();
 
 void app.whenReady().then(async () => {
   let settings = loadSettings(); // TODO(F1): feed settings to feature gates
-  const onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); } });
+  const onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); }, getPetName: () => settings.petName });
   ipcMain.handle(IPC.getPack, async () => {
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
@@ -90,6 +90,7 @@ void app.whenReady().then(async () => {
   createTray();
   // First launch only: Pakkun gets a moment to drop in before the welcome appears.
   const userPet = isPlainName(settings.petName) && (await loadPack(join(app.getPath('userData'), 'pets', settings.petName))) !== null;
+  if (!app.isPackaged) process.on('SIGUSR2', () => onboarding.open(true)); // dev hook: the native menu can't be driven over CDP
   if (!settings.onboarded && !userPet) setTimeout(() => onboarding.open(false), 1500);
 });
 
