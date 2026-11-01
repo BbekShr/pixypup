@@ -57,3 +57,17 @@ export function rollAngle(tMs: number): number {
   const u = clamp01(tMs / 700);
   return 360 * (u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) ** 2);
 }
+
+const GRAVITY = 2000; // px/s^2
+const MAX_FALL = 1400; // px/s
+const BOUNCE_PX = 12;
+const BOUNCE_MIN_V = 300;
+
+/** One gravity step. lift is the offset from the floor (negative = above it). Bounces once, then settles. */
+export function fall(lift: number, vy: number, dt: number): { lift: number; vy: number; impact: boolean; settled: boolean } {
+  const v = Math.min(vy + GRAVITY * dt, MAX_FALL);
+  const l = lift + v * dt;
+  if (l < 0) return { lift: l, vy: v, impact: false, settled: false };
+  if (v > BOUNCE_MIN_V) return { lift: 0, vy: -Math.sqrt(2 * GRAVITY * BOUNCE_PX), impact: true, settled: false };
+  return { lift: 0, vy: 0, impact: false, settled: true };
+}

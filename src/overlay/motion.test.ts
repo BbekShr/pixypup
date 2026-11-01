@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_SPEED, bob, lean, petTransform, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
+import { MAX_SPEED, bob, fall, lean, petTransform, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -68,5 +68,36 @@ describe('motion', () => {
   it('squash recovers linearly', () => {
     expect(squash(0, 0.06, 150)).toBeCloseTo(0.94);
     expect(squash(150, 0.06, 150)).toBe(1);
+  });
+});
+
+describe('fall', () => {
+  const run = (lift: number) => {
+    let l = lift, v = 0, impacts = 0, maxV = 0, peak = 0, steps = 0, settled = false;
+    while (!settled && steps++ < 1000) {
+      const r = fall(l, v, 1 / 60);
+      l = r.lift; v = r.vy; settled = r.settled;
+      if (r.impact) impacts++;
+      maxV = Math.max(maxV, v);
+      if (impacts) peak = Math.max(peak, -l);
+    }
+    return { l, impacts, maxV, peak, steps, settled };
+  };
+  it('lands on the floor from anywhere, with speed capped, one impact and a ~12 px bounce', () => {
+    const r = run(-700);
+    expect(r.settled).toBe(true);
+    expect(r.l).toBe(0);
+    expect(r.impacts).toBe(1);
+    expect(r.maxV).toBeLessThanOrEqual(1400);
+    expect(r.peak).toBeGreaterThan(8);
+    expect(r.peak).toBeLessThan(14);
+  });
+  it('a tiny drop settles without an impact bounce', () => {
+    const r = run(-3);
+    expect(r.impacts).toBe(0);
+    expect(r.settled).toBe(true);
+  });
+  it('a pet below the floor is pulled back to it', () => {
+    expect(run(50).l).toBe(0);
   });
 });

@@ -55,11 +55,12 @@ app.dock?.hide();
 void app.whenReady().then(() => {
   const settings = loadSettings(); // TODO(F1): feed settings to feature gates
   ipcMain.handle(IPC.getPack, () => {
-    const dev = process.env['PIXY_PACK_DIR'];
+    const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
     if (!isPlainName(settings.petName)) return null;
     return loadPack(join(app.getPath('userData'), 'pets', settings.petName));
   });
+  ipcMain.handle(IPC.getStay, () => stay);
   ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => {
     win?.setIgnoreMouseEvents(on, { forward: true });
   });

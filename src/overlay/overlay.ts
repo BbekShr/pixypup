@@ -1,8 +1,8 @@
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { DISPLAY_H, displayWidth, footOffset } from './layout';
-import { bob, breathe, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
-import { dwellMs, next, onTimeout, type PetEvent, type PetState } from './state';
+import { bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
+import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
   interface Window {
@@ -11,6 +11,7 @@ declare global {
       onCommand(cb: (cmd: string) => void): void;
       getPack(): Promise<Pack | null>;
       showMenu(): void;
+      getStay(): Promise<boolean>;
     };
   }
 }
@@ -23,6 +24,8 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const img = document.getElementById('pup') as HTMLImageElement;
 const fx = document.getElementById('fx') as HTMLDivElement;
 
+const keep: HTMLImageElement[] = []; // decoded bitmaps live as long as the pack so swapping src never re-decodes
+
 // Placeholder until (unless) a pack loads.
 let poses: Record<string, PoseSet> = { idle: { srcs: [pupUrl], fps: 1 } };
 let W = 120;
@@ -33,7 +36,6 @@ async function loadPackSprites(): Promise<void> {
   const pack = await window.pixy.getPack();
   if (!pack) return;
   const next: Record<string, PoseSet> = {};
-  const loaded = new Map<string, HTMLImageElement>();
   for (const [name, p] of Object.entries(pack.manifest.poses)) {
     next[name] = { srcs: p.frames.map((f) => pack.frames[f]).filter((s): s is string => !!s), fps: p.fps };
   }
@@ -41,10 +43,10 @@ async function loadPackSprites(): Promise<void> {
     const i = new Image();
     i.src = s;
     await i.decode();
-    loaded.set(s, i); // keeps the decoded bitmaps alive so swapping src never flashes
+    keep.push(i);
   }));
-  const first = next['idle']?.srcs[0] && loaded.get(next['idle'].srcs[0]);
-  if (!first || !next['idle']) return;
+  const first = keep.find((i) => i.src === next['idle']?.srcs[0]);
+  if (!first) return;
   H = DISPLAY_H;
   W = displayWidth(first.naturalWidth, first.naturalHeight);
   footY = pack.manifest.poses['idle']?.footY ?? 1;
@@ -60,11 +62,16 @@ function sizeImg(): void {
 img.src = pupUrl;
 sizeImg();
 void loadPackSprites().catch(() => undefined);
+void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
 const floorY = (): number => window.innerHeight - footOffset(H, footY);
 let state: PetState = 'walk';
 let x = 100;
-let lift = 0; // drag offset above/below the floor line; the floor itself follows the window size
+let lift = 0; // offset from the floor line (negative = above); only non-zero while dragged or falling
+let vy = 0;
+let falling = false;
+let landAt = -1e9;
+let raf = 0;
 let y = floorY();
 let home = x;
 let target = x;
@@ -86,11 +93,10 @@ let shownSrc = '';
 let walked = 0; // distance walked, drives the stride-synced frame and bob
 let zs: HTMLElement[] = [];
 
-function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}): void {
+function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced?: PetState): void {
   const now = performance.now();
   const prev = state;
-  state = next(state, ev);
-  if (state === 'walk' && stay && o.target === undefined) state = 'idle';
+  state = forced ?? resolveWalk(next(state, ev), stay, o.target !== undefined);
   stateAt = now;
   const dwell = o.ms ?? dwellMs(state, Math.random());
   deadline = dwell === null ? null : now + dwell;
@@ -136,13 +142,18 @@ function enter(prev: PetState): void {
 }
 
 function frame(now: number): void {
-  y = floorY() + lift;
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   const age = now - stateAt;
 
   if (now >= turnUntil) facing = dir;
-  if (state === 'walk' && now >= turnUntil) {
+  if (falling) {
+    const r = fall(lift, vy, dt);
+    lift = r.lift;
+    vy = r.vy;
+    if (r.impact) landAt = now;
+    if (r.settled) { falling = false; walkAt = now; }
+  } else if (state === 'walk' && now >= turnUntil) {
     const rem = Math.abs(target - x);
     const want = target >= x ? 1 : -1;
     if (rem < 1) {
@@ -151,6 +162,7 @@ function frame(now: number): void {
     } else if (want !== dir) {
       dir = want;
       turnUntil = now + TURN_MS;
+      walkAt = turnUntil; // speed ramps up from the end of the turn, no lurch
     } else {
       const step = Math.min(walkSpeed(now - walkAt, rem) * dt, rem);
       x += dir * step;
@@ -169,12 +181,13 @@ function frame(now: number): void {
     lifeAt = now + 3000 + Math.random() * 3000;
   }
   const life = state === 'idle' && now < lifeUntil;
-  const turning = now < turnUntil;
+  const turning = state === 'walk' && now < turnUntil;
+  y = floorY() + lift;
 
   const stride = STRIDE * W;
-  const walking = state === 'walk' && !turning;
-  const pose = poses[walking ? 'walk' : state === 'drag' || state === 'walk' ? 'idle' : state] ?? poses['idle']!;
-  const i = walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length;
+  const walking = state === 'walk' && !turning && !falling;
+  const pose = poses[walking ? 'walk' : state === 'drag' || state === 'walk' || falling ? 'idle' : state] ?? poses['idle']!;
+  const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const src = pose.srcs[i]!;
   if (src !== shownSrc) { img.src = src; shownSrc = src; }
 
@@ -182,7 +195,7 @@ function frame(now: number): void {
   let sx = 1;
   let sy = 1;
   let rot = 0;
-  if (state === 'walk' && !turning) {
+  if (walking) {
     if (!calm) { dy = bob(walked, stride); rot = lean(dir); }
   } else if (state === 'idle' || state === 'sit') {
     sy = breathe(now, 0.4, 0.025) * (state === 'sit' ? squash(age, 0.06, 150) : 1);
@@ -197,12 +210,13 @@ function frame(now: number): void {
     rot = rollAngle(age);
   }
   if (turning) { sx = 1.06; sy = 0.92; }
+  if (now - landAt < 180) sy *= squash(now - landAt, 0.15, 180);
   const flip = facing * (life && lifeKind === 'look' ? -1 : 1);
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
   img.style.transform = petTransform(x, y + dy, rot, flip, sx, sy);
   fx.style.transform = `translate(${x + W / 2 + flip * W * 0.3}px, ${y + dy}px)`;
-  requestAnimationFrame(frame);
+  raf = requestAnimationFrame(frame);
 }
 
 img.addEventListener('mouseenter', () => window.pixy.setClickThrough(false));
@@ -223,8 +237,10 @@ img.addEventListener('contextmenu', (e) => {
   window.pixy.showMenu();
 });
 img.addEventListener('pointerdown', (e) => {
-  if (e.button !== 0) return; // right click opens the menu; it is neither a drag nor a trick
+  if (dragging || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
   dragging = true;
+  falling = false;
+  lift = Math.min(0, lift);
   offX = e.clientX - x;
   offY = e.clientY - y;
   preDrag = state;
@@ -237,22 +253,25 @@ img.addEventListener('pointerdown', (e) => {
 });
 img.addEventListener('pointermove', (e) => {
   if (!dragging) return;
-  x = e.clientX - offX;
-  lift = e.clientY - offY - floorY();
+  x = Math.min(Math.max(0, e.clientX - offX), window.innerWidth - W);
+  const top = Math.min(Math.max(0, e.clientY - offY), window.innerHeight - H);
+  lift = top - floorY();
 });
-img.addEventListener('pointerup', (e) => {
+// pointerup, pointercancel and lostpointercapture all end the drag: a stuck drag would leave click-through off.
+function finish(e: PointerEvent): void {
   if (!dragging) return;
   dragging = false;
-  img.releasePointerCapture(e.pointerId);
-  const click = Math.hypot(e.clientX - downX, e.clientY - downY) < 5 && performance.now() - downAt < 300;
+  if (img.hasPointerCapture(e.pointerId)) img.releasePointerCapture(e.pointerId);
+  const click = e.type === 'pointerup' && isClick(Math.hypot(e.clientX - downX, e.clientY - downY), performance.now() - downAt);
   home = x;
-  if (click) {
-    state = preDrag; // a click is not a drag: keep the trick cycle and wake-from-sleep working
-    setState('click');
-  } else setState('dragEnd');
+  setState(click ? 'click' : 'dragEnd', {}, release(preDrag, click, stay));
+  if (lift < 0) { falling = true; vy = 0; }
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
   if (!img.matches(':hover')) window.pixy.setClickThrough(true);
-});
+}
+img.addEventListener('pointerup', finish);
+img.addEventListener('pointercancel', finish);
+img.addEventListener('lostpointercapture', finish);
 
 function command(cmd: string): void {
   lastInteraction = performance.now();
@@ -267,8 +286,9 @@ function command(cmd: string): void {
 window.pixy.onCommand(command);
 
 setState('walk');
-requestAnimationFrame(frame);
+raf = requestAnimationFrame(frame);
+import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { get: () => ({ state, x, dir, facing, walked, stay, menuCalls, command }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ state, x, dir, facing, walked, stay, menuCalls, lift, falling, command }) });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dwellMs, next, onTimeout, type PetEvent, type PetState } from './state';
+import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 describe('next', () => {
   it('drag wins over everything and drop resumes walking', () => {
@@ -46,5 +46,29 @@ describe('wander schedule', () => {
     expect(dwellMs('sleep', 0.5)).toBeNull();
     expect(dwellMs('drag', 0.5)).toBeNull();
     expect(dwellMs('walk', 0.5)).toBeNull();
+  });
+});
+
+describe('stay, click and release', () => {
+  it('stay turns wander walks into idle but obeys an explicit target (come)', () => {
+    expect(resolveWalk('walk', true, false)).toBe('idle');
+    expect(resolveWalk('walk', true, true)).toBe('walk');
+    expect(resolveWalk('walk', false, false)).toBe('walk');
+    expect(resolveWalk('sit', true, false)).toBe('sit');
+  });
+  it('a click is a short, still press', () => {
+    expect(isClick(4.9, 299)).toBe(true);
+    expect(isClick(5, 100)).toBe(false);
+    expect(isClick(1, 300)).toBe(false);
+  });
+  it('release honours stay for drops and clicks, and clicks keep the trick cycle', () => {
+    expect(release('sit', true, false)).toBe('bark');
+    expect(release('sleep', true, false)).toBe('bark');
+    expect(release('walk', false, false)).toBe('walk');
+    expect(release('walk', false, true)).toBe('idle');
+    expect(release('walk', true, true)).toBe('sit');
+  });
+  it('a lost pointer (release as a non-click) never leaves the pet in drag', () => {
+    for (const stay of [true, false]) expect(release('walk', false, stay)).not.toBe('drag');
   });
 });

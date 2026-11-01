@@ -31,3 +31,19 @@ export function onTimeout(state: PetState, rand: number, sinceInteractionMs: num
   if (state === 'walk') return rand < 0.2 ? 'sit' : 'idle';
   return 'walk';
 }
+
+/**
+ * "Stay here" turns every wander walk into idle. An explicit target (the "come" command) is still
+ * obeyed; after arriving the pet stays because its next walk resolves to idle again.
+ */
+export const resolveWalk = (state: PetState, stay: boolean, explicitTarget: boolean): PetState =>
+  state === 'walk' && stay && !explicitTarget ? 'idle' : state;
+
+export const isClick = (distPx: number, ms: number): boolean => distPx < 5 && ms < 300;
+
+/**
+ * State after a press ends. A click keeps the trick cycle (and wake-from-sleep) going from the state
+ * before the press; anything else, including a lost pointer, ends the drag in a non-drag state.
+ */
+export const release = (pre: PetState, click: boolean, stay: boolean): PetState =>
+  resolveWalk(click ? next(pre, 'click') : next('drag', 'dragEnd'), stay, false);
