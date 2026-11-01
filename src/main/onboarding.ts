@@ -4,14 +4,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { dataUrl, generateSpritePack, type PipelineEvent } from '../api/pose-pipeline';
-import { MetaClient } from '../api/meta-client';
+import { openClient } from '../api/gate';
 import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
 import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, slugify, type ErrorCode } from './pet-input';
 import { loadPack } from './pack';
 import { factViews, finishRun, noRuns, record, recordInfo, sourceFor, startRun, type Progress, type Runs } from './run-state';
 import { getApiKey, setApiKey } from './secrets';
-import { saveSettings } from './settings';
+import { loadSettings, saveSettings } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 // Dev rehearsal only; a packaged app can never take the fake path.
@@ -168,7 +168,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
       const slug = await pickSlug(slugify(a.name), o.getPetName(), (s) => stat(join(app.getPath('userData'), 'pets', s)).then(() => true, () => false));
       const outDir = join(app.getPath('userData'), 'pets', slug);
       if (fake) await fakeCreate({ srcDir: join(app.getAppPath(), 'assets/pets/Pakkun'), outDir, name: a.name, species: a.species, fast, emit });
-      else await generateSpritePack({ client: new MetaClient({ apiKey: key }), photo, petName: a.name, species: a.species, outDir, onProgress: emit });
+      else await generateSpritePack({ client: openClient('create-pet', loadSettings(), key), photo, petName: a.name, species: a.species, outDir, onProgress: emit });
       await Promise.all(settled);
       if (!(await loadPack(outDir))) throw new Error('written pack does not load');
       // The pack exists: from here the outcome is ok, whatever settings or the overlay do (a "failure" would invite a paid retry).
