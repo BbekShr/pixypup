@@ -29,5 +29,7 @@
 - Reset per-session handles at the top of start(); attach abort listeners before awaiting a handshake (F8).
 - The CSS transform origin is also the `scale(flip)` mirror axis: never move it to pivot; keep it and add a translation (`pivotShift`). A hard clamp that zeroes velocity reads as a wall: soften the dynamics, keep the clamp as a safety stop (F21).
 - Click-through (`setIgnoreMouseEvents`) can't be observed over CDP; judge a first-frame jump by translate minus pointer motion, not the raw delta (F21).
+- Briefs for editors in a shared tree: commit by explicit path, never `git add -A`; the worktree-isolation hook blocks writes outside the session's own worktree, and `isolation: worktree` agents start from origin/main (cherry-pick their commits) (F25).
+- Generated art is approximate: Muse drew ~4 distinct poses for an 8-phase prompt. Measure what the art does (stride from the planted foot) and let procedural motion carry the phases; cap model-driven scales (F28).
 
 ## Archive
