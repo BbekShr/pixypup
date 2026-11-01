@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { badgeBump, getBadges, parseBadges } from './dock-badge';
 import type { Run } from './helper';
 import { createScreenReader } from './reader';
-import { clean, createTerminalReader, failureContext, findFailure, findPass, findRedLines, greenAfter, lineToScreen, overlap, parseVisible } from './terminal';
+import { SCRIPTS, clean, createTerminalReader, failureContext, findFailure, findPass, findRedLines, greenAfter, lineToScreen, overlap, parseVisible } from './terminal';
 import { listWindows, parseWindows } from './window-list';
 import { makeRun } from './helper';
 
@@ -209,6 +209,13 @@ describe('parseVisible / clean', () => {
       osa: async () => out(5, 400, 1, 1, 'FAIL ' + '😀'.repeat(300)),
       windows: [win('Terminal')],
     }).then((r) => expect(Array.from(r.terminalError!.text)).toHaveLength(200));
+  });
+});
+
+describe('Terminal AppleScript', () => {
+  it('reads the tab text, not the tab object (contents of a variable dereferences it)', () => {
+    expect(SCRIPTS['Terminal']).toContain('set txt to contents of selected tab of front window');
+    expect(SCRIPTS['Terminal']).not.toMatch(/contents of t\b/);
   });
 });
 
