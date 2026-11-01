@@ -1,12 +1,15 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
-import { join } from 'node:path';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, Tray, type MenuItemConstructorOptions } from 'electron';
+import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC } from './ipc';
+import { petMenuTemplate } from './menu';
+import { isPlainName, loadPack } from './pack';
 import { loadSettings } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let stay = false; // mirrors the overlay's stay flag for the menu checkbox; not persisted
 
 function createWindow(): void {
   const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
@@ -50,9 +53,32 @@ function createTray(): void {
 app.dock?.hide();
 
 void app.whenReady().then(() => {
-  loadSettings(); // TODO(F1): feed settings to feature gates
+  const settings = loadSettings(); // TODO(F1): feed settings to feature gates
+  ipcMain.handle(IPC.getPack, () => {
+    const dev = process.env['PIXY_PACK_DIR'];
+    if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
+    if (!isPlainName(settings.petName)) return null;
+    return loadPack(join(app.getPath('userData'), 'pets', settings.petName));
+  });
   ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => {
     win?.setIgnoreMouseEvents(on, { forward: true });
+  });
+  ipcMain.on(IPC.showMenu, () => {
+    if (!win) return;
+    const send = (cmd: string): void => {
+      if (cmd === 'stay' || cmd === 'wander') stay = cmd === 'stay';
+      win?.webContents.send(IPC.command, cmd);
+    };
+    const items = petMenuTemplate({ stay }).map((i): MenuItemConstructorOptions => {
+      if ('type' in i) return { type: 'separator' };
+      if ('quit' in i) return { label: i.label, click: () => app.quit() };
+      return i.checked === undefined
+        ? { label: i.label, click: () => send(i.command) }
+        : { label: i.label, type: 'checkbox', checked: i.checked, click: () => send(i.command) };
+    });
+    if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
+    // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
+    Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });
   });
   createWindow();
   createTray();
