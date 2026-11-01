@@ -93,6 +93,7 @@ describe('findFailure', () => {
     foundZero: 'Found 0 errors in 2 files',
     errorsProse: 'error handling is documented; Found the errors page',
     mathX: 'a × b = 6',
+    gitError: "error: pathspec 'main2' did not match any file(s) known to git",
   };
   for (const [name, l] of Object.entries(passes)) {
     it(`negative: ${name}`, () => expect(findFailure([l])).toBeNull());

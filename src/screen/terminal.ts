@@ -8,7 +8,7 @@ export type Osa = (args: string[], timeoutMs: number) => Promise<string | null>;
 export type Decoded = { data: Uint8Array; w: number; h: number; channels: number };
 
 const FAIL =
-  /\bFAIL(ED)?\b|✗|✖|✕|^\s*×|\b\w*Error:|^\s*\w*Error\b|\berror TS\d+|\b\d+ (failed|failing)\b|^\s*Found \d+ errors?\b|^\s*error(\[E\d+\])?: /;
+  /\bFAIL(ED)?\b|✗|✖|✕|^\s*×|\b\w*Error:|^\s*\w*Error\b|\berror TS\d+|\b\d+ (failed|failing)\b|^\s*Found \d+ errors?\b|^\s*error\[E\d+\]: |^\s*error: could not compile\b/;
 const ZERO = /\b0 (failed|failing|errors?)\b|\bno errors?\b/gi;
 const ESLINT_OK = /^\s*✖ \d+ problems? \(0 errors/;
 
