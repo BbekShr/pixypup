@@ -616,9 +616,9 @@ describe('meet your pet in the pipeline', () => {
   });
 
   it('a slow Spark that finishes within the poses adds no wall time', async () => {
-    // poses take >= 3 sequential rounds of 60 ms; Spark takes 2 x 80 ms in parallel.
+    // poses take 2 sequential rounds of 60 ms; Spark takes 2 x 40 ms in parallel.
     const slow = async (b: Record<string, unknown>) => {
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, 40));
       return sparkReply(b);
     };
     const t0 = Date.now();
@@ -626,6 +626,6 @@ describe('meet your pet in the pipeline', () => {
     const base = Date.now() - t0;
     const t1 = Date.now();
     await (await run({ delayMs: 60, spark: slow })).p;
-    expect(Date.now() - t1).toBeLessThan(base + 80);
+    expect(Date.now() - t1).toBeLessThan(base + 40);
   });
 });
