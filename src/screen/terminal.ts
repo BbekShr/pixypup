@@ -255,7 +255,8 @@ export function createTerminalReader() {
     if (!win || !script) return done(null);
     const out = await deps.osa(['-e', script], 3000);
     const vis = out && parseVisible(out);
-    if (!vis) return done(null);
+    // A failed read is "unknown", not "no failure": keep the previous key so the loop does not forget the last sniff.
+    if (!vis) return { terminalError: null, terminalPass: false, changed: false, key: prev };
     // The id is advisory (CGWindowID may not equal the AppleScript id); bounds decide.
     const sameId = vis.winId !== 0 && vis.winId === win.id;
     if (!sameId && overlap(vis.bounds, win.bounds) < 0.8) return done(null);

@@ -227,6 +227,15 @@ describe('terminal reader', () => {
     windows: [win(owner), win('Safari', 5)],
   });
   const term = win('Terminal').bounds;
+  it('keeps the failure key through a failed read, and clears it on a clean read', async () => {
+    const t = createTerminalReader();
+    const a = await t(mk('Terminal', out(8, 80, 1, 1, screen)));
+    const lost = await t(mk('Terminal', null));
+    expect(lost.terminalError).toBeNull();
+    expect(lost.key).toBe(a.key);
+    expect(lost.changed).toBe(false);
+    expect((await t(mk('Terminal', out(8, 80, 1, 1, 'ok\n')))).key).toBe('');
+  });
   it('reports a green rerun below an old failure as a pass, not an error', async () => {
     const r = await createTerminalReader()(mk('Terminal', out(8, 80, 1, 1, `${screen}Tests 2 passed (2)\n`)));
     expect(r.terminalError).toBeNull();
