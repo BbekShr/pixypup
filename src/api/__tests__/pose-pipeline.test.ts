@@ -164,8 +164,8 @@ describe('chromaKey soft fur fringe', () => {
     for (let i = 0; i < data.length; i += 4) {
       if ((data[i + 3] as number) === 0) continue;
       if ((data[i + 3] as number) < 255) semi++;
-      // below ~25% alpha, 8-bit rounding is amplified by 1/alpha; those pixels are near invisible
-      if ((data[i + 3] as number) >= 64) expect(Math.min(data[i] as number, data[i + 2] as number) - (data[i + 1] as number)).toBeLessThan(60);
+      // keyer's dead zone: a mix under 25% magenta (gap 64) stays; anything redder must be removed or made transparent
+      expect(Math.min(data[i] as number, data[i + 2] as number) - (data[i + 1] as number)).toBeLessThanOrEqual(64);
     }
     expect(semi).toBeGreaterThan(0);
     expect(info.width).toBeGreaterThan(10);
