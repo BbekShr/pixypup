@@ -49,4 +49,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (E2E): out/_e2e.mjs drives a full real-key run (13/13, docs/E2E.md). Pet display name = manifest `pet` via `displayName()` in main; settings.petName is the folder slug.
 
+- 2026-11-01 (F21): overlay physics = `airStep` (ballistic, floor e=0.35, walls/ceiling e=0.5, slide 1200 px/s²), `releaseVelocity` (80 ms window), `dangle` (pendulum, soft limit past 14°, 2 substeps), `pivotShift`, `landSquash` in `src/overlay/motion.ts`; a 300 px drop bounces twice (~34 px, ~3 px) and rests in ~1.0-1.3 s; dangle peaks ~21° on a fast drag. Second overlay instance for verify: `npx electron-vite dev --remoteDebuggingPort 9333 -- --user-data-dir=<dir>` (vite falls back to 5174). Tests 453.
+
 ## Clean audits (so discovery skips these grounds)
