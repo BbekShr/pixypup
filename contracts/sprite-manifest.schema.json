@@ -17,7 +17,10 @@
         "properties": {
           "frames": { "type": "array", "items": { "type": "string" } },
           "fps": { "type": "number" },
-          "footY": { "type": "number" }
+          "footY": {
+            "type": "number",
+            "description": "Fraction (0..1) of the frame height, from the top, where the paws touch the floor."
+          }
         }
       }
     }
