@@ -10,6 +10,7 @@ describe('validateManifest', () => {
   it('accepts good manifests, fps 0 and footY 1', () => {
     expect(() => validateManifest(ok)).not.toThrow();
     expect(() => validateManifest(withPose({ fps: 0, footY: 1 }))).not.toThrow();
+    expect(() => validateManifest(withPose({ judge: 'muse-wonder-1.0' }))).not.toThrow();
   });
   it('is re-exported from pose-pipeline', () => expect(reexported).toBe(validateManifest));
   it.each([
@@ -32,6 +33,10 @@ describe('validateManifest', () => {
     withPose({ frames: ['a\\b.png'] }),
     withPose({ frames: ['a.jpg'] }),
     withPose({ frames: ['.png'] }),
+    withPose({ judge: '' }),
+    withPose({ judge: 1 }),
+    withPose({ judge: 'Muse Wonder' }),
+    withPose({ judge: 'x'.repeat(65) }),
     null,
   ])('rejects %j', (bad) => expect(() => validateManifest(bad)).toThrow(/Invalid sprite manifest/));
 });

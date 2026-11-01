@@ -123,6 +123,11 @@
           "footY": {
             "type": "number",
             "description": "Fraction (0..1) of the frame height, from the top, where the paws touch the floor."
+          },
+          "judge": {
+            "type": "string",
+            "pattern": "^[a-z0-9.-]{1,64}$",
+            "description": "The model that reviewed the drawn frames and picked them (walk only). A judged walk plays as drawn; an unjudged dog or cat walk is replaced by the baked leg rig."
           }
         }
       }
