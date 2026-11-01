@@ -1,0 +1,150 @@
+import '../ui/tokens.css';
+import type { Pack } from '../main/pack';
+import { displayWidth } from './layout';
+import { boundGait, gait, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, walkFrame } from './motion';
+import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW_MS, TURN_MS, type CastMember } from './overload-choreo';
+
+declare global {
+  interface Window {
+    pixyOverload: { onStart(cb: (p: unknown) => void): void; onCursor(cb: (c: { x: number; y: number }) => void): void; done(): void };
+    __pixyOverload: { frameMs: number; count: number; t: number };
+  }
+}
+
+interface Start { packs: Pack[]; seed: number }
+interface Prep { idle: string; walk: string[]; fps: number; footY: number; natW: Map<string, number>; idleW: number; drawn: boolean; flier: boolean; member: CastMember }
+
+const STRIDE = 0.22; // of displayed width per walk frame, as in the overlay
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const keep: HTMLImageElement[] = []; // decoded bitmaps live as long as the show so swapping src never re-decodes
+let cursorX = window.innerWidth / 2;
+window.__pixyOverload = { frameMs: 0, count: 0, t: 0 };
+window.pixyOverload.onCursor((c) => { cursorX = c.x; });
+
+async function prep(pack: Pack): Promise<Prep | null> {
+  const poses = pack.manifest.poses;
+  const idle = pack.frames[poses['idle']?.frames[0] ?? ''];
+  if (!idle) return null;
+  const walk = (poses['walk']?.frames ?? []).map((f) => pack.frames[f]).filter((s): s is string => !!s);
+  const natW = new Map<string, number>();
+  let idleH = 1;
+  await Promise.all([idle, ...walk].map(async (s) => {
+    const i = new Image();
+    i.src = s;
+    await i.decode();
+    keep.push(i);
+    natW.set(s, i.naturalWidth);
+    if (s === idle) idleH = i.naturalHeight;
+  }));
+  const idleW = natW.get(idle)!;
+  const prof = pack.manifest.profile;
+  const flier = prof?.locomotion === 'fly';
+  const member: CastMember = { flier, aspect: displayWidth(idleW, idleH, 1), air: flier && prof?.air ? { min: prof.air.minLiftBody, max: prof.air.maxLiftBody } : undefined };
+  return { idle, walk, fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0 && natW.get(walk[0]!) !== idleW, flier, member };
+}
+
+function heart(x: number, y: number): void {
+  const h = document.createElement('div');
+  h.textContent = '♥';
+  h.className = 'heart';
+  document.body.append(h);
+  const dx = (Math.random() - 0.5) * 30;
+  h.animate(
+    [{ opacity: 0, transform: `translate(${x}px,${y}px) scale(.5)` }, { opacity: 1, offset: 0.2 }, { opacity: 0, transform: `translate(${x + dx}px,${y - 46}px) scale(1)` }],
+    { duration: 900, easing: 'ease-out' },
+  ).onfinish = () => h.remove();
+}
+
+async function begin(raw: unknown): Promise<void> {
+  const { packs, seed } = raw as Start;
+  const preps = await Promise.all(packs.map(prep));
+  const ok = preps.flatMap((p, i) => (p ? [i] : []));
+  if (ok.length === 0) { window.pixyOverload.done(); return; }
+  const cast = castIndices(ok.length).map((k) => preps[ok[k]!]!);
+  const W = window.innerWidth;
+  const show = createShow(seed, cast.map((c) => c.member), W, window.innerHeight);
+  const calmXs = calm ? calmX(show.plans, W) : [];
+  const els = cast.map((c, i) => {
+    const el = new Image();
+    el.className = 'sp';
+    el.src = c.idle;
+    el.style.width = `${show.plans[i]!.w}px`;
+    el.style.height = `${show.plans[i]!.h}px`;
+    el.style.transformOrigin = `50% ${c.footY * 100}%`;
+    if (calm) el.style.opacity = '0';
+    document.body.append(el);
+    return el;
+  });
+  const shown = els.map(() => '');
+  const hearted = new Set<number>();
+  const start = performance.now();
+  let last = start;
+  let ema = 0;
+  window.__pixyOverload.count = els.length;
+
+  const frame = (): void => {
+    const w0 = performance.now();
+    const t = w0 - start;
+    const dt = Math.min(0.05, (w0 - last) / 1000);
+    last = w0;
+    if (!calm) show.step(t, dt, cursorX);
+    show.sprites.forEach((s, i) => {
+      const c = cast[i]!;
+      const p = show.plans[i]!;
+      const el = els[i]!;
+      const px = p.w / c.idleW;
+      let src = c.idle;
+      let x = s.x;
+      let y = window.innerHeight - p.h * c.footY + s.lift;
+      let rot = 0;
+      let sx = 1;
+      let sy = 1;
+      let flip = 1;
+      if (calm) {
+        el.style.opacity = String(calmAlpha(t, p.dropAt));
+        x = calmXs[i]!;
+        y = window.innerHeight - p.h * c.footY;
+      } else if (s.mode === 'wait' || s.gone) {
+        el.style.transform = 'translate(-9999px, 0)';
+        return;
+      } else {
+        flip = Math.sign(mirrorScale(s.mir, t, TURN_MS));
+        const u = mirrorProgress(s.mir, t, TURN_MS);
+        const dir = s.mir.to;
+        const stride = STRIDE * p.w;
+        if (c.flier && c.walk.length) src = c.walk[Math.floor((t / 1000) * c.fps) % c.walk.length]!;
+        else if (s.v > 0 && u >= 1 && c.walk.length) src = c.walk[walkFrame(s.walked, c.walk.length, stride)]!;
+        if (u < 1) {
+          const ht = hopTurn(u, s.turnH);
+          y += ht.dy; sx = ht.sx; sy = ht.sy;
+        }
+        else if (c.flier) rot = lean(dir, 0.5) + 3 * Math.sin(flyLift(p, t) / 12);
+        else if (s.v > 0) {
+          const g = c.drawn ? gait(s.walked, stride, true) : boundGait(s.walked, stride, p.h);
+          y += g.dy; sx = g.sx; sy = g.sy;
+          rot = lean(dir, s.v / MAX_SPEED) + g.rot * dir;
+        }
+        if (t - s.hopAt >= 0 && t - s.hopAt < HOP_WINDOW_MS) {
+          const h = hop(t - s.hopAt);
+          y += h.dy; sy *= h.sy;
+          if (!hearted.has(i)) { hearted.add(i); heart(s.x + p.w / 2, y - p.h * 0.6); }
+        }
+        if (t - s.landAt < LAND_SQUASH_MS) sy *= landSquash(t - s.landAt, s.landV);
+      }
+      if (src !== shown[i]) {
+        shown[i] = src;
+        el.src = src;
+        el.style.width = `${(c.natW.get(src) ?? c.idleW) * px}px`;
+      }
+      const fw = (c.natW.get(src) ?? c.idleW) * px;
+      el.style.transform = petTransform(x + (p.w - fw) / 2, y, rot, flip, sx, sy);
+    });
+    ema = ema * 0.9 + (performance.now() - w0) * 0.1;
+    window.__pixyOverload = { frameMs: ema, count: els.length, t };
+    if (t >= SHOW_MS || (!calm && show.done)) window.pixyOverload.done();
+    else requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+window.pixyOverload.onStart((p) => { void begin(p); });

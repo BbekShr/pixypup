@@ -11,7 +11,7 @@ const sub = (t: MenuItem[], label: string): MenuItem[] => {
 
 describe('petMenuTemplate', () => {
   it('has the agreed order, tricks first and Quit last', () => {
-    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Make a new pet…', '-', 'Quit PixyPup']);
+    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Make a new pet…', 'PixyPup Overload!', '-', 'Quit PixyPup']);
     expect(petMenuTemplate(base).at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
   });
   it('maps the tricks to overlay command strings', () => {
@@ -65,7 +65,14 @@ describe('petMenuTemplate', () => {
 
 describe('trayMenuTemplate', () => {
   it('is Snooze, new pet, Quit; snoozed it says Wake up <name>', () => {
-    expect(labels(trayMenuTemplate(base))).toEqual(['Snooze', 'Make a new pet…', '-', 'Quit PixyPup']);
+    expect(labels(trayMenuTemplate(base))).toEqual(['Snooze', 'PixyPup Overload!', 'Make a new pet…', '-', 'Quit PixyPup']);
     expect(trayMenuTemplate({ snoozed: true, name: 'Rex' })[0]).toEqual({ label: 'Wake up Rex', command: 'wake' });
+  });
+  it('both menus offer the overload, and the tray swaps it for End while it runs', () => {
+    expect(find(petMenuTemplate(base), 'PixyPup Overload!')).toEqual({ label: 'PixyPup Overload!', command: 'overload' });
+    expect(find(trayMenuTemplate(base), 'PixyPup Overload!')).toEqual({ label: 'PixyPup Overload!', command: 'overload' });
+    const running = trayMenuTemplate({ ...base, overload: true });
+    expect(find(running, 'End the overload')).toEqual({ label: 'End the overload', command: 'overload:end' });
+    expect(find(running, 'PixyPup Overload!')).toBeUndefined();
   });
 });

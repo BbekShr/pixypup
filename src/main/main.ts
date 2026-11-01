@@ -18,6 +18,7 @@ import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
 import { setupOnboarding } from './onboarding';
+import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
 import { startScreenLoop } from './screen-loop';
 import { setupScreenExplainer } from './screen-explainer';
@@ -103,6 +104,7 @@ let packPetName: string | undefined; // the loaded pet's display name, boosted a
 const displayName = (): string => packPetName ?? settings.petName;
 let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
+let overload: ReturnType<typeof setupOverload> | undefined;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
 let voiceExplainer: ReturnType<typeof setupScreenExplainer>;
 let voice: ReturnType<typeof createVoiceSession>;
@@ -131,11 +133,13 @@ function sync(): void {
   if (listen) micWin.warm();
   else { voice.abort(); micWin.close(); }
   tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName() }), run)));
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active() }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
 function run(cmd: string): void {
+  if (cmd === 'overload') { void overload?.start(); return; }
+  if (cmd === 'overload:end') { overload?.stop(); return; }
   if (cmd === 'stay' || cmd === 'wander') stay = cmd === 'stay';
   if (cmd === 'debug:on' || cmd === 'debug:off') {
     debugOn = cmd === 'debug:on';
@@ -247,6 +251,7 @@ app.dock?.hide();
 
 void app.whenReady().then(async () => {
   onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
+  overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
   voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });
   startVoice();
@@ -274,7 +279,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on(IPC.showMenu, () => {
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, name: displayName() }), run);
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), name: displayName() }), run);
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });

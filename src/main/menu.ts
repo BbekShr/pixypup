@@ -6,12 +6,13 @@ export type MenuItem =
   | { label: string; quit: true }
   | { label: string; submenu: MenuItem[] };
 
-export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; name: string }
+export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; name: string }
 
 const SIZE_LABELS: Record<Size, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 const ENERGY_LABELS: [Energy, string][] = [['sleepy', 'Sleepy'], ['normal', 'Normal'], ['playful', 'Playful']];
 const SNOOZE: MenuItem = { label: 'Snooze', submenu: [{ label: 'For 1 hour', command: 'snooze:1h' }, { label: 'Until 8 am', command: 'snooze:tomorrow' }] };
 const toggle = (label: string, key: string, on: boolean): MenuItem => ({ label, command: `${key}:${on ? 'off' : 'on'}`, checked: on });
+const overloadItem = (running?: boolean): MenuItem => (running ? { label: 'End the overload', command: 'overload:end' } : { label: 'PixyPup Overload!', command: 'overload' });
 const LOCKED = ' (set by your organisation)';
 
 /** Plain descriptors so the menu is testable without Electron; main.ts maps them to native items. */
@@ -34,13 +35,15 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     toggle(`Show what ${o.name} sees`, 'debug', o.debug ?? false),
     toggle('Open at login', 'login', o.openAtLogin),
     { label: 'Make a new pet…', command: 'new-pet' },
+    overloadItem(o.overload),
     { type: 'separator' },
     { label: 'Quit PixyPup', quit: true },
   ];
 }
 
-export const trayMenuTemplate = (o: Pick<MenuState, 'snoozed' | 'name'>): MenuItem[] => [
+export const trayMenuTemplate = (o: Pick<MenuState, 'snoozed' | 'name' | 'overload'>): MenuItem[] => [
   o.snoozed ? { label: `Wake up ${o.name}`, command: 'wake' } : SNOOZE,
+  overloadItem(o.overload),
   { label: 'Make a new pet…', command: 'new-pet' },
   { type: 'separator' },
   { label: 'Quit PixyPup', quit: true },
