@@ -100,6 +100,7 @@ describe('errorCode', () => {
     expect(errorCode(new TypeError('fetch failed'))).toBe('network');
     expect(errorCode(new TypeError('x', { cause: new Error('ENOTFOUND') }))).toBe('network');
     expect(errorCode(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toBe('network');
+    expect(errorCode(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))).toBe('network'); // AbortSignal.timeout's reason
     expect(errorCode(new TypeError("Cannot read properties of undefined (reading 'x')"))).toBe('generation-failed');
     expect(errorCode(new Error('boom'))).toBe('generation-failed');
     expect(errorCode('weird')).toBe('generation-failed');
