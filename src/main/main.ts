@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { openClient } from '../api/gate';
 import { openVoice, type Transcription } from '../api/voice';
 import { sniffBubble } from '../api/sniff-bubble';
+import { fixHint } from '../api/fix-hint';
 import { createDecider } from '../screen/decide';
 import { makeRun } from '../screen/helper';
 import { createScreenReader } from '../screen/reader';
@@ -28,6 +29,8 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayIcon: Electron.NativeImage | null = null;
 let trayIconDim: Electron.NativeImage | null = null;
+let lastFailure: { text: string; at: number } | null = null; // the sniffed failure, in memory only, for a hint the user asks for
+let fakeScreen: ReturnType<typeof fakeReader> | undefined;
 let debugOn = false; // "Show what <name> sees": not persisted, resets each launch
 let stay = false; // mirrors the overlay's stay flag for the menu checkbox; not persisted
 
@@ -153,6 +156,7 @@ function run(cmd: string): void {
     if (!voiceLockedByAdmin()) void voiceExplainer.ask(displayName()).then((yes) => { if (yes) run('voice:yes'); });
     return;
   }
+  if (!app.isPackaged && cmd.startsWith('screen:fake:')) { fakeScreen?.set(cmd === 'screen:fake:pass'); return; } // dev: flip the scripted terminal
   if (!app.isPackaged && cmd === 'voice:listen') return voice.press(); // dev hook: globalShortcut can't be pressed over CDP
   if (!app.isPackaged && cmd.startsWith('voice:fake:')) { fakeTranscript = cmd.slice(11); return; }
   const patch = commandToPatch(cmd, new Date());
@@ -176,9 +180,9 @@ function run(cmd: string): void {
 function startScreenAwareLoop(): void {
   const osa = (args: string[], timeoutMs: number): Promise<string | null> =>
     new Promise((res) => execFile('osascript', args, { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, (err, out) => res(err ? null : out)));
-  const reader = !app.isPackaged && process.env['PIXY_FAKE_SCREEN'] === '1'
-    ? fakeReader(screen.getPrimaryDisplay().workArea)
-    : createScreenReader({ run: makeRun(helperPath()), osa });
+  const fake = !app.isPackaged && process.env['PIXY_FAKE_SCREEN'] === '1';
+  if (fake) fakeScreen = fakeReader(screen.getPrimaryDisplay().workArea);
+  const reader = fakeScreen ?? createScreenReader({ run: makeRun(helperPath()), osa });
   // Without a key, or when the gate says no, Spark is skipped and the decider falls back to its own bubbles.
   const spark = async (input: { failureLine: string }, signal?: AbortSignal): Promise<{ bubble: string } | null> => {
     try {
@@ -194,8 +198,28 @@ function startScreenAwareLoop(): void {
     overlay: { bounds: () => win?.getBounds() ?? null, send: (b) => win?.webContents.send(IPC.behavior, b) },
     reader,
     decider: createDecider({ spark }),
+    onFailure: (text) => { lastFailure = text ? { text, at: Date.now() } : null; },
+    canHint: () => fake || !!getApiKey(),
     debug: { on: () => debugOn, send: (info) => win?.webContents.send(IPC.debug, { on: true, name: displayName(), info }) },
   });
+}
+
+const HINT_TTL_MS = 5 * 60_000;
+let hintCall: Promise<string | null> | null = null;
+// Only on a click after a sniff, only while "Notice my screen" is allowed (the gate throws otherwise).
+function askHint(): Promise<string | null> {
+  hintCall ??= (async () => {
+    const f = lastFailure && Date.now() - lastFailure.at < HINT_TTL_MS ? lastFailure.text : null;
+    if (!f) return null;
+    const key = getApiKey();
+    if (!key) return fakeScreen ? 'Rehearsal hint: add(2, 2) returns 4, but the test in demo/math.test.ts expects 5.' : null;
+    try {
+      return (await fixHint(openClient('screen', loadSettings(), key), f, AbortSignal.timeout(15_000)))?.hint ?? null;
+    } catch {
+      return null;
+    }
+  })().finally(() => { hintCall = null; });
+  return hintCall;
 }
 
 function startVoice(): void {
@@ -241,6 +265,7 @@ void app.whenReady().then(async () => {
     return pack;
   });
   ipcMain.handle(IPC.getPrefs, () => prefs());
+  ipcMain.handle(IPC.askHint, () => (snoozed() ? null : askHint()));
   if (!app.isPackaged) ipcMain.on(IPC.devCmd, (_e, cmd: unknown) => { if (typeof cmd === 'string') run(cmd); }); // CDP can't click native menus
   ipcMain.handle(IPC.getStay, () => stay);
   ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => {

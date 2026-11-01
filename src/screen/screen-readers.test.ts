@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { badgeBump, getBadges, parseBadges } from './dock-badge';
 import type { Run } from './helper';
 import { createScreenReader } from './reader';
-import { clean, createTerminalReader, findFailure, findRedLines, lineToScreen, overlap, parseVisible } from './terminal';
+import { clean, createTerminalReader, failureContext, findFailure, findPass, findRedLines, greenAfter, lineToScreen, overlap, parseVisible } from './terminal';
 import { listWindows, parseWindows } from './window-list';
 import { makeRun } from './helper';
 
@@ -102,6 +102,35 @@ describe('findFailure', () => {
   });
 });
 
+describe('green runs', () => {
+  const vitestFail = [' ❯ demo/math.test.ts (1 test | 1 failed) 4ms', ' FAIL  demo/math.test.ts > adds', 'AssertionError: expected 4 to be 5', ' Test Files  1 failed (1)', '      Tests  1 failed (1)'];
+  const vitestPass = [' ✓ demo/math.test.ts (1 test) 2ms', ' Test Files  1 passed (1)', '      Tests  1 passed (1)', '   Duration  154ms'];
+  it('finds the green summary of common runners', () => {
+    for (const l of ['      Tests  4 passed (4)', 'Tests:       4 passed, 4 total', '==== 4 passed in 0.12s ====', '  4 passing (12ms)', ' PASS  src/a.test.js', 'Found 0 errors. Watching for file changes.']) {
+      expect(findPass([l]), l).toBe(0);
+    }
+  });
+  it('a summary that also failed, or a lone check mark, is not green', () => {
+    for (const l of [' Tests  1 failed | 3 passed (4)', 'Tests: 1 failed, 3 passed, 4 total', ' ✓ src/b.test.ts (2 tests)', 'passed the salt']) expect(findPass([l]), l).toBeNull();
+  });
+  it('green only when the pass is the newest result on screen', () => {
+    expect(greenAfter(vitestFail, findFailure(vitestFail)!.lineIndex)).toBe(false);
+    expect(greenAfter(vitestPass, null)).toBe(true);
+    const both = [...vitestFail, ...vitestPass];
+    expect(greenAfter(both, findFailure(both)!.lineIndex)).toBe(true);
+    const again = [...vitestPass, ...vitestFail];
+    expect(greenAfter(again, findFailure(again)!.lineIndex)).toBe(false);
+  });
+  it('failure context starts at the first failing line and is capped', () => {
+    expect(failureContext(vitestFail).split('\n')).toEqual(['❯ demo/math.test.ts (1 test | 1 failed) 4ms', 'FAIL  demo/math.test.ts > adds', 'AssertionError: expected 4 to be 5', 'Test Files  1 failed (1)', 'Tests  1 failed (1)']);
+    expect(failureContext(['ok', 'fine'])).toBe('');
+    const many = ['FAIL a', ...Array.from({ length: 40 }, (_, i) => `line ${i} ${'x'.repeat(200)}`)];
+    expect(failureContext(many).startsWith('FAIL a\nline 0 ')).toBe(true);
+    expect(Array.from(failureContext(many))).toHaveLength(1200);
+    expect(failureContext(['FAIL a', ...Array.from({ length: 40 }, (_, i) => `l${i}`)]).split('\n')).toHaveLength(16);
+  });
+});
+
 describe('lineToScreen', () => {
   it('maps in points', () => {
     const b = { x: 100, y: 50, w: 800, h: 628 }; // (628-28-8)/37 = 16
@@ -191,6 +220,14 @@ describe('terminal reader', () => {
     windows: [win(owner), win('Safari', 5)],
   });
   const term = win('Terminal').bounds;
+  it('reports a green rerun below an old failure as a pass, not an error', async () => {
+    const r = await createTerminalReader()(mk('Terminal', out(8, 80, 1, 1, `${screen}Tests 2 passed (2)\n`)));
+    expect(r.terminalError).toBeNull();
+    expect(r.terminalPass).toBe(true);
+    const f = await createTerminalReader()(mk('Terminal', out(8, 80, 1, 1, screen)));
+    expect(f.terminalPass).toBe(false);
+    expect(f.terminalError?.context).toBe('FAIL src/a.test.ts\nTests 1 failed');
+  });
   it('maps the last failing line and flags change once', async () => {
     const read = createTerminalReader();
     const d = mk('Terminal', out(4, 80, 1, 1, screen));

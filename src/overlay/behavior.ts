@@ -3,14 +3,15 @@ import { handoffBusy, type Handoff } from './handoff';
 
 export type Behavior = {
   seq: number;
-  action: 'sniff' | 'perk_up' | 'hide';
+  action: 'sniff' | 'perk_up' | 'hide' | 'celebrate';
   target?: { x: number; y: number }; // overlay coordinates
   bubble?: string;
   on?: boolean; // hide only: level-triggered
+  hint?: boolean; // sniff only: a fix hint can be asked for by clicking the pet
   reason: string;
 };
 
-const ACTIONS = ['sniff', 'perk_up', 'hide'];
+const ACTIONS = ['sniff', 'perk_up', 'hide', 'celebrate'];
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 export function parseBehavior(raw: unknown): Behavior | null {
@@ -22,10 +23,19 @@ export function parseBehavior(raw: unknown): Behavior | null {
   if (t && num(t['x']) && num(t['y'])) b.target = { x: t['x'], y: t['y'] };
   if (typeof r['bubble'] === 'string' && r['bubble'].trim()) b.bubble = r['bubble'].trim().slice(0, 40);
   if (typeof r['on'] === 'boolean') b.on = r['on'];
+  if (r['hint'] === true && b.action === 'sniff') b.hint = true;
   if (b.action === 'sniff' && !b.target) return null;
   if (b.action === 'hide' && b.on === undefined) return null;
   return b;
 }
+
+/** What main answered to "what's wrong, buddy?": model text, shown with textContent only. */
+export function parseHint(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 200) : null;
+}
+
+/** How long after a sniff a click asks for a hint instead of doing a trick. */
+export const HINT_WINDOW_MS = 120_000;
 
 export const behaviorBusy = (o: { dragging: boolean; falling: boolean; resting: boolean; snoozed: boolean; handoff: Handoff | null }): boolean =>
   o.dragging || o.falling || o.resting || o.snoozed || handoffBusy(o.handoff) || o.handoff === 'greet';

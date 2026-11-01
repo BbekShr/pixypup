@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
-import { behaviorBusy, hideSpot, parseBehavior, peekOutX, routeBehavior, SNIFF_MS, sniffPose, type Behavior } from './behavior';
+import { behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, type Behavior } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
@@ -22,6 +22,7 @@ declare global {
       onVoice(cb: (m: unknown) => void): void;
       onPackChanged(cb: (h: { x?: number }) => void): void;
       getPack(): Promise<Pack | null>;
+      askHint(): Promise<unknown>;
       showMenu(): void;
       getStay(): Promise<boolean>;
       getPrefs(): Promise<unknown>;
@@ -34,12 +35,15 @@ declare global {
 interface PoseSet { srcs: string[]; fps: number }
 // A screen-aware behaviour that owns the pet until it ends; the normal state timers are paused meanwhile.
 type Act =
-  | { kind: 'sniff'; phase: 'run' | 'sniff' | 'bark'; until: number; target: { x: number; y: number }; bubble: string }
+  | { kind: 'sniff'; phase: 'run' | 'sniff' | 'bark'; until: number; target: { x: number; y: number }; bubble: string; hint: boolean }
   | { kind: 'perk'; until: number }
+  | { kind: 'celebrate'; until: number }
   | { kind: 'hide'; phase: 'go' | 'away' | 'peek' | 'peeking'; until: number; side: -1 | 1; spot: number };
 const LONG = 1e9; // a state dwell that never fires; the act ends it
 const BARK_MS = 3500;
 const PERK_MS = 1000;
+const CELEBRATE_MS = 2600;
+const HINT_SHOW_MS = 11000;
 const MARK_MS = 2600;
 
 const TURN_MS = 120;
@@ -170,6 +174,8 @@ let act: Act | null = null;
 let queuedBehavior: Behavior | null = null; // the last behaviour that arrived while the pet was busy
 let lastSeq = -1;
 let lastBehavior: Behavior | null = null; // dev panel only
+let hintUntil = 0; // after a sniff, a click asks for a hint until then
+let hintAsking = false;
 
 const en = (): ReturnType<typeof energyParams> => energyParams(prefs.energy);
 
@@ -471,7 +477,12 @@ function finish(e: PointerEvent): void {
     setState(click ? 'click' : 'dragEnd', {}, forced);
     lineOnBark = false;
   };
-  if (click && !calm && lift === 0) {
+  if (click && lift === 0 && !hintAsking && performance.now() < hintUntil) {
+    hintUntil = 0; // one hint per failure
+    if (!calm) wg = { at: performance.now(), dur: CLICK_WIGGLE_MS, cycles: 2 };
+    setState('click', { ms: HINT_SHOW_MS }, 'sit');
+    void askHint();
+  } else if (click && !calm && lift === 0) {
     // wiggle and a heart first, then the trick; any other takeover of the pet cancels it
     const now = performance.now();
     wg = { at: now, dur: CLICK_WIGGLE_MS, cycles: 2 };
@@ -593,13 +604,23 @@ function start(b: Behavior): void {
       setState('walk', { target: peekOutX(act.side, W, window.innerWidth) });
     }
   } else if (b.action === 'sniff' && b.target) {
-    act = { kind: 'sniff', phase: 'run', until: 0, target: b.target, bubble: b.bubble ?? 'Found a bug!' };
+    hintUntil = 0;
+    act = { kind: 'sniff', phase: 'run', until: 0, target: b.target, bubble: b.bubble ?? 'Found a bug!', hint: b.hint === true };
     setState('walk', { target: Math.min(Math.max(0, b.target.x - W / 2), Math.max(0, window.innerWidth - W)) });
   } else if (b.action === 'perk_up') {
     act = { kind: 'perk', until: now + PERK_MS };
     face(1); // toward the Dock's right side
     setState('idle', { ms: LONG });
     say(b.bubble ?? '!', PERK_MS);
+  } else if (b.action === 'celebrate') {
+    hintUntil = 0; // fixed: nothing left to hint at
+    act = { kind: 'celebrate', until: now + CELEBRATE_MS };
+    setState('click', { ms: LONG }, calm ? 'sit' : 'roll');
+    say(b.bubble ?? 'You fixed it!', CELEBRATE_MS);
+    if (!calm) {
+      for (let i = 0; i < 6; i++) setTimeout(heart, i * 140);
+      setTimeout(() => { if (act?.kind === 'celebrate' && state === 'roll') setState('click', { ms: LONG }, 'bark'); }, 900); // one roll, then happy hops
+    }
   }
 }
 
@@ -636,9 +657,49 @@ function actTimeout(now: number): void {
   } else if (a.kind === 'hide' && a.phase === 'peeking') {
     const max = Math.max(0, window.innerWidth - W);
     setState('walk', { target: a.side < 0 ? Math.min(max, 200) : Math.max(0, max - 200) });
+  } else if (a.kind === 'sniff' && a.hint) {
+    hintUntil = now + HINT_WINDOW_MS;
+    setState('sit', { ms: 6000 }); // waits a moment where the user can click him
+    say('Click me for a hint', 3200);
   } else {
     setState('idle');
   }
+}
+
+// Main asks Muse Spark about the failure it sniffed; the answer is model text, so textContent only.
+async function askHint(): Promise<void> {
+  hintAsking = true;
+  fx.querySelectorAll('.hi:not(.card)').forEach((b) => b.remove()); // the "Click me" offer has been answered
+  showPill('thinking…', true);
+  let hint: string | null = null;
+  try {
+    hint = parseHint(await window.pixy.askHint());
+  } catch {
+    /* shown as "not sure" below */
+  }
+  hidePill();
+  hintAsking = false;
+  if (hint) showCard(hint, HINT_SHOW_MS);
+  else say("Hmm, I'm not sure this time", 2500);
+}
+
+function showCard(text: string, ms: number): void {
+  const c = document.createElement('div');
+  c.className = 'hi card';
+  const t = document.createElement('div');
+  t.className = 'card-title';
+  t.textContent = 'Hint';
+  const body = document.createElement('div');
+  body.textContent = text;
+  c.append(t, body);
+  // Keep the 260 px card on screen when the pet sits near an edge.
+  const cx = x + W / 2;
+  const shift = Math.max(140 - cx, Math.min(0, window.innerWidth - 140 - cx));
+  c.style.transform = `translate(calc(-50% + ${shift}px), -100%)`;
+  speakingUntil = performance.now() + ms;
+  fx.append(c);
+  if (calm) { setTimeout(() => c.remove(), ms); return; }
+  c.animate([{ opacity: 0 }, { opacity: 1, offset: 0.04 }, { opacity: 1, offset: 0.95 }, { opacity: 0 }], { duration: ms }).onfinish = () => c.remove();
 }
 
 // "!" where he found it. Screen-derived coordinates only; no text from the screen is shown here.

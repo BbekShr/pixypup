@@ -17,6 +17,8 @@ Permissions reset when the app is rebuilt, so do this on the build you will reco
 ## Beats (video 1:05 to 1:45)
 Record with QuickTime (File > New Screen Recording). Put Terminal front-most before beat 1.
 1. **Failing test.** Run `scripts/stage-demo.sh fail`. A Terminal window opens and runs a test that fails (`expected 4 to be 5`). Within a few seconds the pet runs to the red line, sniffs and shows a Spark bubble; the card shows the line and a dashed box.
+   - **Hint.** Right after the bark he says "Click me for a hint". Click him (within 2 minutes): a "thinking…" pill, then a Hint card from Muse Spark naming the cause and the file and line. Needs the key.
+   - **Fixed.** Run `scripts/stage-demo.sh fix`. A second Terminal window reruns the same test, now green. Within a few seconds he rolls over, hops, hearts burst and he cheers ("You fixed it!").
 2. **Dock badge.** Run `scripts/stage-demo.sh badge`. "Badge Demo" appears in the Dock and its badge goes 1, 2, 3 every 6 s (quits after 60 s). The pet perks up on the first increase; the card's Badge row shows the number.
 3. **Call.** Run `scripts/stage-demo.sh call`. Chrome opens a page titled "Meet - pix-ypup-dem"; the pet hides at the screen edge. Close the tab and he comes back.
 4. Run `scripts/stage-demo.sh reset` between takes (quits Badge Demo), then close the Meet tab and the Terminal window yourself (no AppleScript, so no extra prompts).

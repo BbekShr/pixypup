@@ -9,6 +9,9 @@
       body { opacity: 0; }
       .hi { position: absolute; left: 0; top: 0; padding: 6px 14px; border-radius: var(--pill); background: var(--cream); border: 2px solid var(--blush); color: var(--ink); font: 700 14px var(--font); white-space: nowrap; box-shadow: var(--shadow); pointer-events: none; }
       .hi::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 10px; height: 10px; margin-left: -5px; background: var(--cream); border-right: 2px solid var(--blush); border-bottom: 2px solid var(--blush); transform: rotate(45deg); }
+      .card { width: 260px; border-radius: 18px; white-space: normal; padding: 10px 14px; font-weight: 600; line-height: 1.35; }
+      .card::after { left: 50%; }
+      .card-title { font: 800 11px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--blush); margin-bottom: 2px; }
       #pup { position: absolute; left: 0; top: 0; width: 120px; height: 120px; user-select: none; -webkit-user-drag: none; cursor: grab; }
     </style>
   </head>

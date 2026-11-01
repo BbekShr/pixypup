@@ -8,6 +8,7 @@ export const IPC = {
   prefs: 'pixy:prefs',
   devCmd: 'pixy:dev-cmd',
   behavior: 'pixy:behavior',
+  askHint: 'pixy:ask-hint',
   debug: 'pixy:debug',
   screenAnswer: 'pixy:screen-answer',
   micChunk: 'pixy:mic-chunk',

@@ -5,7 +5,9 @@ export type Box = { x: number; y: number; w: number; h: number };
 export type Observation = {
   windows: { owner: string; title: string; bounds: Box }[];
   badge: { app: string; label: string } | null;
-  terminalError: { text: string; box?: Box } | null;
+  terminalError: { text: string; box?: Box; context?: string } | null;
+  /** The newest test result in the front terminal is all green. */
+  terminalPass?: boolean;
 };
 
 const TERMINALS = ['terminal', 'iterm', 'iterm2', 'warp', 'ghostty', 'alacritty', 'kitty'];
