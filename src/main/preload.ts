@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-const CH = { setClickThrough: 'pixy:set-click-through', command: 'pixy:command', getPack: 'pixy:get-pack', showMenu: 'pixy:show-menu', getStay: 'pixy:get-stay', packChanged: 'pixy:pack-changed', getPrefs: 'pixy:get-prefs', prefs: 'pixy:prefs', devCmd: 'pixy:dev-cmd', behavior: 'pixy:behavior' } as const;
+const CH = { setClickThrough: 'pixy:set-click-through', command: 'pixy:command', getPack: 'pixy:get-pack', showMenu: 'pixy:show-menu', getStay: 'pixy:get-stay', packChanged: 'pixy:pack-changed', getPrefs: 'pixy:get-prefs', prefs: 'pixy:prefs', devCmd: 'pixy:dev-cmd', behavior: 'pixy:behavior', debug: 'pixy:debug' } as const;
 
 contextBridge.exposeInMainWorld('pixy', {
   setClickThrough: (on: boolean): void => ipcRenderer.send(CH.setClickThrough, on),
@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('pixy', {
   },
   onBehavior: (cb: (b: unknown) => void): void => {
     ipcRenderer.on(CH.behavior, (_e, b: unknown) => cb(b));
+  },
+  onDebug: (cb: (d: unknown) => void): void => {
+    ipcRenderer.on(CH.debug, (_e, d: unknown) => cb(d));
   },
   onCommand: (cb: (cmd: string) => void): void => {
     ipcRenderer.on(CH.command, (_e, cmd: string) => cb(cmd));

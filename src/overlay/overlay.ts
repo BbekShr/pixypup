@@ -5,6 +5,7 @@ import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCo
 import { behaviorBusy, hideSpot, parseBehavior, peekOutX, routeBehavior, SNIFF_MS, sniffPose, type Behavior } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
+import { createDebugPanel } from './debug-panel';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
 import { BLINK_MS, MAX_SPEED, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
@@ -16,6 +17,7 @@ declare global {
       setClickThrough(on: boolean): void;
       onCommand(cb: (cmd: string) => void): void;
       onBehavior(cb: (b: unknown) => void): void;
+      onDebug(cb: (d: unknown) => void): void;
       onPackChanged(cb: (h: { x?: number }) => void): void;
       getPack(): Promise<Pack | null>;
       showMenu(): void;
@@ -647,6 +649,7 @@ function showMark(p: { x: number; y: number }): void {
   ).onfinish = () => m.remove();
 }
 window.pixy.onBehavior(onBehavior);
+window.pixy.onDebug(createDebugPanel(calm));
 
 // Old pet trots off the nearest edge at double speed; dropIn() then fires on arrival. Reduced motion: crossfade swap.
 function swapPets(pack: Prepared, cx: number | undefined): void {

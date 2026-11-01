@@ -24,6 +24,7 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayIcon: Electron.NativeImage | null = null;
 let trayIconDim: Electron.NativeImage | null = null;
+let debugOn = false; // "Show what <name> sees": not persisted, resets each launch
 let stay = false; // mirrors the overlay's stay flag for the menu checkbox; not persisted
 
 function createWindow(): void {
@@ -116,6 +117,11 @@ function sync(): void {
 /** Menu, tray and the dev hook all land here; only main writes settings. */
 function run(cmd: string): void {
   if (cmd === 'stay' || cmd === 'wander') stay = cmd === 'stay';
+  if (cmd === 'debug:on' || cmd === 'debug:off') {
+    debugOn = cmd === 'debug:on';
+    win?.webContents.send(IPC.debug, { on: debugOn, name: settings.petName });
+    return;
+  }
   if (cmd === 'new-pet') {
     if (snoozed()) run('wake');
     onboarding.open(true);
@@ -165,6 +171,7 @@ function startScreenAwareLoop(): void {
     overlay: { bounds: () => win?.getBounds() ?? null, send: (b) => win?.webContents.send(IPC.behavior, b) },
     reader,
     decider: createDecider({ spark }),
+    debug: { on: () => debugOn, send: (info) => win?.webContents.send(IPC.debug, { on: true, name: settings.petName, info }) },
   });
 }
 
@@ -195,7 +202,7 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on(IPC.showMenu, () => {
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, openAtLogin: loginOn(), name: settings.petName }), run);
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, openAtLogin: loginOn(), debug: debugOn, name: settings.petName }), run);
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });
