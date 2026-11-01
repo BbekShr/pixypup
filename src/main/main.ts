@@ -350,7 +350,7 @@ async function fakeVoice(text: string, onTranscript: (t: { text: string; final: 
 app.dock?.hide();
 
 void app.whenReady().then(async () => {
-  onboarding = setupOnboarding({ getOverlay: primary, addPet: joinPet, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
+  onboarding = setupOnboarding({ getOverlay: primary, addPet: joinPet, getPets: () => petList(settings), onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
   overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
   voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });

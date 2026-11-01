@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addPet, MAX_PETS, petList, pickWindow, rekeyWins, removePet, routeReaction } from './pets';
+import { addPet, takenSlug, MAX_PETS, petList, pickWindow, rekeyWins, removePet, routeReaction } from './pets';
 
 describe('pet list', () => {
   it('empty or missing pets means just the primary', () => {
@@ -13,6 +13,9 @@ describe('pet list', () => {
     expect(l).toHaveLength(MAX_PETS);
     expect(addPet(l, 'e')).toBeNull();
     expect(addPet(['a'], 'a')).toBeNull();
+    expect(addPet(['Pakkun'], 'pakkun')).toBeNull();
+    expect(takenSlug(['Pakkun', 'milo'], 'MILO')).toBe(true);
+    expect(takenSlug(['Pakkun'], 'rex')).toBe(false);
   });
   it('sends one home but never the last', () => {
     expect(removePet(['a', 'b'], 'a')).toEqual(['b']);

@@ -5,7 +5,10 @@ export const MAX_PETS = 4;
 export const petList = (s: { petName: string; pets?: string[] }): string[] => (s.pets && s.pets.length > 0 ? s.pets : [s.petName]);
 
 /** The list with `slug` appended, or null at the cap or for a duplicate. */
-export const addPet = (list: string[], slug: string): string[] | null => (list.length >= MAX_PETS || list.includes(slug) ? null : [...list, slug]);
+/** APFS folds case, so "Pakkun" and "pakkun" are one folder. */
+export const takenSlug = (list: string[], slug: string): boolean => list.some((s) => s.toLowerCase() === slug.toLowerCase());
+
+export const addPet = (list: string[], slug: string): string[] | null => (list.length >= MAX_PETS || takenSlug(list, slug) ? null : [...list, slug]);
 
 /** The list without `slug`, or null if it isn't there or is the last pet. */
 export const removePet = (list: string[], slug: string): string[] | null => (list.length < 2 || !list.includes(slug) ? null : list.filter((s) => s !== slug));

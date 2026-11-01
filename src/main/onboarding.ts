@@ -9,6 +9,7 @@ import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
 import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, slugify, type ErrorCode } from './pet-input';
 import { loadPack } from './pack';
+import { takenSlug } from './pets';
 import { factViews, finishRun, noRuns, record, recordFailed, recordInfo, sourceFor, startRun, walkFailed, type Progress, type Runs } from './run-state';
 import { getApiKey, setApiKey } from './secrets';
 import { loadSettings, saveSettings } from './settings';
@@ -20,7 +21,7 @@ const fast = process.env['PIXY_FAKE_FAST'] === '1';
 
 const thumb = async (png: Buffer, h: number): Promise<string> => dataUrl(await sharp(png).resize({ height: h, withoutEnlargement: true }).png().toBuffer());
 
-export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; addPet: (slug: string) => void; onSettingsChanged: () => void; getPetName: () => string; getHideInShares: () => boolean; beforeReveal: () => void }): { open(fromMenu: boolean, add?: boolean): void; applyProtection(): void } {
+export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; addPet: (slug: string) => void; getPets: () => string[]; onSettingsChanged: () => void; getPetName: () => string; getHideInShares: () => boolean; beforeReveal: () => void }): { open(fromMenu: boolean, add?: boolean): void; applyProtection(): void } {
   let win: BrowserWindow | null = null;
   let photoBuf: Buffer | null = null; // read once at pick time; the page never names a path for create-pet
   let runs: Runs = noRuns;
@@ -176,7 +177,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
     let result: { ok: true; name: string; idle?: string } | { ok: false; code: ErrorCode };
     try {
       const slug = await pickSlug(slugify(a.name), adding ? '' : o.getPetName(), // adding never overwrites a pet that is already here
-         (s) => stat(join(app.getPath('userData'), 'pets', s)).then(() => true, () => false));
+         (s) => takenSlug(o.getPets(), s) ? Promise.resolve(true) : stat(join(app.getPath('userData'), 'pets', s)).then(() => true, () => false));
       const outDir = join(app.getPath('userData'), 'pets', slug);
       if (fake) await fakeCreate({ srcDir: join(app.getAppPath(), 'assets/pets/Pakkun'), outDir, name: a.name, species: a.species, fast, emit });
       else await generateSpritePack({ client: openClient('create-pet', loadSettings(), key), photo, petName: a.name, species: a.species, outDir, onProgress: emit });
