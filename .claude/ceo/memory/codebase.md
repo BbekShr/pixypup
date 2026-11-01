@@ -16,4 +16,7 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-10-31 (pose test): SAM 3.1 returns 0 matches for "red text"/"error text"/"text" on a terminal screenshot; a local red-pixel row scan finds each red line. Muse Image edits return WebP; ~10-22 s per pose. `docs/POSE-TEST.md`
 
+- 2026-10-31 (B2/B3): test baseline 35 tests in 5 files. `loadSettings` fails closed (screenAware/voice off, offline on) when admin.json is unreadable, corrupt, non-object, or has a mistyped known key. `src/main/settings.ts`
+- 2026-10-31 (B2/B3): `loadSettings()` result is unused until F1/F9 wire feature gates. `src/main/main.ts:53`
+
 ## Clean audits (so discovery skips these grounds)
