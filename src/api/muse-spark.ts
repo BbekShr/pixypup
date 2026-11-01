@@ -36,7 +36,7 @@ interface Part {
 }
 export interface SparkResponse {
   status?: string;
-  output?: { type?: string; content?: Part[] }[];
+  output?: { type?: string; content?: Part[]; results?: { url?: string }[] }[];
 }
 
 export function sparkRequestBody(o: SparkOptions) {
@@ -48,7 +48,7 @@ export function sparkRequestBody(o: SparkOptions) {
     reasoning: { effort: o.effort },
     max_output_tokens: o.maxOutputTokens ?? 4096,
     text: { format: { type: 'json_schema', name: o.name, schema: o.schema, strict: true } },
-    ...(o.tools ? { tools: o.tools } : {}),
+    ...(o.tools ? { tools: o.tools, include: ['web_search_call.results'] } : {}),
   };
 }
 
@@ -62,10 +62,15 @@ export function parseResponseText(res: SparkResponse): string {
   return text;
 }
 
-/** URLs the model cited (url_citation annotations): the only sources we show. A retrieved-but-uncited page is not a source. */
+/**
+ * URLs the search itself produced: url_citation annotations plus the pages the web_search call returned
+ * (JSON-schema output carries no annotations, live). A source is shown only if the model named it AND it is in
+ * this set, so a URL the model merely made up never becomes a source.
+ */
 export function citedUrls(res: SparkResponse): Set<string> {
   const urls = new Set<string>();
   for (const item of res.output ?? []) {
+    for (const r of item.results ?? []) if (r.url) urls.add(r.url);
     for (const p of item.content ?? []) for (const a of p.annotations ?? []) if (a.type === 'url_citation' && a.url) urls.add(a.url);
   }
   return urls;

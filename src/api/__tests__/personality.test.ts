@@ -73,11 +73,11 @@ describe('request shapes', () => {
     expect(JSON.stringify(b)).not.toMatch(/contributor/);
   });
 
-  it('breedFacts enables web_search', async () => {
+  it('breedFacts enables web_search and asks for the raw results', async () => {
     const calls: Body[] = [];
     await breedFacts(fake(text(JSON.stringify({ facts: [] })), calls), 'Shiba Inu', 'dog');
     expect(calls[0]!.tools).toEqual([{ type: 'web_search' }]);
-    expect(calls[0]!.include).toBeUndefined();
+    expect(calls[0]!.include).toEqual(['web_search_call.results']);
     expect(JSON.stringify(calls[0])).not.toMatch(/image/);
   });
 
@@ -134,7 +134,7 @@ describe('sanitizePersonality', () => {
 
 describe('breedFacts', () => {
   const facts = (...f: { text: string; source: string }[]) => JSON.stringify({ facts: f });
-  it('keeps only sources the model cited (annotations), not merely retrieved ones, drops long or URL facts', async () => {
+  it('keeps a model-named source only if the search returned or cited it; returned-but-unnamed pages attach to nothing, drops long or URL facts', async () => {
     const res = {
       status: 'completed',
       output: [
@@ -152,7 +152,7 @@ describe('breedFacts', () => {
     expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([
       { text: 'Shibas are very old.', source: 'https://a.org/shiba' },
       { text: 'They scream a lot.' },
-      { text: 'Retrieved only.' },
+      { text: 'Retrieved only.', source: 'https://retrieved-only.org' },
     ]);
     expect((await breedFacts(fake(res), 'Shiba', 'dog'))!.length).toBe(3);
   });
@@ -170,10 +170,16 @@ describe('breedFacts', () => {
 });
 
 describe('breedFacts without annotations', () => {
-  it('keeps the facts but no sources', async () => {
-    const body = JSON.stringify({ facts: [{ text: 'Old breed.', source: 'https://a.org' }] });
+  it('keeps a returned source the model named, drops an unreturned one, attaches nothing unnamed', async () => {
+    const body = JSON.stringify({
+      facts: [
+        { text: 'Old breed.', source: 'https://a.org' },
+        { text: 'Made up.', source: 'https://invented.org' },
+        { text: 'Unnamed.', source: '' },
+      ],
+    });
     const res = { status: 'completed', output: [{ type: 'web_search_call', results: [{ url: 'https://a.org' }] }, { type: 'message', content: [{ type: 'output_text', text: body }] }] };
-    expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([{ text: 'Old breed.' }]);
+    expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([{ text: 'Old breed.', source: 'https://a.org' }, { text: 'Made up.' }, { text: 'Unnamed.' }]);
   });
 });
 
