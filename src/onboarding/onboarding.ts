@@ -30,7 +30,7 @@ declare global {
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const TILES: [string, string][] = [['idle', 'standing'], ['walk', 'stepping'], ['sit', 'sitting'], ['sleep', 'napping'], ['bark', 'barking'], ['roll', 'rolling'], ['blink', 'blinking']];
-const tileOf = (pose: string): string => (pose.startsWith('walk') ? 'walk' : pose.replace(/^idle_0$/, 'idle').replace(/^idle_/, ''));
+const tileOf = (pose: string): string => (/^(walk|side)_/.test(pose) ? 'walk' : pose.replace(/^idle_0$/, 'idle').replace(/^idle_/, ''));
 
 const SAY: Record<Code | 'type' | 'size' | 'missing' | 'unreadable', string> = {
   'bad-key': "Hmm, that key didn't work. Want to try another?",

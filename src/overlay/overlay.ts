@@ -50,7 +50,7 @@ const TURN_MS = 120;
 type Fidget = 'look' | 'tilt' | 'sniff' | 'wag';
 const LIFE_MS: Record<Fidget, number> = { look: 1000, tilt: 1400, sniff: 1200, wag: 1000 };
 const WAG_FRAME_MS = 110;
-const STRIDE = 0.22; // of displayed width per walk frame
+const STRIDE = 0.22; // of displayed (idle) width per walk frame: ~5-6 frames/s at walking speed
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const img = document.getElementById('pup') as HTMLImageElement;
 const fx = document.getElementById('fx') as HTMLDivElement;
@@ -66,6 +66,7 @@ let prefs: Prefs = { size: 'medium', energy: 'normal', snoozed: false };
 let footY = 1;
 let reg = new Map<string, number>(); // src -> natural px its head sits right of idle's
 let wagOk = false;
+let widths = new Map<string, number>(); // src -> natural width; the profile walk is drawn wider than idle
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
 let sayAt = Infinity;
 let speakingUntil = 0;
@@ -75,39 +76,49 @@ let woofs = false; // this bark shows "Woof!" bubbles
 let woofShown = -1; // the last burst that got one
 const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('chatty') === '1';
 
-interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean }
+interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
 const WAG_OVERLAP = 0.85; // bark this close to idle (same stance, tail up) doubles as a tail wag
 
 /**
- * Per-frame head alignment (natural px to shift each standing/sitting frame so its head sits where idle's does)
- * and whether the bark frame is close enough to idle to flick between them as a wag.
+ * Per-frame head alignment: natural px each standing/sitting frame's head sits right of its reference's, both
+ * measured from the canvas centre (every frame is drawn centred on the pet). The reference is idle, or for a pose
+ * drawn on its own canvas size (the profile walk) that pose's first frame, so its body stays centred.
+ * Also whether the bark frame is close enough to idle to flick between them as a wag.
  */
 function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], idle: HTMLImageElement): { reg: Map<string, number>; wag: boolean } {
   const reg = new Map<string, number>();
   const alpha = (i: HTMLImageElement): Uint8ClampedArray | null => {
-    if (i.naturalWidth !== idle.naturalWidth || i.naturalHeight !== idle.naturalHeight) return null;
     const c = new OffscreenCanvas(i.naturalWidth, i.naturalHeight).getContext('2d', { willReadFrequently: true });
     if (!c) return null;
     c.drawImage(i, 0, 0);
     return c.getImageData(0, 0, i.naturalWidth, i.naturalHeight).data.subarray(3);
   };
-  const a0 = alpha(idle);
-  const h0 = a0 && headX(a0, idle.naturalWidth, idle.naturalHeight, 4);
-  if (!a0 || h0 === null) return { reg, wag: false };
-  const max = 0.15 * idle.naturalWidth;
+  const head = (i: HTMLImageElement): number | null => {
+    const a = alpha(i);
+    const h = a && headX(a, i.naturalWidth, i.naturalHeight, 4);
+    return h === null || h === undefined ? null : h - i.naturalWidth / 2;
+  };
+  const sameSize = (i: HTMLImageElement): boolean => i.naturalWidth === idle.naturalWidth && i.naturalHeight === idle.naturalHeight;
+  const bitmap = (src: string | undefined): HTMLImageElement | undefined => bitmaps.find((b) => b.src === src);
+  const h0 = head(idle);
+  if (h0 === null) return { reg, wag: false };
   for (const [name, p] of Object.entries(poses)) {
     if (LYING.has(name)) continue;
+    const first = bitmap(p.srcs[0]);
+    const ref = !first || sameSize(first) ? h0 : head(first);
     for (const src of p.srcs) {
-      const a = alpha(bitmaps.find((b) => b.src === src) ?? idle);
-      const h = a && headX(a, idle.naturalWidth, idle.naturalHeight, 4);
-      if (h !== null && h !== undefined) reg.set(src, Math.max(-max, Math.min(max, h - h0)));
+      const b = bitmap(src) ?? idle;
+      const h = ref === null ? null : head(b);
+      const max = 0.15 * b.naturalWidth;
+      if (h !== null && ref !== null) reg.set(src, Math.max(-max, Math.min(max, h - ref)));
     }
   }
-  const bark = poses['bark']?.srcs.length === 1 ? bitmaps.find((b) => b.src === poses['bark']!.srcs[0]) : undefined;
-  const ab = bark && alpha(bark);
-  return { reg, wag: !!ab && overlap(a0, ab, 4) >= WAG_OVERLAP };
+  const bark = poses['bark']?.srcs.length === 1 ? bitmap(poses['bark']!.srcs[0]) : undefined;
+  const a0 = alpha(idle);
+  const ab = bark && sameSize(bark) ? alpha(bark) : null;
+  return { reg, wag: !!a0 && !!ab && overlap(a0, ab, 4) >= WAG_OVERLAP };
 }
 
 // Decodes everything before anything is swapped, so the old pet keeps its own poses until it has left.
@@ -128,7 +139,7 @@ async function readPack(): Promise<Prepared | null> {
   const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
   const { reg, wag } = register(poses, bitmaps, first);
-  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag };
+  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
 }
 
 function applyPack(p: Prepared): void {
@@ -139,6 +150,7 @@ function applyPack(p: Prepared): void {
   poses = p.poses;
   reg = p.reg;
   wagOk = p.wag;
+  widths = p.widths;
   lines = p.lines;
   sayAt = nextSayAt(performance.now(), Math.random(), chatty);
   sizeImg();
@@ -379,6 +391,8 @@ function frame(now: number): void {
   const turning = state === 'walk' && now < turnUntil;
   y = floorY() + lift;
 
+  const px = nat ? W / nat.w : 1; // display px per natural px
+  const shownW = (src: string | undefined): number => (src && nat ? (widths.get(src) ?? nat.w) * px : W);
   const stride = STRIDE * W;
   const walking = state === 'walk' && !turning && !falling;
   const blinking = state === 'idle' && !yawn && blinkShut(now - blinkAt0, BLINK_MS, blinkDouble) && !!poses['blink'];
@@ -393,6 +407,8 @@ function frame(now: number): void {
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const src = pose.srcs[i]!;
   if (src !== shownSrc) { img.src = src; shownSrc = src; }
+  const fw = shownW(src);
+  if (img.style.width !== `${fw}px`) img.style.width = `${fw}px`; // a wider frame (the profile walk) stays centred on the pet
 
   let dx = 0;
   let dy = 0;
@@ -460,7 +476,7 @@ function frame(now: number): void {
   const flip = facing * (life && lifeKind === 'look' ? -1 : 1);
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
-  if (nat) dx -= (reg.get(src) ?? 0) * (W / nat.w) * flip; // keep the head where idle's is
+  dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
   img.style.transform = petTransform(x + dx, y + dy, rot, flip, sx, sy);
   fx.style.transform = `translate(${x + W / 2 + flip * W * 0.3}px, ${y + dy}px)`;
   raf = requestAnimationFrame(frame);

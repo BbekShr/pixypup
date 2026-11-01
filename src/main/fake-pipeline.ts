@@ -7,7 +7,7 @@ import { writePack, type PipelineEvent } from '../api/pose-pipeline';
 // Dev rehearsal (PIXY_FAKE_PIPELINE=1): replays the built-in Pakkun as if it had just been generated.
 // [pose, fraction of the pose window]; walk frames land together like the real sheet.
 const TIMELINE: [string, number][] = [
-  ['idle_0', 0], ['sit', 0.2], ['bark', 0.35], ['walk_0', 0.5], ['walk_1', 0.5], ['walk_2', 0.5], ['walk_3', 0.5], ['sleep', 0.75], ['roll', 0.9], ['idle_blink', 1],
+  ['idle_0', 0], ['sit', 0.2], ['bark', 0.35], ['side_0', 0.5], ['side_1', 0.5], ['side_2', 0.5], ['side_3', 0.5], ['sleep', 0.75], ['roll', 0.9], ['idle_blink', 1],
 ];
 
 const PERSONALITY: Personality = {
