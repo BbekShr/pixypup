@@ -100,6 +100,7 @@ let onboarding: ReturnType<typeof setupOnboarding>;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
 let voiceExplainer: ReturnType<typeof setupScreenExplainer>;
 let voice: ReturnType<typeof createVoiceSession>;
+let micWin: ReturnType<typeof setupMic>;
 let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech model when there is no key
 
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
@@ -117,8 +118,11 @@ function sync(): void {
   clearTimeout(wakeTimer);
   // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
   if (s) wakeTimer = setTimeout(sync, Math.min(MAX_TIMER, Math.max(0, (settings.snoozeUntil ?? 0) - Date.now()) + 50));
-  syncShortcut(globalShortcut, shouldRegister(settings, s), () => voice.press());
-  if (!shouldRegister(settings, s)) voice.abort();
+  const listen = shouldRegister(settings, s);
+  // Re-read the admin file on every press: an admin who turns voice off blocks the next one and the shortcut goes away.
+  syncShortcut(globalShortcut, listen, () => { settings = loadSettings(); sync(); voice.press(); });
+  if (listen) micWin.warm();
+  else { voice.abort(); micWin.close(); }
   tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
   tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: settings.petName }), run)));
 }
@@ -193,13 +197,13 @@ function startScreenAwareLoop(): void {
 
 function startVoice(): void {
   const tell = (m: VoiceUi): void => { win?.webContents.send(IPC.voice, m); };
-  const mic = setupMic({ onChunk: (b) => voice.chunk(b), fake: app.isPackaged ? undefined : fakeMicPcm(process.env['PIXY_FAKE_MIC']) });
+  micWin = setupMic({ onChunk: (b) => voice.chunk(b), fake: app.isPackaged ? undefined : fakeMicPcm(process.env['PIXY_FAKE_MIC']) });
   voice = createVoiceSession({
-    allowed: () => shouldRegister(settings, snoozed()),
+    allowed: () => shouldRegister(loadSettings(), snoozed()),
     key: () => (fakeTranscript !== undefined ? 'fake' : getApiKey()),
     petName: () => settings.petName,
     open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, opts)),
-    mic,
+    mic: micWin,
     ui: tell,
     command: (c) => win?.webContents.send(IPC.command, c),
     heard: (text) => { if (debugOn) win?.webContents.send(IPC.debug, { on: true, name: settings.petName, heard: text }); },

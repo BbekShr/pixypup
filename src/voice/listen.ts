@@ -2,9 +2,11 @@
 // a window that ends by itself (silence or time) or on a second press.
 export const ACCELERATOR = 'Alt+Space';
 export const LISTEN_MS = 4000;
-export const CAP_MS = 6000;
+export const CAP_MS = 10_000; // absolute safety cap from the press
+export const GRACE_MS = 2000; // after LISTEN_MS from the ack: time for the final transcript
 export const SILENCE_MS = 900;
 export const SPEECH_RMS = 0.015; // of full scale; room noise after noiseSuppression sits well below
+export const MAX_PENDING_BYTES = 288_000; // 6 s of 24 kHz 16-bit
 export const MAX_CHUNK_BYTES = 64 * 1024;
 export const NEEDS_KEY = 'Needs a key (Make a new pet… to add one)';
 

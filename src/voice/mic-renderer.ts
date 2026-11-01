@@ -13,21 +13,29 @@ let stopCapture: (() => void) | null = null;
 const FAKE_CHUNK = 3840; // 80 ms of 24 kHz 16-bit, sent every 80 ms: real time
 
 async function capture(): Promise<() => void> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
-  const ctx = new AudioContext();
-  const src = ctx.createMediaStreamSource(stream);
-  // ponytail: ScriptProcessor is deprecated but needs no worklet module file; swap to AudioWorklet if Electron drops it.
-  const node = ctx.createScriptProcessor(2048, 1, 1);
-  node.onaudioprocess = (e) => window.pixyMic.chunk(downsampleTo24k(e.inputBuffer.getChannelData(0), ctx.sampleRate).buffer as ArrayBuffer);
-  src.connect(node);
-  node.connect(ctx.destination); // silent: the output buffer is never written
-  return () => {
-    node.onaudioprocess = null;
-    node.disconnect();
-    src.disconnect();
-    for (const t of stream.getTracks()) t.stop();
-    void ctx.close();
-  };
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
+  let ctx: AudioContext | undefined;
+  try {
+    ctx = new AudioContext();
+    const c = ctx;
+    const src = c.createMediaStreamSource(stream);
+    // ponytail: ScriptProcessor is deprecated but needs no worklet module file; swap to AudioWorklet if Electron drops it.
+    const node = c.createScriptProcessor(2048, 1, 1);
+    node.onaudioprocess = (e) => window.pixyMic.chunk(downsampleTo24k(e.inputBuffer.getChannelData(0), c.sampleRate).buffer as ArrayBuffer);
+    src.connect(node);
+    node.connect(c.destination); // silent: the output buffer is never written
+    return () => {
+      node.onaudioprocess = null;
+      node.disconnect();
+      src.disconnect();
+      for (const t of stream.getTracks()) t.stop();
+      void c.close();
+    };
+  } catch (e) {
+    for (const t of stream.getTracks()) t.stop(); // the mic indicator must not stay on
+    void ctx?.close();
+    throw e;
+  }
 }
 
 function streamFake(pcm: ArrayBuffer): () => void {

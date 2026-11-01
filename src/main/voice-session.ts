@@ -2,7 +2,7 @@
 // Transcripts pass through here but are never logged or stored.
 import type { Transcription, VoiceOptions } from '../api/voice';
 import { matchCommand, type Command } from '../voice/commands';
-import { CAP_MS, LISTEN_MS, createSilenceDetector, listenNext, type ListenEvent, type ListenState } from '../voice/listen';
+import { MAX_PENDING_BYTES, CAP_MS, GRACE_MS, LISTEN_MS, createSilenceDetector, listenNext, type ListenEvent, type ListenState } from '../voice/listen';
 
 export type VoiceUi = { kind: 'listening' | 'thinking' | 'idle' | 'huh' | 'error' | 'nokey' } | { kind: 'partial'; text: string };
 
@@ -22,11 +22,14 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
   let id = 0;
   let tr: Transcription | null = null;
   let pending: ArrayBuffer[] = []; // audio that arrives while the socket is still shaking hands
+  let pendingBytes = 0;
+  let ctl: AbortController | null = null;
   let text = '';
   let silent = createSilenceDetector();
   let warned = false;
   let t1: NodeJS.Timeout | undefined;
   let t2: NodeJS.Timeout | undefined;
+  let t3: NodeJS.Timeout | undefined;
 
   const fire = (ev: ListenEvent): void => {
     const r = listenNext(state, ev);
@@ -38,11 +41,14 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
 
   function start(): void {
     const me = ++id;
+    tr = null;
     pending = [];
+    pendingBytes = 0;
+    ctl = new AbortController();
     text = '';
     silent = createSilenceDetector();
     d.ui({ kind: 'listening' });
-    d.mic.start();
+    d.mic.start(); // allowed() already passed, so the gate is open before the mic is
     t2 = setTimeout(() => fire('error'), CAP_MS);
     d.open(d.key()!, {
       onTranscript: (t) => {
@@ -51,16 +57,23 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
         d.ui({ kind: 'partial', text });
       },
       onError: () => me === id && fire('error'),
+      signal: ctl.signal,
     }).then(
       (t) => {
         if (me !== id) return t.close();
         tr = t;
-        if (state === 'listening') t1 = setTimeout(() => fire('timeout'), LISTEN_MS); // the window counts from the handshake ack; the 6 s cap still runs from the press
+        if (state === 'listening') t1 = setTimeout(() => fire('timeout'), LISTEN_MS); // the window counts from the handshake ack
+        t3 = setTimeout(() => fire('error'), LISTEN_MS + GRACE_MS);
         for (const b of pending) t.push(b);
         pending = [];
+        pendingBytes = 0;
         if (state === 'thinking') finish(t, me);
       },
-      () => me === id && fire('error'),
+      (e: unknown) => {
+        if (me !== id) return;
+        if (e instanceof Error && e.name === 'NetworkBlockedError') teardown(false); // voice was switched off meanwhile: stay quiet
+        else fire('error');
+      },
     );
   }
 
@@ -75,10 +88,13 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
     void t.end().then(() => {
       if (me !== id) return;
       clearTimeout(t2);
+      clearTimeout(t3);
+      tr = null;
+      ctl = null;
       const heard = text;
       fire('done');
       d.heard(heard.slice(0, 60));
-      const cmd = matchCommand(heard, d.petName(), { requireName: false }) // pressing the key is the address;
+      const cmd = matchCommand(heard, d.petName(), { requireName: false }); // pressing the key is the address
       if (cmd) d.command(cmd);
       d.ui({ kind: cmd ? 'idle' : 'huh' });
     });
@@ -88,10 +104,14 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
     id++;
     clearTimeout(t1);
     clearTimeout(t2);
+    clearTimeout(t3);
     d.mic.stop();
+    ctl?.abort();
+    ctl = null;
     tr?.close();
     tr = null;
     pending = [];
+    pendingBytes = 0;
     d.ui({ kind: failed ? 'error' : 'idle' });
   }
 
@@ -110,7 +130,7 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
     chunk(b) {
       if (state !== 'listening') return;
       if (tr) tr.push(b);
-      else pending.push(b);
+      else if (pendingBytes + b.byteLength <= MAX_PENDING_BYTES) { pending.push(b); pendingBytes += b.byteLength; } // keeps the head of the utterance
       if (silent(b)) fire('silence');
     },
     abort: () => fire('abort'),

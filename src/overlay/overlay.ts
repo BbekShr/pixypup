@@ -251,6 +251,7 @@ function frame(now: number): void {
 
   if (now >= turnUntil) facing = dir;
   if (queuedBehavior && !busyNow() && (!act || queuedBehavior.action === 'hide')) { const q = queuedBehavior; queuedBehavior = null; start(q); }
+  if (queuedCmd && !act && !handoffBusy(handoff) && handoff !== 'greet') { const q = queuedCmd; queuedCmd = null; command(q); }
   if (act && act.until && now >= act.until) actTimeout(now);
   if (falling) {
     const r = fall(lift, vy, dt);
@@ -495,6 +496,7 @@ function command(raw: string): void {
   if (!r.now) return;
   const cmd = r.now;
   if (act?.kind === 'hide') return;
+  if (act?.kind === 'sniff') { queuedCmd = cmd; return; } // a voice command waits for the sniff to finish
   lastInteraction = performance.now();
   if (cmd === 'sit' || cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');

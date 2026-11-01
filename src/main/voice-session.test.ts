@@ -43,6 +43,78 @@ const kinds = (ui: VoiceUi[]) => ui.map((u) => u.kind);
 beforeEach(() => void vi.useFakeTimers());
 afterEach(() => void vi.useRealTimers());
 
+describe('voice session lifecycle', () => {
+  function multi() {
+    const sessions: { got: ArrayBuffer[]; closed: boolean; signal?: AbortSignal; ack: () => void; resolveEnd: () => void }[] = [];
+    const ui: VoiceUi[] = [];
+    const s = createVoiceSession({
+      allowed: () => true,
+      key: () => 'k',
+      petName: () => 'P',
+      open: (_k, o) =>
+        new Promise((res) => {
+          const rec = { got: [] as ArrayBuffer[], closed: false, signal: o.signal, ack: () => undefined as void, resolveEnd: () => undefined as void };
+          const t: Transcription = { push: (b) => void rec.got.push(b as ArrayBuffer), close: () => void (rec.closed = true), end: () => new Promise<void>((r) => (rec.resolveEnd = r)) };
+          rec.ack = () => res(t);
+          sessions.push(rec);
+        }),
+      mic: { start: () => undefined, stop: () => undefined },
+      ui: (m) => void ui.push(m),
+      command: () => undefined,
+      heard: () => undefined,
+    });
+    return { s, sessions, ui };
+  }
+  it('three back-to-back sessions each push their own handshake-time chunks to their own transcription', async () => {
+    const { s, sessions } = multi();
+    for (let n = 1; n <= 3; n++) {
+      s.press();
+      const c = new Int16Array(960).fill(n).buffer;
+      s.chunk(c);
+      sessions[n - 1]!.ack();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sessions[n - 1]!.got).toEqual([c]);
+      s.press(); // stop early
+      sessions[n - 1]!.resolveEnd();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(s.state()).toBe('idle');
+    }
+    expect(sessions.map((x) => x.got.length)).toEqual([1, 1, 1]);
+  });
+  it('stopping before the handshake finishes does not touch the previous session, and teardown aborts the signal', async () => {
+    const { s, sessions } = multi();
+    s.press();
+    sessions[0]!.ack();
+    await vi.advanceTimersByTimeAsync(0);
+    s.abort();
+    expect(sessions[0]!.closed).toBe(true);
+    expect(sessions[0]!.signal?.aborted).toBe(true);
+    s.press();
+    s.press(); // stop before session 2 has an ack
+    sessions[1]!.ack();
+    await vi.advanceTimersByTimeAsync(0);
+    sessions[1]!.resolveEnd();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.state()).toBe('idle');
+    expect(sessions[1]!.closed).toBe(false); // ended normally; the old socket was never reused
+  });
+  it('a gate rejection is quiet, a ten-second safety cap and the 6 s post-ack cap hold, pending audio is bounded', async () => {
+    const ui: VoiceUi[] = [];
+    const blocked = createVoiceSession({ allowed: () => true, key: () => 'k', petName: () => 'P', open: async () => { throw Object.assign(new Error('x'), { name: 'NetworkBlockedError' }); }, mic: { start: () => undefined, stop: () => undefined }, ui: (m) => void ui.push(m), command: () => undefined, heard: () => undefined });
+    blocked.press();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ui.map((u) => u.kind)).toEqual(['listening', 'idle']);
+    const { s, sessions } = multi();
+    s.press();
+    for (let i = 0; i < 100; i++) s.chunk(new Int16Array(3840).buffer); // 768,000 bytes while shaking hands
+    sessions[0]!.ack();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sessions[0]!.got.reduce((n, b) => n + b.byteLength, 0)).toBeLessThanOrEqual(288_000);
+    await vi.advanceTimersByTimeAsync(6100); // 4 s window + 2 s grace after the ack, final never arrives
+    expect(s.state()).toBe('idle');
+  });
+});
+
 describe('voice session', () => {
   it('every chunk from the press is kept through a slow handshake and pushed in order', async () => {
     let ack!: (t: Transcription) => void;

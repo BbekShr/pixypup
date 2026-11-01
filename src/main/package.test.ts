@@ -8,4 +8,8 @@ describe('electron-builder files', () => {
     for (const f of files) expect(f.startsWith('!') || !f.includes('photos')).toBe(true);
     expect(files.some((f) => f === 'assets/**/*' || f === 'assets/**' || f === 'assets/photos' || f === '**/*')).toBe(false);
   });
+  it('explains the microphone prompt', () => {
+    const mac = JSON.parse(readFileSync('package.json', 'utf8')).build.mac;
+    expect(mac.extendInfo.NSMicrophoneUsageDescription).toMatch(/⌥ Space/);
+  });
 });
