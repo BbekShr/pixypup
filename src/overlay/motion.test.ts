@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -474,5 +474,57 @@ describe('turnFrame', () => {
       prev = f;
     }
     expect(flips).toBe(1);
+  });
+});
+
+describe('walkBody', () => {
+  const H = 140;
+  const dy = (p: number, g = gaitParams('walk')): number => walkBody(p, H, g).dy;
+  it('is lowest on the down phases and highest on the up phases', () => {
+    for (const p of [1 / 8, 5 / 8]) expect(dy(p)).toBeCloseTo(0.012 * H, 6);
+    for (const p of [3 / 8, 7 / 8]) expect(dy(p)).toBeCloseTo(-0.012 * H, 6);
+    for (const p of [0, 2 / 8, 4 / 8, 6 / 8]) expect(Math.abs(dy(p))).toBeLessThan(1e-9);
+  });
+  it('repeats every half cycle and is continuous across the wrap', () => {
+    for (let p = 0; p < 0.5; p += 0.01) {
+      expect(walkBody(p, H).dy).toBeCloseTo(walkBody(p + 0.5, H).dy, 9);
+      expect(walkBody(p, H).rot).toBeCloseTo(walkBody(p + 0.5, H).rot, 9);
+    }
+    expect(walkBody(0, H).dy).toBeCloseTo(walkBody(1 - 1e-9, H).dy, 6);
+  });
+  it('stays small: the frames already draw the legs', () => {
+    for (let p = 0; p <= 1; p += 0.01) {
+      const b = walkBody(p, H);
+      expect(Math.abs(b.dy)).toBeLessThanOrEqual(0.012 * H + 1e-9);
+      expect(Math.abs(b.rot)).toBeLessThanOrEqual(1.2 + 1e-9);
+      expect(b.sx * b.sy).toBeCloseTo(1, 9); // volume kept
+      expect(b.sy).toBeGreaterThanOrEqual(0.98 - 1e-9);
+    }
+  });
+  it('the spine rocks out of phase with the dip', () => {
+    expect(walkBody(0, H).rot).toBeCloseTo(1.2, 6);
+    expect(walkBody(1 / 8, H).rot).toBeCloseTo(0, 6);
+    expect(walkBody(2 / 8, H).rot).toBeCloseTo(-1.2, 6);
+  });
+});
+
+describe('gaits', () => {
+  it('a trot reaches further, bounces more and floats at the pass phases; a sneak is low, slow and nose-down', () => {
+    const [w, t, s] = [gaitParams('walk'), gaitParams('trot'), gaitParams('sniff')];
+    expect(t.reach).toBe(1.3);
+    expect(t.bounce).toBe(1.8);
+    expect(t.speed).toBe(2);
+    expect(walkBody(0.25, 140, t).dy).toBeLessThan(walkBody(0.25, 140, w).dy);
+    expect(s.speed).toBe(0.6);
+    expect(s.sy).toBe(0.95);
+    expect(walkBody(0.3, 140, s).sy).toBeLessThan(walkBody(0.3, 140, w).sy);
+    expect(walkBody(0.25, 140, s).rot).toBeLessThan(walkBody(0.25, 140, w).rot - 3.9);
+    expect(s.bounce).toBe(0.5);
+  });
+  it('the default dog profile reproduces the constants; other profiles scale and clamp', () => {
+    expect(profileScale({ bounce: 0.03, pitchDeg: 2 })).toEqual({ bounce: 1, pitch: 1 });
+    expect(profileScale(undefined)).toEqual({ bounce: 1, pitch: 1 });
+    expect(profileScale({ bounce: 0.15, pitchDeg: 40 })).toEqual({ bounce: 2.5, pitch: 3 });
+    expect(profileScale({ bounce: 0, pitchDeg: 0 })).toEqual({ bounce: 0.3, pitch: 0 });
   });
 });

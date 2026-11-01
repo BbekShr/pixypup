@@ -1,9 +1,10 @@
 import '../ui/tokens.css';
 import type { Pack } from '../main/pack';
-import { cleanFrame } from './frames';
+import { alphaPlane, cleanFrame } from './frames';
+import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth } from './layout';
-import { boundGait, gait, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, turnFrame, usableTurn, walkFrame } from './motion';
-import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW_MS, TURN_MS, type CastMember } from './overload-choreo';
+import { boundGait, gaitParams, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, profileScale, turnFrame, usableTurn, walkBody, walkFrame } from './motion';
+import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW_MS, T, TURN_MS, type CastMember } from './overload-choreo';
 
 declare global {
   interface Window {
@@ -13,9 +14,8 @@ declare global {
 }
 
 interface Start { packs: Pack[]; seed: number }
-interface Prep { idle: string; walk: string[]; turn: string[] | null; fps: number; footY: number; natW: Map<string, number>; idleW: number; drawn: boolean; flier: boolean; member: CastMember }
+interface Prep { idle: string; walk: string[]; turn: string[] | null; strideFrac: number; body: { bounce: number; pitch: number }; fps: number; footY: number; natW: Map<string, number>; idleW: number; drawn: boolean; flier: boolean; member: CastMember }
 
-const STRIDE = 0.22; // of displayed width per walk frame, as in the overlay
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keep: HTMLImageElement[] = []; // decoded bitmaps live as long as the show so swapping src never re-decodes
 let cursorX = window.innerWidth / 2;
@@ -29,6 +29,7 @@ async function prep(pack: Pack): Promise<Prep | null> {
   let walk = (poses['walk']?.frames ?? []).map((f) => pack.frames[f]).filter((s): s is string => !!s);
   const natW = new Map<string, number>();
   let idleH = 1;
+  const walkImgs: HTMLImageElement[] = [];
   const turn = usableTurn(poses['turn']?.frames.map((f) => pack.frames[f]).filter((s): s is string => !!s))?.slice(0, 2) ?? null; // front and front34 are all a turn needs
   await Promise.all((turn ?? []).map(async (s) => {
     const i = new Image();
@@ -37,7 +38,7 @@ async function prep(pack: Pack): Promise<Prep | null> {
     keep.push(i);
     natW.set(s, i.naturalWidth);
   }));
-  walk = await Promise.all([idle, ...walk].map(async (s) => {
+  walk = await Promise.all([idle, ...walk].map(async (s, k) => {
     const i = new Image();
     i.src = s;
     await i.decode();
@@ -46,13 +47,18 @@ async function prep(pack: Pack): Promise<Prep | null> {
     keep.push(f);
     natW.set(f.src, f.naturalWidth);
     if (s === idle) idleH = i.naturalHeight;
+    else walkImgs[k - 1] = f; // frame order matters for the stride
     return f.src;
   })).then((all) => all.slice(1));
   const idleW = natW.get(idle)!;
   const prof = pack.manifest.profile;
   const flier = prof?.locomotion === 'fly';
   const member: CastMember = { flier, aspect: displayWidth(idleW, idleH, 1), air: flier && prof?.air ? { min: prof.air.minLiftBody, max: prof.air.maxLiftBody } : undefined };
-  return { idle, walk, turn, fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0 && natW.get(walk[0]!) !== idleW, flier, member };
+  const w0 = walkImgs[0];
+  const alphas = walkImgs.map(alphaPlane);
+  const same = !!w0 && walkImgs.every((f) => f.naturalWidth === w0.naturalWidth && f.naturalHeight === w0.naturalHeight);
+  const strideFrac = same && alphas.every((a) => a) ? strideFromFrames(alphas as Uint8ClampedArray[], w0.naturalWidth, w0.naturalHeight, 4, idleW) / idleW : FALLBACK_STRIDE; // measured from the art so the feet don't slide
+  return { idle, walk, turn, strideFrac, body: profileScale(prof?.gait), fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0, flier, member }; // drawn: loadPack already dropped walks that never move
 }
 
 function heart(x: number, y: number): void {
@@ -125,7 +131,8 @@ async function begin(raw: unknown): Promise<void> {
         flip = Math.sign(mirrorScale(s.mir, t, TURN_MS));
         const u = mirrorProgress(s.mir, t, TURN_MS);
         const dir = s.mir.to;
-        const stride = STRIDE * p.w;
+        const gp = gaitParams(t >= T.conga ? 'trot' : 'walk'); // the conga and the exit trot
+        const stride = c.strideFrac * p.w * gp.reach;
         if (c.flier && c.walk.length) src = c.walk[Math.floor((t / 1000) * c.fps) % c.walk.length]!;
         else if (s.v > 0 && u >= 1 && c.walk.length) src = c.walk[walkFrame(s.walked, c.walk.length, stride)]!;
         if (u < 1) {
@@ -139,9 +146,15 @@ async function begin(raw: unknown): Promise<void> {
         }
         else if (c.flier) rot = lean(dir, 0.5) + 3 * Math.sin(flyLift(p, t) / 12);
         else if (s.v > 0) {
-          const g = c.drawn ? gait(s.walked, stride, true) : boundGait(s.walked, stride, p.h);
-          y += g.dy; sx = g.sx; sy = g.sy;
-          rot = lean(dir, s.v / MAX_SPEED) + g.rot * dir;
+          if (c.drawn) {
+            const b = walkBody(s.walked / (stride * c.walk.length), p.h, gp, c.body);
+            y += b.dy; sx = b.sx; sy = b.sy;
+            rot = lean(dir, s.v / MAX_SPEED) - b.rot * dir;
+          } else {
+            const g = boundGait(s.walked, stride, p.h);
+            y += g.dy; sx = g.sx; sy = g.sy;
+            rot = lean(dir, s.v / MAX_SPEED) + g.rot * dir;
+          }
         }
         if (t - s.hopAt >= 0 && t - s.hopAt < HOP_WINDOW_MS) {
           const h = hop(t - s.hopAt);

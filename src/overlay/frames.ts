@@ -41,6 +41,14 @@ export function edgeSlivers(alpha: ArrayLike<number>, w: number, h: number, stri
   return comps.filter((c) => c !== body && c.px.length < SLIVER * body.px.length && ((c.left && !body.left) || (c.right && !body.right))).flatMap((c) => c.px);
 }
 
+/** The alpha channel of a decoded image, one sample per 4 bytes (stride 4), or null without a canvas. */
+export function alphaPlane(i: HTMLImageElement): Uint8ClampedArray | null {
+  const c = new OffscreenCanvas(i.naturalWidth, i.naturalHeight).getContext('2d', { willReadFrequently: true });
+  if (!c) return null;
+  c.drawImage(i, 0, 0);
+  return c.getImageData(0, 0, i.naturalWidth, i.naturalHeight).data.subarray(3);
+}
+
 /** A decoded copy of the frame with its edge slivers erased (a blob: URL), or null when it has none or cannot be cleaned: keep the original. */
 export async function cleanFrame(img: HTMLImageElement): Promise<HTMLImageElement | null> {
   const w = img.naturalWidth;
