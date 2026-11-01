@@ -39,7 +39,9 @@ const drawn = (cw: number, ch: number, w: number, h: number) =>
 const sheetImg = (widths = [50, 50, 50, 50]) => {
   let left = 10;
   const blobs = widths.map((w) => {
-    const b = { input: { create: { width: w, height: 50, channels: 3 as const, background: '#00aa00' } }, left, top: 10 };
+    // rounded like a real silhouette: a frame cut by a straight edge is rejected as cropped
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="50"><ellipse cx="${w / 2}" cy="25" rx="${w / 2}" ry="25" fill="#00aa00"/></svg>`;
+    const b = { input: Buffer.from(svg), left, top: 10 };
     left += w + 50;
     return b;
   });
@@ -233,6 +235,22 @@ describe('layoutFrames', () => {
     expect(await drawnHeight(out.frames.walk_0 as Buffer)).toBe(Math.round(10 * 1.6 * 5.12));
   });
 
+  it('gives the profile walk one shared scale and its own wider canvas at the same height', async () => {
+    const out = await layoutFrames(
+      {
+        idle_0: { png: await solid(100, 50), rawHeight: 200 },
+        side_0: { png: await solid(100, 50) },
+        side_1: { png: await solid(90, 40) }, // shorter: a lifted paw, not a smaller dog
+      },
+      'idle_0',
+    );
+    expect(out.width).toBe(256 * 2);
+    const side0 = await sharp(out.frames.side_0 as Buffer).metadata();
+    expect([side0.width, side0.height]).toEqual([Math.round(100 * 256 / 50), out.height]);
+    expect(await drawnHeight(out.frames.side_0 as Buffer)).toBe(256);
+    expect(await drawnHeight(out.frames.side_1 as Buffer)).toBe(Math.round(40 * 256 / 50));
+  });
+
   it('sizes a lying pose to 1.1 x idle width', async () => {
     const out = await layoutFrames(
       { idle_0: { png: await solid(100, 50), rawHeight: 200 }, sleep: { png: await solid(130, 40), rawHeight: 200 } },
@@ -266,7 +284,13 @@ describe('layoutFrames', () => {
 describe('sliceSheet', () => {
   const sheet = (blobs: [number, number][], W = 400, H = 20) => {
     const buf = Buffer.alloc(W * H * 4);
-    for (const [x0, w] of blobs) for (let y = 2; y < 18; y++) for (let x = x0; x < x0 + w; x++) buf[(y * W + x) * 4 + 3] = 255;
+    // rounded blobs (column height peaks mid-frame), like real silhouettes
+    for (const [x0, w] of blobs) {
+      for (let x = x0; x < x0 + w; x++) {
+        const half = Math.max(1, Math.round(8 * Math.sin((Math.PI * (x - x0 + 0.5)) / w)));
+        for (let y = 10 - half; y < 10 + half; y++) buf[(y * W + x) * 4 + 3] = 255;
+      }
+    }
     return { buf, W, H };
   };
   it('finds 4 equal runs', () => {
@@ -291,6 +315,11 @@ describe('sliceSheet', () => {
     for (const r of runs!) expect(r.x1 - r.x0 + 1).toBeGreaterThanOrEqual(120);
     for (const r of runs!) expect(r.x1 - r.x0 + 1).toBeLessThanOrEqual(200);
     for (let i = 1; i < 4; i++) expect(runs![i]!.x0).toBeGreaterThan(runs![i - 1]!.x1);
+  });
+  it('rejects frames cut by a straight edge (a sheet drawn as cropped panels)', () => {
+    const { buf, W, H } = sheet([[10, 50], [110, 50], [210, 50], [310, 50]]);
+    for (const x0 of [10, 110, 210, 310]) for (let y = 3; y < 17; y++) buf[(y * W + x0) * 4 + 3] = 255; // a flat back edge
+    expect(sliceSheet(buf, W, H, 4)).toBeNull();
   });
   it('rejects 3 blobs, 5 blobs and unequal widths', () => {
     const three = sheet([[10, 50], [110, 50], [210, 50]]);
@@ -363,19 +392,19 @@ describe('generateSpritePack', () => {
       'idle_0.png',
       'idle_blink.png',
       'roll.png',
+      'side_0.png',
+      'side_1.png',
+      'side_2.png',
+      'side_3.png',
       'sit.png',
       'sleep.png',
       'sprite-manifest.json',
-      'walk_0.png',
-      'walk_1.png',
-      'walk_2.png',
-      'walk_3.png',
     ]);
     expect(JSON.parse(await readFile(join(out, 'sprite-manifest.json'), 'utf8'))).toEqual(manifest);
     expect(manifest.poses.walk?.fps).toBe(8);
     expect(manifest.poses.blink?.frames).toEqual(['idle_blink.png']);
     expect(manifest.poses.blink?.footY).toBe(manifest.poses.idle?.footY);
-    expect(manifest.poses.walk?.frames).toEqual(['walk_0.png', 'idle_0.png', 'walk_2.png', 'idle_0.png']); // stride, stand: no crouched hop
+    expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']); // the profile walk
     expect(await readdir(root)).toEqual(['pack']);
   });
 
@@ -412,14 +441,16 @@ describe('generateSpritePack', () => {
     const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? make() : defaultImage(n)) }, events);
     await p;
     expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(2);
-    expect(events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name)).toEqual(['walk_0', 'walk_1', 'walk_2', 'walk_3']);
-    for (let i = 0; i < 4; i++) expect(await readFile(join(out, `walk_${i}.png`))).toEqual(await readFile(join(out, 'idle_0.png')));
+    expect(events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name)).toEqual(['side_0', 'side_1', 'side_2', 'side_3']);
+    // the idle drawing, on the walk's own (tighter) canvas
+    const drawing = async (f: string) => sharp(await readFile(join(out, f))).trim({ threshold: 0 }).raw().toBuffer();
+    for (let i = 0; i < 4; i++) expect(await drawing(`side_${i}.png`)).toEqual(await drawing('idle_0.png'));
   });
 
   it('slices a good sheet into 4 walk frames at idle height', async () => {
     const { p } = await run({});
     await p;
-    for (let i = 0; i < 4; i++) expect(await drawnHeight(await readFile(join(out, `walk_${i}.png`)))).toBe(256);
+    for (let i = 0; i < 4; i++) expect(await drawnHeight(await readFile(join(out, `side_${i}.png`)))).toBe(256);
   });
 
   it('falls back to idle when the blink jumps (IoU < 0.85)', async () => {

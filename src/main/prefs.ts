@@ -47,6 +47,13 @@ export function snoozeUntil(kind: '1h' | 'tomorrow', now: Date): number {
 
 export const isSnoozed = (until: number | null, now: number): boolean => until !== null && until > now;
 
+/**
+ * Opening PixyPup by hand (launching it, or opening it again while it runs) means "I want my pet": wake it.
+ * While snoozed the pet is hidden and there is no Dock icon, so otherwise the faded tray icon is the only way
+ * back. A launch at login keeps the snooze ("Until 8 am" must survive a restart).
+ */
+export const wakeOnOpen = (snoozed: boolean, atLogin: boolean): boolean => snoozed && !atLogin;
+
 /** A menu/tray/dev command that changes a setting -> the settings patch; null for anything else (tricks, quit). */
 export function commandToPatch(cmd: string, now: Date): Record<string, unknown> | null {
   const [k, v] = cmd.split(':');

@@ -18,7 +18,7 @@ import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
 import { setupOnboarding } from './onboarding';
-import { commandToPatch, isSnoozed, type Energy, type Prefs } from './prefs';
+import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
 import { startScreenLoop } from './screen-loop';
 import { setupScreenExplainer } from './screen-explainer';
 import { getApiKey } from './secrets';
@@ -111,6 +111,7 @@ let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech
 
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
 const prefs = (s = snoozed()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergy ?? 'normal', snoozed: s });
+const ACTIVATE_GRACE_MS = 2000;
 const MAX_TIMER = 2 ** 31 - 1; // setTimeout wraps to 1 ms above this
 // The checkbox shows what macOS says (the user can change it in System Settings); dev has no real login item.
 const loginOn = (): boolean => (app.isPackaged ? app.getLoginItemSettings().openAtLogin : settings.openAtLogin);
@@ -280,7 +281,13 @@ void app.whenReady().then(async () => {
   });
   createWindow();
   createTray();
-  sync();
+  const atLogin = app.isPackaged && app.getLoginItemSettings().wasOpenedAtLogin === true;
+  if (wakeOnOpen(snoozed(), atLogin)) run('wake'); // run syncs
+  else sync();
+  // Opening the app again while it runs (Finder, Spotlight, Launchpad) arrives as 'activate'; the launch's own
+  // 'activate' falls inside the grace and was handled just above.
+  const openedAt = Date.now();
+  app.on('activate', () => { if (Date.now() - openedAt > ACTIVATE_GRACE_MS && wakeOnOpen(snoozed(), false)) run('wake'); });
   startScreenAwareLoop();
   powerMonitor.on('resume', sync); // timers pause while the Mac sleeps
   // First launch only: Pakkun gets a moment to drop in before the welcome appears.

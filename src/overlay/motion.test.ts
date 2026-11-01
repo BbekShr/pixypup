@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, blinkDelay, bob, fall, lean, petTransform, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, fall, gait, headX, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -119,5 +119,74 @@ describe('walkSpeed cap', () => {
   it('display width follows the chosen height', () => {
     expect(displayWidth(200, 100, 180)).toBe(360);
     expect(displayWidth(200, 100, 110)).toBe(220);
+  });
+});
+
+// w x h alpha mask from rows of '#' (opaque) and '.' (clear)
+const mask = (rows: string[]): number[] => rows.flatMap((r) => [...r].map((c) => (c === '#' ? 255 : 0)));
+
+describe('frame registration', () => {
+  const idle = mask(['.##.......', '.##.......', '####......', '#########.', '#########.', '#.#.#..#..', '#.#.#..#..', '#.#.#..#..', '#.#.#..#..', '#.#.#..#..']);
+  const walk = mask(['....##....', '....##....', '...####...', '.#########', '.#########', '.#.#.#..#.', '..#.#..#..', '.#....#..#', '.#....#..#', '.#....#..#']);
+  it('finds the head from the top 30% of the silhouette, ignoring the legs', () => {
+    expect(headX(idle, 10, 10)).toBeCloseTo(1.5);
+    expect(headX(walk, 10, 10)! - headX(idle, 10, 10)!).toBeCloseTo(3);
+  });
+  it('reads RGBA data with a stride and returns null for a blank frame', () => {
+    const rgba = idle.flatMap((a) => [0, 0, 0, a]);
+    expect(headX(rgba.slice(3), 10, 10, 4)).toBeCloseTo(1.5);
+    expect(headX(new Array(100).fill(0), 10, 10)).toBeNull();
+  });
+  it('overlap is 1 for the same frame and drops as frames differ', () => {
+    expect(overlap(idle, idle)).toBe(1);
+    expect(overlap(idle, walk)).toBeLessThan(0.6);
+    expect(overlap([0, 0], [0, 0])).toBe(0);
+  });
+});
+
+describe('gait, bark, settle', () => {
+  it('squashes at each footfall, stretches mid-stride, rocks the other way every step', () => {
+    expect(gait(0, 20).sy).toBeCloseTo(0.985);
+    expect(gait(10, 20).sy).toBeCloseTo(1.015);
+    expect(gait(10, 20).sx).toBeLessThan(1);
+    expect(gait(10, 20).rot).toBeCloseTo(1.2);
+    expect(gait(30, 20).rot).toBeCloseTo(-1.2);
+    expect(gait(10, 20).dy).toBe(bob(10, 20));
+  });
+  it('adds only a light footfall and no rock to a drawn side-on cycle', () => {
+    expect(gait(10, 20, true).rot).toBe(0);
+    expect(gait(30, 20, true).rot).toBe(0);
+    expect(gait(10, 20, true).dy).toBeCloseTo(0.4 * bob(10, 20));
+    expect(gait(10, 20, true).sy).toBeCloseTo(1.006);
+  });
+  it('each woof winds up (nose down, crouch) then pops (nose up, chest up), and is calm between bursts', () => {
+    const wind = barkPose(140);
+    expect(wind.rot).toBeLessThan(0);
+    expect(wind.sy).toBeLessThan(1);
+    const pop = barkPose(180);
+    expect(pop.rot).toBeCloseTo(5);
+    expect(pop.sy).toBeCloseTo(1.06);
+    expect(pop.dx).toBeGreaterThan(0);
+    expect(barkPose(1200).rot).toBeCloseTo(0, 1);
+    expect(barkPose(1400 + 180).rot).toBeCloseTo(5); // repeats
+  });
+  it('counts a new burst on each burst\'s first pop', () => {
+    expect(woofBurst(0)).toBe(-1);
+    expect(woofBurst(179)).toBe(-1);
+    expect(woofBurst(180)).toBe(0);
+    expect(woofBurst(520)).toBe(0); // second woof of the same burst
+    expect(woofBurst(1400 + 180)).toBe(1);
+  });
+  it('settle dips, overshoots, and is done by SETTLE_MS', () => {
+    expect(settle(0)).toBeCloseTo(0.94);
+    expect(settle(130)).toBeGreaterThan(1);
+    expect(settle(SETTLE_MS)).toBe(1);
+    expect(settle(-5)).toBe(1);
+  });
+  it('envelope eases in and out and is 0 outside its span', () => {
+    expect(envelope(0, 1000)).toBe(0);
+    expect(envelope(500, 1000)).toBeCloseTo(1);
+    expect(envelope(1000, 1000)).toBe(0);
+    expect(envelope(250, 1000)).toBeCloseTo(0.5);
   });
 });

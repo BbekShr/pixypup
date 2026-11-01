@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import type { PetFact, Personality, SpriteManifest } from '../../contracts/types.js';
-import { validateManifest, WALK_CYCLE } from './manifest.js';
+import { validateManifest } from './manifest.js';
 import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
 import { breedFacts, meetPet } from './personality.js';
@@ -34,12 +34,17 @@ export const STYLE =
   'Leave a clear margin of empty background on all four sides so nothing touches the canvas edge.';
 
 // idle_0 is generated first and fed back as a second reference so every other pose copies its character design.
+// A strict side profile: a 3/4 view with the head turned to the camera hides the legs, so no walk reads from it.
+// Earlier wording ("side view", "passing (legs under body)") came back 3/4 with a crouched hop for the passing frames.
 const SHEET =
-  "A horizontal sprite sheet of exactly 4 frames of the same character's walk cycle, side view facing right, " +
-  'evenly spaced in 4 equal columns with wide magenta gaps between frames: ' +
-  'frame 1 contact (right front and left back legs forward), frame 2 passing (legs under body), ' +
-  'frame 3 contact mirrored (left front and right back legs forward), frame 4 passing. ' +
-  'Same size, same height, same camera in every frame; only the legs move.';
+  "A horizontal sprite sheet of exactly 4 frames of this same character walking, drawn in strict side profile facing right: " +
+  "the camera is level and perpendicular to the body, we see the pet's left side, only one eye visible, " +
+  'the head points right in the walking direction and does not look at the camera. All four legs clearly visible and separated. ' +
+  'Frame 1: left front leg reaching forward and right hind leg reaching back. ' +
+  'Frame 2: legs passing under the body, one front paw slightly lifted, body at the same height as frame 1, back level, ' +
+  'not crouching, not jumping. Frame 3: right front leg forward and left hind leg back. Frame 4: legs passing under the body again. ' +
+  'Same size, same body height and same head position in every frame; only the legs move. ' +
+  'Evenly spaced in 4 equal columns with wide magenta gaps between frames.';
 
 // The sheet is one request so the four frames come out as one coherent cycle (separate calls copied each other).
 // idle_blink is a pure edit of the idle image: no STYLE prefix, it would invite a redraw.
@@ -55,7 +60,10 @@ export const POSES: Record<string, string> = {
     'same size, same position, same lighting, same magenta background.',
 };
 
-const WALK_FRAMES = ['walk_0', 'walk_1', 'walk_2', 'walk_3'];
+// Profile walk frames sit on their own, wider canvas (see layoutFrames); old packs' walk_0..3 are 3/4 view.
+export const SIDE_FRAMES = ['side_0', 'side_1', 'side_2', 'side_3'];
+const WALK_FRAMES = SIDE_FRAMES;
+const SIDE = new Set(SIDE_FRAMES);
 const POSE_NAMES = ['idle_0', ...WALK_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
 // Lying poses are sized by width, everything else by height.
 const LYING = new Set(['sleep', 'roll']);
@@ -228,7 +236,9 @@ export interface KeyedFrame {
  * Every pose is sized from its own trimmed alpha: standing/sitting poses to idle's height (TARGET_HEIGHT),
  * lying poses (sleep, roll) to 1.1 x idle's width. Each scale is clamped to 0.6..1.6 of the raw-canvas
  * estimate so a bad drawing cannot be blown up or shrunk absurdly.
- * Frames are then centred and bottom-aligned (MARGIN px) on one shared canvas.
+ * Frames are then centred and bottom-aligned (MARGIN px) on one shared canvas. The profile walk frames share
+ * one scale (their tallest to TARGET_HEIGHT, so the sheet's proportions hold) and their own wider canvas of the
+ * same height, so the foot line matches and the narrow poses keep a tight hit box.
  */
 export async function layoutFrames(
   keyed: Record<string, KeyedFrame>,
@@ -238,10 +248,12 @@ export async function layoutFrames(
   const refMeta = await sharp(ref.png).metadata();
   const s = TARGET_HEIGHT / refMeta.height;
   const scaled: Record<string, { buf: Buffer; w: number; h: number }> = {};
+  const sides = Object.keys(keyed).filter((n) => SIDE.has(n));
+  const sideMax = Math.max(1, ...(await Promise.all(sides.map(async (n) => (await sharp((keyed[n] as KeyedFrame).png).metadata()).height))));
   for (const [name, f] of Object.entries(keyed)) {
     const { width, height } = await sharp(f.png).metadata();
-    let k = LYING.has(name) ? (1.1 * refMeta.width * s) / width : TARGET_HEIGHT / height;
-    if (f.rawHeight && ref.rawHeight) {
+    let k = SIDE.has(name) ? TARGET_HEIGHT / sideMax : LYING.has(name) ? (1.1 * refMeta.width * s) / width : TARGET_HEIGHT / height;
+    if (f.rawHeight && ref.rawHeight && !SIDE.has(name)) {
       const est = (s * ref.rawHeight) / f.rawHeight;
       k = Math.min(1.6 * est, Math.max(0.6 * est, k));
     }
@@ -249,14 +261,17 @@ export async function layoutFrames(
     const h = Math.max(1, Math.round(height * k));
     scaled[name] = { buf: await sharp(f.png).resize(w, h).png().toBuffer(), w, h };
   }
-  const width = Math.max(...Object.values(scaled).map((f) => f.w));
+  const widest = (side: boolean) => Math.max(...Object.entries(scaled).filter(([n]) => SIDE.has(n) === side).map(([, f]) => f.w));
+  const width = widest(false);
+  const sideWidth = sides.length ? widest(true) : width;
   const height = Math.max(...Object.values(scaled).map((f) => f.h)) + MARGIN;
   const frames: Record<string, Buffer> = {};
   for (const [name, f] of Object.entries(scaled)) {
+    const w = SIDE.has(name) ? sideWidth : width;
     frames[name] = await sharp({
-      create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      create: { width: w, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
     })
-      .composite([{ input: f.buf, left: Math.floor((width - f.w) / 2), top: height - MARGIN - f.h }])
+      .composite([{ input: f.buf, left: Math.floor((w - f.w) / 2), top: height - MARGIN - f.h }])
       .png()
       .toBuffer();
   }
@@ -267,7 +282,9 @@ export async function layoutFrames(
  * Cut a keyed sprite sheet (RGBA) into n frames. Muse draws frames that nearly touch, so there is no
  * reliable empty gutter: each of the n-1 cuts goes at the emptiest column (fewest alpha >= 32 pixels)
  * within 18% of a frame width of k*W/n. Null unless every cut column holds <= 15% of the busiest
- * column's pixels and the n frames' alpha-bbox widths are within 35% of the median.
+ * column's pixels, the n frames' alpha-bbox widths are within 35% of the median, and no frame is cropped: a real
+ * silhouette ends in a thin column (nose, tail tip, paw), so a frame whose first or last column holds more than
+ * 30% of its own tallest column was cut by a straight edge (Muse sometimes draws the sheet as cropped panels).
  */
 export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0: number; x1: number }[] | null {
   const count: number[] = [];
@@ -300,9 +317,41 @@ export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0:
     if (x1 < x0) return null;
     runs.push({ x0, x1 });
   }
+  for (const r of runs) {
+    const tallest = Math.max(...count.slice(r.x0, r.x1 + 1));
+    if ((count[r.x0] as number) > 0.3 * tallest || (count[r.x1] as number) > 0.3 * tallest) return null;
+  }
   const widths = runs.map((r) => r.x1 - r.x0 + 1).sort((a, b) => a - b);
   const median = widths[Math.floor(n / 2)] as number;
   return runs.every((r) => Math.abs(r.x1 - r.x0 + 1 - median) <= 0.35 * median) ? runs : null;
+}
+
+/** Cut a keyed walk sheet into its 4 frames, each trimmed to its own alpha rows. Throws on a bad sheet. */
+export async function sheetFrames(k: Keyed): Promise<KeyedFrame[]> {
+  const { data, info } = await sharp(k.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const runs = sliceSheet(data, info.width, info.height, WALK_FRAMES.length);
+  if (!runs) throw new BadOutputError('bad sheet');
+  return Promise.all(
+    runs.map(async (r) => {
+      const slice = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+        .extract({ left: r.x0, top: 0, width: r.x1 - r.x0 + 1, height: info.height })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      let y0 = info.height;
+      let y1 = -1;
+      for (let i = 3; i < slice.data.length; i += 4) {
+        if ((slice.data[i] as number) === 0) continue;
+        const y = Math.floor(i / 4 / slice.info.width);
+        y0 = Math.min(y0, y);
+        y1 = Math.max(y1, y);
+      }
+      const png = await sharp(slice.data, { raw: { width: slice.info.width, height: info.height, channels: 4 } })
+        .extract({ left: 0, top: y0, width: slice.info.width, height: y1 - y0 + 1 })
+        .png()
+        .toBuffer();
+      return { png };
+    }),
+  );
 }
 
 /** Publish `files` as outDir without ever leaving a half-written or missing pack. `mv` is injectable for tests. */
@@ -443,32 +492,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     }
   };
   const refs = [cutoutOnMagenta, idleRaw];
-  const sheet = async (_img: unknown, k: Keyed) => {
-    const { data, info } = await sharp(k.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const runs = sliceSheet(data, info.width, info.height, WALK_FRAMES.length);
-    if (!runs) throw new BadOutputError('bad sheet');
-    return Promise.all(
-      runs.map(async (r) => {
-        const slice = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
-          .extract({ left: r.x0, top: 0, width: r.x1 - r.x0 + 1, height: info.height })
-          .raw()
-          .toBuffer({ resolveWithObject: true });
-        let y0 = info.height;
-        let y1 = -1;
-        for (let i = 3; i < slice.data.length; i += 4) {
-          if ((slice.data[i] as number) === 0) continue;
-          const y = Math.floor(i / 4 / slice.info.width);
-          y0 = Math.min(y0, y);
-          y1 = Math.max(y1, y);
-        }
-        const png = await sharp(slice.data, { raw: { width: slice.info.width, height: info.height, channels: 4 } })
-          .extract({ left: 0, top: y0, width: slice.info.width, height: y1 - y0 + 1 })
-          .png()
-          .toBuffer();
-        return { png };
-      }),
-    );
-  };
+  const sheet = async (_img: unknown, k: Keyed) => sheetFrames(k);
   await Promise.all([
     run(WALK_FRAMES, () => draw('walk_sheet', refs, sheet)),
     ...['sit', 'sleep', 'bark', 'roll'].map((n) => run([n], async () => [await draw(n, refs, single)])),
@@ -495,7 +519,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     species: o.species,
     poses: {
       idle: pose(['idle_0.png'], 2),
-      walk: pose(WALK_CYCLE, 8), // stride, stand (manifest.ts says why)
+      walk: pose(SIDE_FRAMES.map((f) => `${f}.png`), 8),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),
       bark: pose(['bark.png'], 4),

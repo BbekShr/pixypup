@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commandToPatch, energyParams, isSnoozed, parsePrefs, sizeScale, snoozeUntil } from './prefs';
+import { commandToPatch, energyParams, isSnoozed, parsePrefs, sizeScale, snoozeUntil, wakeOnOpen } from './prefs';
 
 describe('snoozeUntil', () => {
   it('1 hour is exactly 3600 s later', () => {
@@ -17,6 +17,11 @@ describe('snoozeUntil', () => {
       const t = new Date(snoozeUntil('tomorrow', new Date(y, m, d, 21, 0)));
       expect([t.getHours(), t.getMinutes()]).toEqual([8, 0]);
     }
+  });
+  it('opening the app by hand wakes a snoozed pet; a launch at login keeps the snooze', () => {
+    expect(wakeOnOpen(true, false)).toBe(true);
+    expect(wakeOnOpen(true, true)).toBe(false);
+    expect(wakeOnOpen(false, false)).toBe(false);
   });
   it('isSnoozed is true only while the time is in the future', () => {
     expect(isSnoozed(null, 10)).toBe(false);

@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, breathe, envelope, fall, gait, headX, hop, lean, overlap, petTransform, pickTarget, rollAngle, settle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -47,7 +47,10 @@ const HINT_SHOW_MS = 11000;
 const MARK_MS = 2600;
 
 const TURN_MS = 120;
-const STRIDE = 0.22; // of displayed width per walk frame
+type Fidget = 'look' | 'tilt' | 'sniff' | 'wag';
+const LIFE_MS: Record<Fidget, number> = { look: 1000, tilt: 1400, sniff: 1200, wag: 1000 };
+const WAG_FRAME_MS = 110;
+const STRIDE = 0.22; // of displayed (idle) width per walk frame: ~5-6 frames/s at walking speed
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const img = document.getElementById('pup') as HTMLImageElement;
 const fx = document.getElementById('fx') as HTMLDivElement;
@@ -61,14 +64,62 @@ let H = 120;
 let nat: { w: number; h: number } | null = null; // the pose's natural size; W and H follow the chosen size
 let prefs: Prefs = { size: 'medium', energy: 'normal', snoozed: false };
 let footY = 1;
+let reg = new Map<string, number>(); // src -> natural px its head sits right of idle's
+let wagOk = false;
+let widths = new Map<string, number>(); // src -> natural width; the profile walk is drawn wider than idle
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
 let sayAt = Infinity;
 let speakingUntil = 0;
 let lastLine: string | null = null;
 let lineOnBark = false;
+let woofs = false; // this bark shows "Woof!" bubbles
+let woofShown = -1; // the last burst that got one
 const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('chatty') === '1';
 
-interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number }
+interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
+
+const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
+const WAG_OVERLAP = 0.85; // bark this close to idle (same stance, tail up) doubles as a tail wag
+
+/**
+ * Per-frame head alignment: natural px each standing/sitting frame's head sits right of its reference's, both
+ * measured from the canvas centre (every frame is drawn centred on the pet). The reference is idle, or for a pose
+ * drawn on its own canvas size (the profile walk) that pose's first frame, so its body stays centred.
+ * Also whether the bark frame is close enough to idle to flick between them as a wag.
+ */
+function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], idle: HTMLImageElement): { reg: Map<string, number>; wag: boolean } {
+  const reg = new Map<string, number>();
+  const alpha = (i: HTMLImageElement): Uint8ClampedArray | null => {
+    const c = new OffscreenCanvas(i.naturalWidth, i.naturalHeight).getContext('2d', { willReadFrequently: true });
+    if (!c) return null;
+    c.drawImage(i, 0, 0);
+    return c.getImageData(0, 0, i.naturalWidth, i.naturalHeight).data.subarray(3);
+  };
+  const head = (i: HTMLImageElement): number | null => {
+    const a = alpha(i);
+    const h = a && headX(a, i.naturalWidth, i.naturalHeight, 4);
+    return h === null || h === undefined ? null : h - i.naturalWidth / 2;
+  };
+  const sameSize = (i: HTMLImageElement): boolean => i.naturalWidth === idle.naturalWidth && i.naturalHeight === idle.naturalHeight;
+  const bitmap = (src: string | undefined): HTMLImageElement | undefined => bitmaps.find((b) => b.src === src);
+  const h0 = head(idle);
+  if (h0 === null) return { reg, wag: false };
+  for (const [name, p] of Object.entries(poses)) {
+    if (LYING.has(name)) continue;
+    const first = bitmap(p.srcs[0]);
+    const ref = !first || sameSize(first) ? h0 : head(first);
+    for (const src of p.srcs) {
+      const b = bitmap(src) ?? idle;
+      const h = ref === null ? null : head(b);
+      const max = 0.15 * b.naturalWidth;
+      if (h !== null && ref !== null) reg.set(src, Math.max(-max, Math.min(max, h - ref)));
+    }
+  }
+  const bark = poses['bark']?.srcs.length === 1 ? bitmap(poses['bark']!.srcs[0]) : undefined;
+  const a0 = alpha(idle);
+  const ab = bark && sameSize(bark) ? alpha(bark) : null;
+  return { reg, wag: !!a0 && !!ab && overlap(a0, ab, 4) >= WAG_OVERLAP };
+}
 
 // Decodes everything before anything is swapped, so the old pet keeps its own poses until it has left.
 async function readPack(): Promise<Prepared | null> {
@@ -87,7 +138,8 @@ async function readPack(): Promise<Prepared | null> {
   }));
   const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
-  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1 };
+  const { reg, wag } = register(poses, bitmaps, first);
+  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
 }
 
 function applyPack(p: Prepared): void {
@@ -96,6 +148,9 @@ function applyPack(p: Prepared): void {
   footY = p.footY;
   keep.splice(0, keep.length, ...p.bitmaps); // the old pack's bitmaps are released only once the new poses are live
   poses = p.poses;
+  reg = p.reg;
+  wagOk = p.wag;
+  widths = p.widths;
   lines = p.lines;
   sayAt = nextSayAt(performance.now(), Math.random(), chatty);
   sizeImg();
@@ -141,8 +196,11 @@ let deadline: number | null = null;
 let lastInteraction = stateAt;
 let lifeAt = stateAt + 3000;
 let lifeUntil = 0;
-let lifeKind: 'look' | 'tilt' = 'look';
+let lifeStart = 0;
+let lifeKind: Fidget = 'look';
 let lifeTilt = 0;
+let poseKey = ''; // the pose family on screen; a change starts the settle wobble
+let settleAt = -1e9;
 let blinkAt = stateAt + blinkDelay(Math.random());
 let blinkAt0 = -1e9; // when the current blink began
 let blinkDouble = false;
@@ -185,6 +243,8 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
   yawn = false;
   state = forced ?? resolveWalk(next(state, ev), stay, o.target !== undefined);
   stateAt = now;
+  lifeUntil = 0;
+  lifeAt = Math.max(lifeAt, now + 1500); // let a new pose land before the first fidget
   const dwell = o.ms ?? dwellMs(state, Math.random(), en());
   deadline = dwell === null ? null : now + dwell;
   if (state === 'walk') {
@@ -208,8 +268,8 @@ function startYawn(): void {
 }
 
 function enter(prev: PetState): void {
-  // brief dip so the frame swap reads as a crossfade
-  if (!calm) {
+  // brief dip so the swap to or from a lying pose reads as a crossfade; upright swaps get the settle wobble instead
+  if (!calm && (LYING.has(state) || LYING.has(prev))) {
     img.style.transition = 'none';
     img.style.opacity = '0.4';
     requestAnimationFrame(() => {
@@ -236,17 +296,23 @@ function enter(prev: PetState): void {
       );
     }
   }
+  woofs = false;
+  woofShown = -1;
   if (state === 'bark' && !greet && quiet(performance.now(), speakingUntil)) {
     if (lineOnBark && speakLine()) return;
-    const b = document.createElement('div');
-    b.textContent = 'Woof!';
-    b.style.cssText = 'position:absolute;left:0;top:0;font:700 14px sans-serif;background:#fff;color:#222;padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none';
-    fx.append(b);
-    b.animate(
-      [{ opacity: 0, transform: 'translate(-50%,-100%) translateY(4px)' }, { opacity: 1, offset: 0.15 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-10px)' }],
-      { duration: 800 },
-    ).onfinish = () => b.remove();
+    woofs = true; // the frame loop pops a "Woof!" on each burst
   }
+}
+
+function woofBubble(): void {
+  const b = document.createElement('div');
+  b.textContent = 'Woof!';
+  b.style.cssText = 'position:absolute;left:0;top:0;font:700 14px sans-serif;background:#fff;color:#222;padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none';
+  fx.append(b);
+  b.animate(
+    [{ opacity: 0, transform: 'translate(-50%,-100%) translateY(4px)' }, { opacity: 1, offset: 0.15 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-10px)' }],
+    { duration: 800 },
+  ).onfinish = () => b.remove();
 }
 
 function frame(now: number): void {
@@ -306,11 +372,14 @@ function frame(now: number): void {
 
   if (now >= sayAt && canSpeak(state, act !== null || (handoff !== null && handoff !== 'wander') ||dragging || falling || now < speakingUntil || greet !== null) && speakLine()) sayAt = nextSayAt(now, Math.random(), chatty);
 
-  // idle life: look around or tilt the head every 3-6 s
-  if (state === 'idle' && now >= lifeAt) {
-    lifeKind = Math.random() < 0.5 ? 'look' : 'tilt';
+  // idle life every 3-6 s: look the other way, tilt the head, sniff the floor or wag (sitting: tilt only)
+  const upright = state === 'idle' || state === 'sit';
+  if (upright && !act && !yawn && now >= lifeAt) {
+    const kinds: Fidget[] = state === 'sit' ? ['tilt'] : ['look', 'tilt', 'sniff', ...(wagOk ? ['wag' as const] : [])];
+    lifeKind = kinds[Math.floor(Math.random() * kinds.length)]!;
     lifeTilt = Math.random() < 0.5 ? -4 : 4;
-    lifeUntil = now + 1000;
+    lifeStart = now;
+    lifeUntil = now + LIFE_MS[lifeKind];
     lifeAt = now + 3000 + Math.random() * 3000;
   }
   if (state === 'idle' && now >= blinkAt) {
@@ -318,27 +387,57 @@ function frame(now: number): void {
     blinkDouble = Math.random() < DOUBLE_BLINK_CHANCE;
     blinkAt = now + blinkDelay(Math.random());
   }
-  const life = state === 'idle' && now < lifeUntil;
+  const life = upright && !act && now < lifeUntil;
   const turning = state === 'walk' && now < turnUntil;
   y = floorY() + lift;
 
+  const px = nat ? W / nat.w : 1; // display px per natural px
+  const shownW = (src: string | undefined): number => (src && nat ? (widths.get(src) ?? nat.w) * px : W);
   const stride = STRIDE * W;
   const walking = state === 'walk' && !turning && !falling;
   const blinking = state === 'idle' && !yawn && blinkShut(now - blinkAt0, BLINK_MS, blinkDouble) && !!poses['blink'];
-  const pose = poses[blinking ? 'blink' : walking ? 'walk' : state === 'drag' || state === 'walk' || falling ? 'idle' : state] ?? poses['idle']!;
+  const name = blinking ? 'blink' : walking ? 'walk' : state === 'drag' || state === 'walk' || falling ? 'idle' : state;
+  const key = blinking ? 'idle' : state === 'walk' && !falling ? 'walk' : name; // blinks and walk turns are not pose changes
+  if (key !== poseKey) {
+    if (poseKey && !LYING.has(key) && !LYING.has(poseKey)) settleAt = now;
+    poseKey = key;
+  }
+  const wagging = life && lifeKind === 'wag' && !calm && Math.floor((now - lifeStart) / WAG_FRAME_MS) % 2 === 1;
+  const pose = poses[wagging ? 'bark' : name] ?? poses['idle']!;
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const src = pose.srcs[i]!;
   if (src !== shownSrc) { img.src = src; shownSrc = src; }
+  const fw = shownW(src);
+  if (img.style.width !== `${fw}px`) img.style.width = `${fw}px`; // a wider frame (the profile walk) stays centred on the pet
 
+  let dx = 0;
   let dy = 0;
   let sx = 1;
   let sy = 1;
   let rot = 0;
   if (walking) {
-    if (!calm) { dy = bob(walked, stride); rot = lean(dir); }
-  } else if (state === 'idle' || state === 'sit') {
-    sy = breathe(now, 0.4, 0.025) * (state === 'sit' ? squash(age, 0.06, 150) : 1);
-    if (life && lifeKind === 'tilt' && !calm) rot = lifeTilt;
+    if (!calm) {
+      const g = gait(walked, stride, shownW(poses['walk']?.srcs[0]) !== W); // a wider walk frame is the drawn profile cycle
+      dy = g.dy;
+      sx = g.sx;
+      sy = g.sy;
+      rot = lean(dir) + g.rot * dir;
+    }
+  } else if (upright) {
+    const b = breathe(now, 0.3, 0.02);
+    sy = b;
+    if (!calm) {
+      sx = 1 - (b - 1) / 2; // chest fills out as it rises
+      rot = 0.6 * Math.sin((2 * Math.PI * 0.11 * now) / 1000); // slow weight shift
+      if (life) {
+        const t = now - lifeStart;
+        const e = envelope(t, lifeUntil - lifeStart);
+        if (lifeKind === 'tilt') rot += lifeTilt * e;
+        else if (lifeKind === 'sniff') { rot += 5 * e * facing; dy = -1.5 * e * Math.abs(Math.sin(t / 70)); }
+        else if (lifeKind === 'wag') rot += 1.2 * e * Math.sin((Math.PI * t) / WAG_FRAME_MS);
+        else if (t < TURN_MS || lifeUntil - now < TURN_MS) { sx *= 1.06; sy *= 0.92; } // look: squash through each turn
+      }
+    }
     if (act?.kind === 'sniff' && act.phase === 'sniff' && !calm) {
       const p = sniffPose(now - (act.until - SNIFF_MS));
       rot = p.tilt * facing;
@@ -351,9 +450,14 @@ function frame(now: number): void {
   } else if (state === 'sleep') {
     sy = breathe(now, 0.2, 0.04);
   } else if (state === 'bark') {
-    const h = hop(age);
-    dy = calm ? 0 : h.dy;
-    sy = h.sy;
+    if (woofs && woofBurst(age) > woofShown && quiet(now, speakingUntil)) { woofShown = woofBurst(age); woofBubble(); }
+    if (!calm) {
+      const b = barkPose(age);
+      dx = b.dx * facing;
+      rot = -b.rot * facing; // nose up
+      sx = b.sx;
+      sy = b.sy;
+    }
   } else if (state === 'roll' && !calm) {
     rot = rollAngle(age);
   }
@@ -364,14 +468,16 @@ function frame(now: number): void {
     rot += tilt + wiggle(now - wg.at, wg.dur, wg.cycles);
     const p = perkPulse(now - perkAt);
     const st = stretch(now - stretchAt);
-    sx *= p * st.sx;
-    sy *= p * st.sy * (yawn ? yawnSy(age) : 1);
+    const se = now - settleAt < SETTLE_MS ? settle(now - settleAt) : 1;
+    sx *= p * st.sx * (1 + (1 - se) / 2);
+    sy *= p * st.sy * se * (yawn ? yawnSy(age) : 1);
   }
   if (now - landAt < 180) sy *= squash(now - landAt, 0.15, 180);
   const flip = facing * (life && lifeKind === 'look' ? -1 : 1);
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
-  img.style.transform = petTransform(x, y + dy, rot, flip, sx, sy);
+  dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
+  img.style.transform = petTransform(x + dx, y + dy, rot, flip, sx, sy);
   fx.style.transform = `translate(${x + W / 2 + flip * W * 0.3}px, ${y + dy}px)`;
   raf = requestAnimationFrame(frame);
 }
@@ -837,5 +943,5 @@ raf = requestAnimationFrame(frame);
 import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command, yawn: startYawn }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, wag: wagOk, reg: [...reg.values()].map(Math.round), pose: poseKey, menuCalls, lift, falling, handoff, command, yawn: startYawn }) });
 }
