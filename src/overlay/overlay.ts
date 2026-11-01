@@ -75,7 +75,8 @@ let lastLine: string | null = null;
 let lineOnBark = false;
 let woofs = false; // this bark shows "Woof!" bubbles
 let woofShown = -1; // the last burst that got one
-const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('chatty') === '1';
+const query = new URLSearchParams(location.search);
+const chatty = import.meta.env.DEV && query.get('chatty') === '1';
 
 interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
 
@@ -189,12 +190,18 @@ function sizeImg(): void {
 img.src = pupUrl;
 sizeImg();
 img.addEventListener('load', () => { if (!nat) { layout(); sizeImg(); } }, { once: true });
-void readPack().then((p) => p && applyPack(p)).catch(() => undefined);
+const enterDrop = query.get('enter') === 'drop' && !calm; // a pet just added: it falls in like the hand-off's new pet
+void readPack().then((p) => {
+  if (!p) return;
+  if (!enterDrop) return applyPack(p);
+  incoming = { pack: p, cx: undefined };
+  dropIn();
+}).catch(() => undefined);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
 const floorY = (): number => window.innerHeight - footOffset(H, footY);
 let state: PetState = 'walk';
-let x = 100;
+let x = 100 + ([...(query.get('pet') ?? '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 600, 0)); // pets sharing the screen don't start on top of each other
 let lift = 0; // offset from the floor line (negative = above); only non-zero while dragged or falling
 let vy = 0;
 let vx = 0; // px/s, only while thrown or sliding
@@ -203,6 +210,7 @@ let dang = { angle: 0, omega: 0 }; // body swing under the hand, deg
 let handX = 0;
 let handV = 0;
 let falling = false;
+if (enterDrop) { falling = true; lift = -4000; } // out of sight until its pack arrives
 let landAt = -1e9;
 let raf = 0;
 let y = floorY();

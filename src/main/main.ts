@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { execFile } from 'node:child_process';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,7 @@ import { shouldRegister, syncShortcut } from '../voice/listen';
 import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
+import { addPet, MAX_PETS, petList, pickWindow, removePet, routeReaction } from './pets';
 import { setupOnboarding } from './onboarding';
 import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
@@ -26,7 +27,15 @@ import { getApiKey } from './secrets';
 import { hideLockedByAdmin, loadSettings, saveSettings, voiceLockedByAdmin } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
-let win: BrowserWindow | null = null;
+const wins = new Map<string, BrowserWindow>(); // one transparent overlay window per pet, keyed by folder slug
+const senderSlug = new WeakMap<Electron.WebContents, string>();
+const petNames = new Map<string, string>(); // slug -> display name, learnt as each pack loads
+const packEnergies = new Map<string, Energy>();
+const primarySlug = (): string => petList(settings)[0]!;
+/** The primary pet's window: screen reactions, voice and the debug panel go here. */
+const primary = (): BrowserWindow | null => wins.get(primarySlug()) ?? null;
+const allWins = (): BrowserWindow[] => [...wins.values()].filter((w) => !w.isDestroyed());
+const winOf = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): BrowserWindow | undefined => pickWindow(wins, senderSlug.get(e.sender));
 let tray: Tray | null = null;
 let trayIcon: Electron.NativeImage | null = null;
 let trayIconDim: Electron.NativeImage | null = null;
@@ -35,9 +44,9 @@ let fakeScreen: ReturnType<typeof fakeReader> | undefined;
 let debugOn = false; // "Show what <name> sees": not persisted, resets each launch
 let stay = false; // mirrors the overlay's stay flag for the menu checkbox; not persisted
 
-function createWindow(): void {
+function createWindow(slug: string, enterDrop = false): void {
   const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
-  win = new BrowserWindow({
+  const win = new BrowserWindow({
     x,
     y,
     width,
@@ -58,12 +67,18 @@ function createWindow(): void {
   });
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.setIgnoreMouseEvents(true, { forward: true });
+  win.setIgnoreMouseEvents(true, { forward: true }); // every pet window starts, and after any menu returns to, click-through
   win.setContentProtection(settings.hideInShares);
+  wins.set(slug, win);
+  senderSlug.set(win.webContents, slug);
+  win.on('closed', () => { if (wins.get(slug) === win) wins.delete(slug); });
 
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   // Dev rehearsal only: PIXY_CHATTY=1 makes the pet speak every ~5 s.
-  const search = !app.isPackaged && process.env['PIXY_CHATTY'] === '1' ? '?chatty=1' : '';
+  const q = new URLSearchParams({ pet: slug });
+  if (!app.isPackaged && process.env['PIXY_CHATTY'] === '1') q.set('chatty', '1');
+  if (enterDrop) q.set('enter', 'drop');
+  const search = `?${q.toString()}`;
   if (devUrl) void win.loadURL(`${devUrl}/overlay/index.html${search}`);
   else void win.loadFile(join(here, '../renderer/overlay/index.html'), { search });
 }
@@ -98,11 +113,11 @@ function toNative(items: MenuItem[], run: (cmd: string) => void): MenuItemConstr
 }
 
 let settings = loadSettings(); // TODO(F1): feed settings to feature gates
-let packEnergy: Energy | undefined; // the loaded pet's own personality.energy
 let packSpecies: string | undefined; // the loaded pet's species, so Spark's lines suit it
 let packPetName: string | undefined; // the loaded pet's display name, boosted as a speech keyword
 /** What the user called their pet (manifest), not the folder slug in settings. */
 const displayName = (): string => packPetName ?? settings.petName;
+const nameOf = (slug: string): string => petNames.get(slug) ?? slug;
 let wakeTimer: NodeJS.Timeout | undefined;
 let onboarding: ReturnType<typeof setupOnboarding>;
 let overload: ReturnType<typeof setupOverload> | undefined;
@@ -113,7 +128,8 @@ let micWin: ReturnType<typeof setupMic>;
 let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech model when there is no key
 
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
-const prefs = (s = snoozed()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergy ?? 'normal', snoozed: s });
+const prefs = (s = snoozed(), slug = primarySlug()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergies.get(slug) ?? 'normal', snoozed: s });
+const menuPets = (): { slug: string; name: string }[] => petList(settings).map((slug) => ({ slug, name: nameOf(slug) }));
 const ACTIVATE_GRACE_MS = 2000;
 const MAX_TIMER = 2 ** 31 - 1; // setTimeout wraps to 1 ms above this
 // The checkbox shows what macOS says (the user can change it in System Settings); dev has no real login item.
@@ -122,8 +138,7 @@ const loginOn = (): boolean => (app.isPackaged ? app.getLoginItemSettings().open
 /** Apply every effect of the current settings; the one place main reacts to a change. */
 function sync(): void {
   const s = snoozed();
-  win?.webContents.send(IPC.prefs, prefs(s));
-  win?.setContentProtection(settings.hideInShares);
+  for (const [slug, w] of wins) if (!w.isDestroyed()) { w.webContents.send(IPC.prefs, prefs(s, slug)); w.setContentProtection(settings.hideInShares); }
   onboarding.applyProtection();
   clearTimeout(wakeTimer);
   // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
@@ -134,24 +149,29 @@ function sync(): void {
   if (listen) micWin.warm();
   else { voice.abort(); micWin.close(); }
   tray?.setImage((s ? trayIconDim : trayIcon) ?? nativeImage.createEmpty());
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active() }), run)));
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets() }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
-function run(cmd: string): void {
+function run(cmd: string, from?: BrowserWindow): void {
   if (cmd === 'overload') { void overload?.start(); return; }
   if (cmd === 'overload:end') { overload?.stop(); return; }
   if (cmd === 'stay' || cmd === 'wander') stay = cmd === 'stay';
   if (cmd === 'debug:on' || cmd === 'debug:off') {
     debugOn = cmd === 'debug:on';
-    win?.webContents.send(IPC.debug, { on: debugOn, name: displayName() });
+    primary()?.webContents.send(IPC.debug, { on: debugOn, name: displayName() });
     return;
   }
   if (cmd === 'new-pet') {
+    if (petList(settings).length >= MAX_PETS) {
+      void dialog.showMessageBox({ type: 'info', message: 'Four pets is a full house!', detail: 'Send one home first (right-click a pet, "Send … home"), then add another.' });
+      return;
+    }
     if (snoozed()) run('wake');
-    onboarding.open(true);
+    onboarding.open(true, true);
     return;
   }
+  if (cmd.startsWith('home:')) return sendHome(cmd.slice(5));
   if (cmd === 'screen:on') {
     // The explainer is the consent: nothing reads the screen (or asks macOS for Terminal access) before "Turn it on".
     if (!settings.adminDisableScreenAware) void screenExplainer.ask(displayName()).then((yes) => { if (yes) run('screen:yes'); });
@@ -179,7 +199,37 @@ function run(cmd: string): void {
       else console.log(`[prefs] openAtLogin=${String(patch['openAtLogin'])} stored; only applied in a packaged app`);
     }
     sync();
-  } else win?.webContents.send(IPC.command, cmd);
+  } else if (cmd === 'stay' || cmd === 'wander') for (const w of allWins()) w.webContents.send(IPC.command, cmd);
+  else (from && !from.isDestroyed() ? from : primary())?.webContents.send(IPC.command, cmd);
+}
+
+/** A pet made in add mode: it joins the list and drops in. */
+function joinPet(slug: string): void {
+  const next = addPet(petList(settings), slug);
+  if (!next) return;
+  try {
+    saveSettings({ pets: next });
+  } catch {
+    console.warn('PixyPup: could not save the pet list');
+  }
+  settings = loadSettings();
+  createWindow(slug, true);
+  sync();
+}
+
+function sendHome(slug: string): void {
+  const next = removePet(petList(settings), slug);
+  if (!next) return;
+  try {
+    saveSettings({ pets: next, petName: next[0] });
+  } catch {
+    console.warn('PixyPup: could not save the pet list');
+  }
+  settings = loadSettings();
+  const w = wins.get(slug);
+  wins.delete(slug);
+  w?.destroy();
+  sync();
 }
 
 // Runs from launch but does nothing (no osascript, no helper, no network) until screen-aware is on and allowed.
@@ -201,12 +251,12 @@ function startScreenAwareLoop(): void {
   startScreenLoop({
     getSettings: () => settings,
     isSnoozed: snoozed,
-    overlay: { bounds: () => win?.getBounds() ?? null, send: (b) => win?.webContents.send(IPC.behavior, b) },
+    overlay: { bounds: () => primary()?.getBounds() ?? null, send: (b) => { for (const [slug, m] of routeReaction(petList(settings), b)) wins.get(slug)?.webContents.send(IPC.behavior, m); } },
     reader,
     decider: createDecider({ spark }),
     onFailure: (text) => { lastFailure = text ? { text, at: Date.now() } : null; },
     canHint: () => fake || !!getApiKey(),
-    debug: { on: () => debugOn, send: (info) => win?.webContents.send(IPC.debug, { on: true, name: displayName(), info }) },
+    debug: { on: () => debugOn, send: (info) => primary()?.webContents.send(IPC.debug, { on: true, name: displayName(), info }) },
   });
 }
 
@@ -229,7 +279,7 @@ function askHint(): Promise<string | null> {
 }
 
 function startVoice(): void {
-  const tell = (m: VoiceUi): void => { win?.webContents.send(IPC.voice, m); };
+  const tell = (m: VoiceUi): void => { primary()?.webContents.send(IPC.voice, m); };
   micWin = setupMic({ onChunk: (b) => voice.chunk(b), fake: app.isPackaged ? undefined : fakeMicPcm(process.env['PIXY_FAKE_MIC']) });
   voice = createVoiceSession({
     allowed: () => shouldRegister(loadSettings(), snoozed()),
@@ -238,8 +288,8 @@ function startVoice(): void {
     open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, { ...opts, keywords: [displayName()] })),
     mic: micWin,
     ui: tell,
-    command: (c) => win?.webContents.send(IPC.command, c),
-    heard: (text) => { if (debugOn) win?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
+    command: (c) => primary()?.webContents.send(IPC.command, c),
+    heard: (text) => { if (debugOn) primary()?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
   });
 }
 
@@ -251,42 +301,49 @@ async function fakeVoice(text: string, onTranscript: (t: { text: string; final: 
 app.dock?.hide();
 
 void app.whenReady().then(async () => {
-  onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
+  onboarding = setupOnboarding({ getOverlay: primary, addPet: joinPet, onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
   overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
   voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });
   startVoice();
-  ipcMain.handle(IPC.getPack, async () => {
+  ipcMain.handle(IPC.getPack, async (ev) => {
+    const slug = senderSlug.get(ev.sender) ?? primarySlug();
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
     const candidates = [join(app.getAppPath(), 'assets/pets/Pakkun')];
-    if (isPlainName(settings.petName)) candidates.unshift(join(app.getPath('userData'), 'pets', settings.petName));
+    if (isPlainName(slug)) candidates.unshift(join(app.getPath('userData'), 'pets', slug));
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
     const pack = dir && (await loadPack(dir));
-    packPetName = pack ? pack.manifest.pet : undefined;
-    packSpecies = pack ? pack.manifest.species : undefined;
-    const e = pack ? pack.manifest.personality?.energy : undefined;
-    if (e !== packEnergy) {
-      packEnergy = e;
-      win?.webContents.send(IPC.prefs, prefs());
+    if (pack) petNames.set(slug, pack.manifest.pet);
+    if (slug === primarySlug()) {
+      packPetName = pack ? pack.manifest.pet : undefined;
+      packSpecies = pack ? pack.manifest.species : undefined;
     }
+    const e = pack ? pack.manifest.personality?.energy : undefined;
+    if (e !== packEnergies.get(slug)) {
+      if (e) packEnergies.set(slug, e);
+      else packEnergies.delete(slug);
+      wins.get(slug)?.webContents.send(IPC.prefs, prefs(snoozed(), slug));
+    }
+    if (pack) sync(); // the menus name the pets
     return pack;
   });
-  ipcMain.handle(IPC.getPrefs, () => prefs());
+  ipcMain.handle(IPC.getPrefs, (ev) => prefs(snoozed(), senderSlug.get(ev.sender)));
   ipcMain.handle(IPC.askHint, () => (snoozed() ? null : askHint()));
   if (!app.isPackaged) ipcMain.on(IPC.devCmd, (_e, cmd: unknown) => { if (typeof cmd === 'string') run(cmd); }); // CDP can't click native menus
   ipcMain.handle(IPC.getStay, () => stay);
-  ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => {
-    win?.setIgnoreMouseEvents(on, { forward: true });
+  ipcMain.on(IPC.setClickThrough, (e, on: boolean) => {
+    winOf(e)?.setIgnoreMouseEvents(on, { forward: true });
   });
-  ipcMain.on(IPC.showMenu, () => {
+  ipcMain.on(IPC.showMenu, (e) => {
+    const win = winOf(e);
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), name: displayName() }), run);
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), name: displayName() }), (c) => run(c, win));
     if (process.env['ELECTRON_RENDERER_URL']) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
-    Menu.buildFromTemplate(items).popup({ window: win, callback: () => win?.setIgnoreMouseEvents(true, { forward: true }) });
+    Menu.buildFromTemplate(items).popup({ window: win, callback: () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); } });
   });
-  createWindow();
+  for (const slug of petList(settings)) createWindow(slug);
   createTray();
   const atLogin = app.isPackaged && app.getLoginItemSettings().wasOpenedAtLogin === true;
   if (wakeOnOpen(snoozed(), atLogin)) run('wake'); // run syncs
