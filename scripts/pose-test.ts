@@ -7,8 +7,11 @@
 // Defaults to the first image in assets/photos/. Cost per full run: ~1 SAM call + 7 images,
 // well under $0.10.
 
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
 import { clientFromEnv, type MetaClient } from '../src/api/meta-client.js';
@@ -55,6 +58,19 @@ async function firstPhoto(): Promise<string> {
   const files = (await readdir(dir)).filter((f) => /\.(jpe?g|png|webp|heic)$/i.test(f)).sort();
   if (files.length === 0) throw new Error(`No photos in ${dir}/. Drop 3-4 full-body shots there.`);
   return join(dir, files[0] as string);
+}
+
+/** sharp's prebuilt libvips has no HEVC decoder, so iPhone HEIC goes through macOS `sips` first. */
+async function readPhoto(path: string): Promise<Buffer> {
+  if (!/\.heic$/i.test(path)) return readFile(path);
+  const dir = await mkdtemp(join(tmpdir(), 'pixy-'));
+  try {
+    const out = join(dir, 'photo.png');
+    await promisify(execFile)('sips', ['-s', 'format', 'png', path, '--out', out]);
+    return await readFile(out);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 /** SAM-segment the pet, return a tight transparent PNG cutout. */
@@ -131,7 +147,7 @@ async function main(): Promise<void> {
   const photoPath = positionals[0] ?? (await firstPhoto());
   log(`Photo: ${photoPath}`);
   // Normalise to PNG <= 1536px: HEIC/JPEG in, small upload out.
-  const photo = await sharp(await readFile(photoPath)).rotate().resize(1536, 1536, { fit: 'inside' }).png().toBuffer();
+  const photo = await sharp(await readPhoto(photoPath)).rotate().resize(1536, 1536, { fit: 'inside' }).png().toBuffer();
 
   let t = Date.now();
   const cutout = await samCutout(client, photo, values.species ?? 'dog');
