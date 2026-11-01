@@ -1,5 +1,3 @@
-import type { BehaviorDecision } from '../../contracts/types.js';
-import type { Observation } from '../screen/decide.js';
 import type { MetaClient } from './meta-client.js';
 
 export const SPARK_MODEL = 'muse-spark-1.3';
@@ -119,7 +117,3 @@ export async function sparkJson<T>(client: MetaClient, o: SparkOptions & { valid
   return o.validate(extractJson(parseResponseText(await sparkResponse(client, o))));
 }
 
-// TODO(F7): LLM behavior decision; must validate against contracts/behavior-decision.schema.json.
-export function decideBehavior(_observation: Observation): Promise<BehaviorDecision> {
-  throw new Error('not implemented');
-}

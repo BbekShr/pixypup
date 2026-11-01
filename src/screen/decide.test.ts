@@ -51,7 +51,7 @@ describe('ruleDecide', () => {
     expect(d?.target).toEqual({ x: 5, y: 210 });
   });
   it('perks up for Slack badge', () => {
-    expect(ruleDecide({ ...base, slackBadge: '3' })).toMatchObject({ action: 'idle', reason: 'perk up' });
+    expect(ruleDecide({ ...base, slackBadge: '3' })).toMatchObject({ action: 'perk_up' });
   });
   it('call beats error', () => {
     const d = ruleDecide({
