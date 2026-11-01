@@ -29,4 +29,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-10-31 (F15): pack order PIXY_PACK_DIR (dev) → userData/pets/<petName> → built-in assets/pets/Pakkun → placeholder; settings (petName) are read once at startup, so creating a pet must re-resolve the pack. `--user-data-dir=<dir>` after `--` isolates userData in dev. Tests 138 in 12 files. `src/main/main.ts`
 
+- 2026-10-31 (F5a): onboarding = `src/main/onboarding.ts` + `src/onboarding/*`; dev hooks: `PIXY_FAKE_PIPELINE=1 [PIXY_FAKE_FAST=1]` rehearsal, `PIXY_DEV_PHOTO=<abs path>` + `window.__ob.devPhoto()`, `kill -USR2 <main pid>` opens the window; real CDP driver at out/_drive.mjs. Tests 171 in 17 files.
+
 ## Clean audits (so discovery skips these grounds)
