@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, blinkDelay, bob, envelope, fall, gait, headX, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, fall, gait, headX, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -163,6 +163,13 @@ describe('gait, bark, settle', () => {
     expect(pop.dx).toBeGreaterThan(0);
     expect(barkPose(1200).rot).toBeCloseTo(0, 1);
     expect(barkPose(1400 + 180).rot).toBeCloseTo(5); // repeats
+  });
+  it('counts a new burst on each burst\'s first pop', () => {
+    expect(woofBurst(0)).toBe(-1);
+    expect(woofBurst(179)).toBe(-1);
+    expect(woofBurst(180)).toBe(0);
+    expect(woofBurst(520)).toBe(0); // second woof of the same burst
+    expect(woofBurst(1400 + 180)).toBe(1);
   });
   it('settle dips, overshoots, and is done by SETTLE_MS', () => {
     expect(settle(0)).toBeCloseTo(0.94);

@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, blinkDelay, breathe, envelope, fall, gait, headX, hop, lean, overlap, petTransform, pickTarget, rollAngle, settle, squash, walkFrame, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, breathe, envelope, fall, gait, headX, hop, lean, overlap, petTransform, pickTarget, rollAngle, settle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -71,6 +71,8 @@ let sayAt = Infinity;
 let speakingUntil = 0;
 let lastLine: string | null = null;
 let lineOnBark = false;
+let woofs = false; // this bark shows "Woof!" bubbles
+let woofShown = -1; // the last burst that got one
 const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('chatty') === '1';
 
 interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean }
@@ -282,17 +284,23 @@ function enter(prev: PetState): void {
       );
     }
   }
+  woofs = false;
+  woofShown = -1;
   if (state === 'bark' && !greet && quiet(performance.now(), speakingUntil)) {
     if (lineOnBark && speakLine()) return;
-    const b = document.createElement('div');
-    b.textContent = 'Woof!';
-    b.style.cssText = 'position:absolute;left:0;top:0;font:700 14px sans-serif;background:#fff;color:#222;padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none';
-    fx.append(b);
-    b.animate(
-      [{ opacity: 0, transform: 'translate(-50%,-100%) translateY(4px)' }, { opacity: 1, offset: 0.15 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-10px)' }],
-      { duration: 800 },
-    ).onfinish = () => b.remove();
+    woofs = true; // the frame loop pops a "Woof!" on each burst
   }
+}
+
+function woofBubble(): void {
+  const b = document.createElement('div');
+  b.textContent = 'Woof!';
+  b.style.cssText = 'position:absolute;left:0;top:0;font:700 14px sans-serif;background:#fff;color:#222;padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none';
+  fx.append(b);
+  b.animate(
+    [{ opacity: 0, transform: 'translate(-50%,-100%) translateY(4px)' }, { opacity: 1, offset: 0.15 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-10px)' }],
+    { duration: 800 },
+  ).onfinish = () => b.remove();
 }
 
 function frame(now: number): void {
@@ -426,6 +434,7 @@ function frame(now: number): void {
   } else if (state === 'sleep') {
     sy = breathe(now, 0.2, 0.04);
   } else if (state === 'bark') {
+    if (woofs && woofBurst(age) > woofShown && quiet(now, speakingUntil)) { woofShown = woofBurst(age); woofBubble(); }
     if (!calm) {
       const b = barkPose(age);
       dx = b.dx * facing;

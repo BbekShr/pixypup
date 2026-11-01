@@ -147,6 +147,9 @@ export function barkPose(tMs: number): Pose {
   return { dx: 3 * k, dy: 0, rot: 5 * k, sx: 1 - 0.03 * k, sy: 1 + 0.06 * k };
 }
 
+/** Which burst's first woof has popped by tMs (-1 before the first), so a "Woof!" can land on each pop. */
+export const woofBurst = (tMs: number): number => (tMs < WOOFS[0]! ? -1 : Math.floor((tMs - WOOFS[0]!) / WOOF_EVERY));
+
 export const SETTLE_MS = 400;
 
 /** Follow-through when the pose changes: a dip to 0.94, a small overshoot, settled by SETTLE_MS. Returns sy. */
