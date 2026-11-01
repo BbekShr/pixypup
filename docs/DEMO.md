@@ -27,3 +27,22 @@ Record with QuickTime (File > New Screen Recording). Put Terminal front-most bef
 - Check the debug card: Terminal "nothing failing" = Terminal is not front-most or Automation was denied; Badge "—" = Accessibility missing; Call "no" = grant Screen Recording.
 - Rehearse the pet side without any permission: `PIXY_FAKE_SCREEN=1 npm run dev`, then in the overlay devtools `__pixyDebug.pref('screen:yes')` and `__pixyDebug.behave(...)` (dev builds only; see README).
 - Last resort: record the reaction from the fake-screen run and cut it in. Never cut the failing-test sniff.
+
+## If the Wi-Fi dies
+Everything the pet does on its own is local; only the model calls need a network. In the packaged dmg, with no connection:
+- **Works offline:** Pakkun, the Pet library (Mochi, Kuma), walk, turn, drag, tricks, size, energy, snooze; the failing-test sniff (the failure is detected locally from Terminal, and only the Spark wording of the bubble needs the network: it gives up after 6 s, `src/screen/decide.ts:50,73-78`, and the decider uses its own line, `:86`, `FALLBACKS` at `:49`); the fix celebrate; the badge perk; the call hide.
+- **Needs the network:** create-a-pet from a photo, the hint (aborted after 15 s, `src/main/main.ts:341`, then he says "Hmm, I'm not sure this time", `src/overlay/overlay.ts:1015`), voice, and Talk.
+- **Fallback kit (dev checkout only):** the fake modes are deliberately gated on `!app.isPackaged` (`src/main/main.ts:246,307,351`, `src/main/onboarding.ts:20`), so a packaged dmg can never run them. Do not change that to make a demo easier.
+  - Create-a-pet: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` replays the built-in Pakkun as if just generated.
+  - Screen reactions and the hint: `PIXY_FAKE_SCREEN=1 npm run dev`, then in the overlay devtools `__pixyDebug.pref('screen:yes')`, and `__pixyDebug.pref('screen:fake:fail')` or `screen:fake:pass` to flip the scripted terminal (the hint is a canned line with no key, `src/main/main.ts:339`).
+  - Voice: `PIXY_FAKE_MIC=<wav>` streams a recording instead of the microphone (the transcript still comes from the model, so voice itself needs the network).
+- **Pre-record each beat** while you have a connection, so a dead network costs you a re-take of nothing. Never cut the failing-test sniff.
+
+| Beat | Works offline? | Fallback |
+|---|---|---|
+| Failing-test sniff | Yes (Spark bubble waits up to 6 s, then his own line) | None needed; never cut it |
+| Hint | No | Pre-recorded clip, or `PIXY_FAKE_SCREEN=1` canned hint |
+| Fixed celebrate, Dock badge, Call hide | Yes | None needed |
+| Create-a-pet | No | `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1` run, or a pre-recorded clip |
+| Voice, Talk | No | Pre-recorded clip (`PIXY_FAKE_MIC=<wav>` for the mic side) |
+| Pet library, walk, tricks, size, energy, snooze | Yes | None needed |
