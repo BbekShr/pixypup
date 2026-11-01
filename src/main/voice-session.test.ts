@@ -6,10 +6,11 @@ import { createVoiceSession, type VoiceUi } from './voice-session';
 const loud = new Int16Array(960).fill(8000).buffer;
 const quiet = new Int16Array(960).buffer;
 
-function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFails?: boolean } = {}) {
+function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFails?: boolean; talk?: boolean } = {}) {
   const log: string[] = [];
   const ui: VoiceUi[] = [];
   const cmds: string[] = [];
+  const talked: string[] = [];
   let opts!: Omit<VoiceOptions, 'apiKey'>;
   let opened = 0;
   let pushed = 0;
@@ -35,8 +36,9 @@ function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFail
     ui: (m) => void ui.push(m),
     command: (c) => void cmds.push(c),
     heard: () => undefined,
+    talk: o.talk ? (t) => void talked.push(t) : undefined,
   });
-  return { s, log, ui, cmds, opened: () => opened, pushed: () => pushed, got, fail: () => opts.onError({ code: 1011 } as never) };
+  return { s, talked, log, ui, cmds, opened: () => opened, pushed: () => pushed, got, fail: () => opts.onError({ code: 1011 } as never) };
 }
 const kinds = (ui: VoiceUi[]) => ui.map((u) => u.kind);
 
@@ -180,6 +182,27 @@ describe('voice session', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(r.cmds).toEqual([]);
     expect(kinds(r.ui).at(-1)).toBe('huh');
+  });
+  it('a sentence that is not a command goes to the chat, a short mumble still gets huh', async () => {
+    for (const [transcript, chat] of [['I had a really rough day', true], ['hmm okay', false]] as const) {
+      const r = rig({ transcript, talk: true });
+      r.s.press();
+      await vi.advanceTimersByTimeAsync(0);
+      r.s.press();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(r.cmds).toEqual([]);
+      expect(r.talked).toEqual(chat ? [transcript] : []);
+      expect(kinds(r.ui).at(-1)).toBe(chat ? 'idle' : 'huh');
+    }
+  });
+  it('a real command never opens the chat', async () => {
+    const r = rig({ transcript: 'Pakkun, sit down please now', talk: true });
+    r.s.press();
+    await vi.advanceTimersByTimeAsync(0);
+    r.s.press();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(r.cmds.length).toBe(1);
+    expect(r.talked).toEqual([]);
   });
   it('an ASR error or a failed open gives the gentle error and frees the mic', async () => {
     const r = rig();
