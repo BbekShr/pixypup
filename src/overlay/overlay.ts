@@ -807,7 +807,11 @@ function command(raw: string): void {
   queuedCmd = r.queued;
   if (!r.now) return;
   const cmd = r.now;
-  if (act?.kind === 'hide') return;
+  if (act?.kind === 'hide') { // the flag still follows the menu (main flipped its own); no walking mid-hide
+    if (cmd === 'stay') stay = true;
+    else if (cmd === 'wander') stay = false;
+    return;
+  }
   if (act?.kind === 'sniff' || commandMustWait({ falling, dragging, turning: state === 'walk' && performance.now() < turnUntil })) { queuedCmd = cmd; return; } // waits for the sniff, the fall, the hand or the hop-turn to finish
   act = actAfterCommand(act);
   lastInteraction = performance.now();
