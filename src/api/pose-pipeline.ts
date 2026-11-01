@@ -1,5 +1,5 @@
-// One pet photo -> sprite pack. SAM cuts the pet out, Muse Image draws idle first, then the other
-// poses in parallel with idle as a second reference, a local chroma key removes the magenta
+// One pet photo -> sprite pack. SAM cuts the pet out, Muse Image draws idle, then walk_0, then the other
+// poses in parallel with idle (and walk_0 for the walk frames) as extra references, a local chroma key removes the magenta
 // background and every frame is scaled to one body size on one shared canvas.
 // Privacy: the photo and cutout live in memory only; the library writes just the pack.
 
@@ -10,37 +10,55 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import type { SpriteManifest } from '../../contracts/types.js';
+import { validateManifest } from './manifest.js';
 import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
 import { largest, maskAt, segment } from './sam.js';
+
+export { validateManifest };
 
 export const MAGENTA = { r: 255, g: 0, b: 255 };
 const TARGET_HEIGHT = 256;
 const MARGIN = 2;
 
 export const STYLE =
-  'Redraw the exact same pet from the reference photo as a cute chibi sticker character: ' +
-  'same breed, same fur colours and markings, same ear shape, big friendly eyes, soft cel shading, ' +
-  'thick clean white sticker outline. Full body visible, centred, nothing cropped. ' +
+  'Render the exact same pet from the reference photo as a cute 3D animated-movie character, ' +
+  'Pixar-style: soft volumetric fur, gentle studio lighting with soft highlights, subtle ambient occlusion, ' +
+  'slightly stylised proportions (big expressive glossy eyes, rounded body), same breed, same fur colour and markings. ' +
+  'Full body visible, centred, nothing cropped. Thin clean white outline around the silhouette. ' +
   'Solid flat pure magenta background (#FF00FF) filling the whole canvas, no gradient, ' +
-  'no ground shadow, no props, no text. ' +
+  'no ground shadow, no reflections, no props, no text. ' +
   'Keep the same soft ears (same shape and how they hang), same face shape and same collar as the reference; ' +
   'do not change the breed or ear shape. ' +
   'Leave a clear margin of empty background on all four sides so nothing touches the canvas edge.';
 
-// idle_0 is generated first and then fed back as a second reference so every other pose
-// copies its character design.
+// idle_0 is generated first and fed back as a second reference so every other pose copies its character design.
+const SHEET =
+  "A horizontal sprite sheet of exactly 4 frames of the same character's walk cycle, side view facing right, " +
+  'evenly spaced in 4 equal columns with wide magenta gaps between frames: ' +
+  'frame 1 contact (right front and left back legs forward), frame 2 passing (legs under body), ' +
+  'frame 3 contact mirrored (left front and right back legs forward), frame 4 passing. ' +
+  'Same size, same height, same camera in every frame; only the legs move.';
+
+// The sheet is one request so the four frames come out as one coherent cycle (separate calls copied each other).
+// idle_blink is a pure edit of the idle image: no STYLE prefix, it would invite a redraw.
 export const POSES: Record<string, string> = {
   idle_0: 'Pose: standing on all four legs, side view facing right, tail relaxed.',
-  walk_0: 'Pose: mid-walk, side view facing right, front-left and back-right legs forward.',
-  walk_1: 'Pose: mid-walk, side view facing right, front-right and back-left legs forward.',
+  walk_sheet: SHEET,
   sit: 'Pose: sitting upright facing the viewer, front paws together.',
   sleep: 'Pose: curled up asleep lying down, eyes closed, side view.',
   bark: 'Pose: barking happily, side view facing right, mouth open, ears perked.',
   roll: 'Pose: rolling over on its back, belly up, paws in the air, playful.',
+  idle_blink:
+    'Edit this exact image: gently close the eyes in a blink. Change nothing else: same pose, same framing, ' +
+    'same size, same position, same lighting, same magenta background.',
 };
 
-const POSE_NAMES = Object.keys(POSES);
+const WALK_FRAMES = ['walk_0', 'walk_1', 'walk_2', 'walk_3'];
+const POSE_NAMES = ['idle_0', ...WALK_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
+// Lying poses are sized by width, everything else by height.
+const LYING = new Set(['sleep', 'roll']);
+const BLINK_MIN_IOU = 0.85;
 
 export type PipelineEvent =
   | { stage: 'cutout'; png: Buffer }
@@ -125,6 +143,23 @@ export interface Keyed {
   opaque: number;
   /** Fraction of the canvas border that is subject: the model drew past the edge. */
   edge: number;
+  /** Subject bounding box on the raw canvas (inclusive); all zero when empty. */
+  box: Box;
+}
+
+export interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export function bboxIoU(a: Box, b: Box): number {
+  const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) + 1;
+  const h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + 1;
+  if (w <= 0 || h <= 0) return 0;
+  const area = (r: Box) => (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1);
+  return (w * h) / (area(a) + area(b) - w * h);
 }
 
 /**
@@ -176,20 +211,20 @@ export async function chromaKey(img: Buffer): Promise<Keyed> {
   // Own bbox instead of sharp's trim(), which also drops faint anti-aliased edge pixels.
   const crop = x1 < 0 ? { left: 0, top: 0, width: W, height: H } : { left: x0, top: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
   const png = await sharp(data, { raw: { width: W, height: H, channels: 4 } }).extract(crop).png().toBuffer();
-  return { png, bleed: bleed / (W * H), opaque: opaque / (W * H), edge: ringOpaque / ring };
+  return { png, bleed: bleed / (W * H), opaque: opaque / (W * H), edge: ringOpaque / ring, box: x1 < 0 ? { x0: 0, y0: 0, x1: 0, y1: 0 } : { x0, y0, x1, y1 } };
 }
 
 export interface KeyedFrame {
   /** Keyed and trimmed PNG. */
   png: Buffer;
-  /** Height of the raw canvas Muse drew on, before trimming. */
-  rawHeight: number;
+  /** Height of the raw canvas Muse drew on; absent for sheet slices, which have no canvas of their own. */
+  rawHeight?: number;
 }
 
 /**
- * One scale for every pose (TARGET_HEIGHT / idle's trimmed height) keeps sit/sleep/roll at their
- * natural proportions; a pose drawn on a different canvas size is first rescaled by the raw height ratio
- * (heights are what we normalise).
+ * Every pose is sized from its own trimmed alpha: standing/sitting poses to idle's height (TARGET_HEIGHT),
+ * lying poses (sleep, roll) to 1.1 x idle's width. Each scale is clamped to 0.6..1.6 of the raw-canvas
+ * estimate so a bad drawing cannot be blown up or shrunk absurdly.
  * Frames are then centred and bottom-aligned (MARGIN px) on one shared canvas.
  */
 export async function layoutFrames(
@@ -197,11 +232,16 @@ export async function layoutFrames(
   idle: string,
 ): Promise<{ frames: Record<string, Buffer>; width: number; height: number; footY: number }> {
   const ref = keyed[idle] as KeyedFrame;
-  const s = TARGET_HEIGHT / (await sharp(ref.png).metadata()).height;
+  const refMeta = await sharp(ref.png).metadata();
+  const s = TARGET_HEIGHT / refMeta.height;
   const scaled: Record<string, { buf: Buffer; w: number; h: number }> = {};
   for (const [name, f] of Object.entries(keyed)) {
     const { width, height } = await sharp(f.png).metadata();
-    const k = (s * ref.rawHeight) / f.rawHeight;
+    let k = LYING.has(name) ? (1.1 * refMeta.width * s) / width : TARGET_HEIGHT / height;
+    if (f.rawHeight && ref.rawHeight) {
+      const est = (s * ref.rawHeight) / f.rawHeight;
+      k = Math.min(1.6 * est, Math.max(0.6 * est, k));
+    }
     const w = Math.max(1, Math.round(width * k));
     const h = Math.max(1, Math.round(height * k));
     scaled[name] = { buf: await sharp(f.png).resize(w, h).png().toBuffer(), w, h };
@@ -220,24 +260,46 @@ export async function layoutFrames(
   return { frames, width, height, footY: (height - MARGIN) / height };
 }
 
-export function validateManifest(m: unknown): asserts m is SpriteManifest {
-  const bad = (why: string): never => {
-    throw new Error(`Invalid sprite manifest: ${why}`);
-  };
-  if (typeof m !== 'object' || m === null) return bad('not an object');
-  const o = m as Record<string, unknown>;
-  if (Object.keys(o).some((k) => !['pet', 'species', 'poses'].includes(k))) bad('unknown key');
-  if (typeof o.pet !== 'string') bad('pet');
-  if (o.species !== 'dog' && o.species !== 'cat') bad('species');
-  if (typeof o.poses !== 'object' || o.poses === null) return bad('poses');
-  for (const [name, p] of Object.entries(o.poses)) {
-    const d = p as Record<string, unknown> | null;
-    if (typeof d !== 'object' || d === null) return bad(`pose ${name}`);
-    if (Object.keys(d).some((k) => !['frames', 'fps', 'footY'].includes(k))) bad(`pose ${name} unknown key`);
-    if (!Array.isArray(d.frames) || d.frames.length === 0 || d.frames.some((f) => typeof f !== 'string')) bad(`pose ${name} frames`);
-    if (typeof d.fps !== 'number') bad(`pose ${name} fps`);
-    if (typeof d.footY !== 'number') bad(`pose ${name} footY`);
+/**
+ * Cut a keyed sprite sheet (RGBA) into n frames. Muse draws frames that nearly touch, so there is no
+ * reliable empty gutter: each of the n-1 cuts goes at the emptiest column (fewest alpha >= 32 pixels)
+ * within 18% of a frame width of k*W/n. Null unless every cut column holds <= 15% of the busiest
+ * column's pixels and the n frames' alpha-bbox widths are within 35% of the median.
+ */
+export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0: number; x1: number }[] | null {
+  const count: number[] = [];
+  for (let x = 0; x < w; x++) {
+    let c = 0;
+    for (let y = 0; y < h; y++) if ((rgba[(y * w + x) * 4 + 3] as number) >= 32) c++;
+    count.push(c);
   }
+  const max = Math.max(...count);
+  const half = Math.round((0.18 * w) / n);
+  const cuts = [0];
+  for (let k = 1; k < n; k++) {
+    const mid = Math.round((k * w) / n);
+    let best = mid;
+    for (let x = Math.max(1, mid - half); x <= Math.min(w - 1, mid + half); x++) {
+      const c = count[x] as number;
+      const bc = count[best] as number;
+      if (c < bc || (c === bc && Math.abs(x - mid) < Math.abs(best - mid))) best = x;
+    }
+    if ((count[best] as number) > 0.15 * max) return null;
+    cuts.push(best);
+  }
+  cuts.push(w);
+  const runs: { x0: number; x1: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    let x0 = cuts[i] as number;
+    let x1 = (cuts[i + 1] as number) - 1;
+    while (x0 <= x1 && !count[x0]) x0++;
+    while (x1 >= x0 && !count[x1]) x1--;
+    if (x1 < x0) return null;
+    runs.push({ x0, x1 });
+  }
+  const widths = runs.map((r) => r.x1 - r.x0 + 1).sort((a, b) => a - b);
+  const median = widths[Math.floor(n / 2)] as number;
+  return runs.every((r) => Math.abs(r.x1 - r.x0 + 1 - median) <= 0.35 * median) ? runs : null;
 }
 
 /** Publish `files` as outDir without ever leaving a half-written or missing pack. `mv` is injectable for tests. */
@@ -301,7 +363,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
 
   const cutoutOnMagenta = dataUrl(await sharp(cutout).flatten({ background: MAGENTA }).png().toBuffer());
 
-  const attempt = async (prompt: string, refs: string[]) => {
+  const attempt = async <T>(prompt: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>) => {
     const ctl = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -312,44 +374,90 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       const [img] = await editImage(o.client, prompt, refs, 1, { signal: ctl.signal });
       const keyed = await chromaKey(img!.buffer);
       if (keyed.opaque < 0.02 || keyed.opaque > 0.9 || keyed.edge > 0.01) throw new BadOutputError('degenerate pose');
-      return { img: img!, keyed: { png: keyed.png, rawHeight: (await sharp(img!.buffer).metadata()).height } };
+      return await finish(img!, keyed);
     } catch (err) {
       throw Object.assign(err instanceof Error ? err : new Error(String(err)), { timedOut });
     } finally {
       clearTimeout(timer);
     }
   };
-  const draw = async (name: string, refs: string[]) => {
-    const prompt = `${STYLE} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
+  const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>) => {
+    const prompt =
+      name === 'idle_blink'
+        ? POSES[name]!
+        : `${STYLE} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
     try {
-      return await attempt(prompt, refs);
+      return await attempt(prompt, refs, finish);
     } catch (first) {
       const wait = (first instanceof MetaApiError && first.status === 429 ? 3 : 1) * backoffMs;
       await new Promise((r) => setTimeout(r, wait));
-      return await attempt(prompt, refs);
+      return await attempt(prompt, refs, finish);
     }
   };
   const poseEvent = (name: string, png: Buffer, fallback?: boolean) =>
     emit({ stage: 'pose', name, png, index: POSE_NAMES.indexOf(name), total: POSE_NAMES.length, ...(fallback ? { fallback } : {}) });
 
-  const idle = await draw('idle_0', [cutoutOnMagenta]);
-  poseEvent('idle_0', idle.keyed.png);
-  const refs = [cutoutOnMagenta, dataUrl(idle.img.buffer, idle.img.mime)];
+  const rawHeightOf = async (b: Buffer) => (await sharp(b).metadata()).height;
+  const single = async (img: { buffer: Buffer }, k: Keyed) => ({ png: k.png, rawHeight: await rawHeightOf(img.buffer) });
 
-  const keyed: Record<string, KeyedFrame> = { idle_0: idle.keyed };
-  await Promise.all(
-    POSE_NAMES.slice(1).map(async (name) => {
-      let failure: string | null = null;
-      try {
-        keyed[name] = (await draw(name, refs)).keyed;
-      } catch (err) {
-        keyed[name] = idle.keyed;
-        failure = reason(err, (err as { timedOut?: boolean }).timedOut === true);
-      }
-      if (failure) emit({ stage: 'pose-failed', name, error: failure });
-      poseEvent(name, (keyed[name] as KeyedFrame).png, failure ? true : undefined);
-    }),
-  );
+  const idleDraw = await draw('idle_0', [cutoutOnMagenta], async (img, k) => ({ img, k, frame: await single(img, k) }));
+  const idle = idleDraw.frame;
+  poseEvent('idle_0', idle.png);
+  const idleRaw = dataUrl(idleDraw.img.buffer, idleDraw.img.mime);
+
+  const keyed: Record<string, KeyedFrame> = { idle_0: idle };
+  // On failure every name in `names` falls back to the idle frame (a missing walk/blink is harmless, a bad one is not).
+  const run = async (names: string[], go: () => Promise<KeyedFrame[]>) => {
+    let failure: string | null = null;
+    try {
+      const out = await go();
+      names.forEach((n, i) => (keyed[n] = out[i] as KeyedFrame));
+    } catch (err) {
+      names.forEach((n) => (keyed[n] = idle));
+      failure = reason(err, (err as { timedOut?: boolean }).timedOut === true);
+    }
+    for (const n of names) {
+      if (failure) emit({ stage: 'pose-failed', name: n, error: failure });
+      poseEvent(n, (keyed[n] as KeyedFrame).png, failure ? true : undefined);
+    }
+  };
+  const refs = [cutoutOnMagenta, idleRaw];
+  const sheet = async (_img: unknown, k: Keyed) => {
+    const { data, info } = await sharp(k.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const runs = sliceSheet(data, info.width, info.height, WALK_FRAMES.length);
+    if (!runs) throw new BadOutputError('bad sheet');
+    return Promise.all(
+      runs.map(async (r) => {
+        const slice = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+          .extract({ left: r.x0, top: 0, width: r.x1 - r.x0 + 1, height: info.height })
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        let y0 = info.height;
+        let y1 = -1;
+        for (let i = 3; i < slice.data.length; i += 4) {
+          if ((slice.data[i] as number) === 0) continue;
+          const y = Math.floor(i / 4 / slice.info.width);
+          y0 = Math.min(y0, y);
+          y1 = Math.max(y1, y);
+        }
+        const png = await sharp(slice.data, { raw: { width: slice.info.width, height: info.height, channels: 4 } })
+          .extract({ left: 0, top: y0, width: slice.info.width, height: y1 - y0 + 1 })
+          .png()
+          .toBuffer();
+        return { png };
+      }),
+    );
+  };
+  await Promise.all([
+    run(WALK_FRAMES, () => draw('walk_sheet', refs, sheet)),
+    ...['sit', 'sleep', 'bark', 'roll'].map((n) => run([n], async () => [await draw(n, refs, single)])),
+    run(['idle_blink'], async () => [
+      await draw('idle_blink', [idleRaw], async (img, k) => {
+        if (bboxIoU(k.box, idleDraw.k.box) < BLINK_MIN_IOU) throw new BadOutputError('blink moved');
+        return single(img, k);
+      }),
+    ]),
+  ]);
 
   const { frames, footY } = await layoutFrames(keyed, 'idle_0');
   const pose = (frames: string[], fps: number) => ({ frames, fps, footY });
@@ -358,11 +466,12 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     species: o.species,
     poses: {
       idle: pose(['idle_0.png'], 2),
-      walk: pose(['walk_0.png', 'walk_1.png'], 6),
+      walk: pose(['walk_0.png', 'walk_1.png', 'walk_2.png', 'walk_3.png'], 8),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),
       bark: pose(['bark.png'], 4),
       roll: pose(['roll.png'], 2),
+      blink: pose(['idle_blink.png'], 1),
     },
   };
   validateManifest(manifest);

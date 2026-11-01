@@ -15,5 +15,6 @@
 - Import shared validators from a leaf module; importing from `pose-pipeline.ts` pulled sharp into the Electron main bundle (F4).
 - Every pointer path (up, cancel, lostpointercapture) restores click-through; test the invariants as pure functions, not formula re-statements (F4).
 - Before a verify run, check who owns the debug and renderer ports (the maintainer may be running the app); use a different `--remoteDebuggingPort` and never kill processes you didn't start.
+- When separate image calls copy a reference, ask for one sprite sheet and slice locally; save real model output as a test fixture, because synthetic fixtures are too clean (F13: Muse sheet frames nearly touch).
 
 ## Archive

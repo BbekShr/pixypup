@@ -25,4 +25,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 - 2026-10-31 (F4): overlay loads the pack via `pixy:get-pack` (data URLs, ≤64 frames, ≤2 MB each); `PIXY_PACK_DIR` dev-only; `npm run dev:pakkun` uses out/pack/Pakkun. Display height 140 px, stride 0.22×width, max 90 px/s, gravity 2000 px/s². Tests 105 in 10 files. `src/overlay/*`, `src/main/pack.ts`
 - 2026-10-31 (F4): dev-only `window.__pixyDebug` {state,x,dir,facing,walked,stay,menuCalls,command()} for CDP; Runtime.evaluate on promises needs awaitPromise. `src/overlay/overlay.ts`
 
+- 2026-10-31 (F13): pipeline = SAM cutout → idle → parallel [walk sheet, sit, sleep, bark, roll, blink edit]; 7 Muse Image requests + 1 SAM per run; live 52 s; manifest poses idle, blink, walk(4 frames, fps 8), sit, sleep, bark, roll. Tests 134 in 12 files. `src/api/pose-pipeline.ts`, `src/api/manifest.ts`
+
 ## Clean audits (so discovery skips these grounds)
