@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PixyPup · your pet, on your Mac</title>
+<meta name="description" content="One photo of your dog or cat becomes a 3D companion on your Mac with PixyPup. It walks, does tricks, sniffs your failing tests. Built with Meta SAM 3.1, Muse Image, Muse Spark and Voice Transcribe.">
+<meta property="og:title" content="PixyPup · your pet, on your Mac">
+<meta property="og:description" content="One photo in. One very good pup out. He walks your desktop, does tricks, and sniffs out your failing tests.">
+<meta property="og:image" content="https://bbekshr.github.io/pixypup/pack-sheet.png">
+<link rel="icon" href="img/pakkun/idle_0.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream: #FFF6EC;
+  --cream-deep: #FBE8D3;
+  --ink: #3B2F2A;
+  --ink-soft: rgba(59, 47, 42, .66);
+  --blush: #F4A6A0;
+  --blush-deep: #E9827B;
+  --honey: #F6C76B;
+  --sky: #BFE3F2;
+  --mint: #CDEBD3;
+  --radius: 28px;
+  --pop: cubic-bezier(.34, 1.56, .64, 1);
+  --settle: cubic-bezier(.2, .8, .2, 1);
+  --shadow: 0 10px 30px rgba(59, 47, 42, .12);
+  --shadow-lg: 0 24px 60px rgba(59, 47, 42, .16);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--cream); color: var(--ink);
+  font: 17px/1.6 "Nunito", ui-rounded, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  background-image: radial-gradient(circle at 12% 8%, #FDE3DC 0, transparent 38%),
+                    radial-gradient(circle at 92% 18%, #E3F2F9 0, transparent 34%);
+}
+h1, h2, h3 { font-family: "Fredoka", ui-rounded, system-ui, sans-serif; line-height: 1.1; margin: 0; letter-spacing: -.01em; }
+h2 { font-size: clamp(32px, 5vw, 52px); }
+h3 { font-size: 24px; }
+p { margin: 0; }
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+.eyebrow { display: inline-flex; gap: 8px; align-items: center; font: 700 13px/1 "Nunito"; text-transform: uppercase; letter-spacing: .12em; color: var(--blush-deep); margin-bottom: 14px; }
+.lede { font-size: 19px; color: var(--ink-soft); max-width: 620px; }
+section { padding: 96px 0; position: relative; }
+.center { text-align: center; }
+.center .lede { margin-inline: auto; }
+
+/* nav */
+nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); background: rgba(255, 246, 236, .78); border-bottom: 1px solid rgba(59, 47, 42, .06); }
+nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.logo { display: flex; align-items: center; gap: 10px; font: 700 22px "Fredoka"; text-decoration: none; }
+.logo img { width: 34px; height: 36px; object-fit: contain; }
+nav ul { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; font-weight: 700; font-size: 15px; }
+nav ul a { text-decoration: none; opacity: .75; }
+nav ul a:hover { opacity: 1; }
+@media (max-width: 720px) { nav ul li:not(:last-child) { display: none; } }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; border-radius: 999px; font: 800 16px "Nunito"; text-decoration: none; border: 0; cursor: pointer; transition: transform .25s var(--pop), box-shadow .25s; }
+.btn:hover { transform: translateY(-3px) scale(1.03); }
+.btn-primary { background: var(--blush); color: var(--ink); box-shadow: 0 6px 0 var(--blush-deep), var(--shadow); }
+.btn-primary:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--blush-deep); }
+.btn-ghost { background: #fff; box-shadow: var(--shadow); }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; background: #fff; font-weight: 700; font-size: 14px; box-shadow: var(--shadow); }
+
+/* hero */
+.hero { padding: 64px 0 40px; text-align: center; }
+.hero h1 { font-size: clamp(44px, 8vw, 92px); margin: 18px auto 18px; max-width: 900px; }
+.hero h1 .name { color: var(--blush-deep); position: relative; white-space: nowrap; }
+.hero h1 .name::after { content: ""; position: absolute; left: 2%; right: 2%; bottom: .04em; height: .16em; background: var(--honey); border-radius: 99px; z-index: -1; opacity: .7; }
+.hero .lede { margin: 0 auto 30px; font-size: clamp(18px, 2.2vw, 21px); }
+.cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+/* fake desktop */
+.desk { position: relative; margin: 56px auto 0; height: 420px; border-radius: 26px; overflow: hidden; box-shadow: var(--shadow-lg);
+  background: linear-gradient(160deg, #FCD9C9 0%, #F9E6D3 45%, #D6ECF5 100%); border: 6px solid #fff; user-select: none; }
+.menubar { height: 30px; background: rgba(255, 255, 255, .55); backdrop-filter: blur(8px); display: flex; align-items: center; gap: 18px; padding: 0 16px; font: 700 13px "Nunito"; }
+.menubar .spacer { flex: 1; }
+.menubar img { width: 18px; height: 19px; object-fit: contain; }
+.term { position: absolute; left: 6%; top: 62px; width: min(440px, 62%); border-radius: 14px; background: #241E1C; color: #EDE3DA; font: 13px/1.6 ui-monospace, "SF Mono", Menlo, monospace; box-shadow: var(--shadow-lg); text-align: left; transition: transform .4s var(--pop); }
+.term .bar { display: flex; gap: 7px; padding: 11px 13px; }
+.term .bar i { width: 11px; height: 11px; border-radius: 50%; background: #FF6159; }
+.term .bar i:nth-child(2) { background: #FFBD2E; } .term .bar i:nth-child(3) { background: #28C941; }
+.term pre { margin: 0; padding: 4px 18px 18px; white-space: pre-wrap; }
+.term .fail { color: #FF8C82; } .term .pass { color: #8FE3A0; } .term .dim { opacity: .55; }
+.term.flagged .failline { outline: 2px dashed var(--blush); outline-offset: 3px; border-radius: 3px; }
+.dock-badge { position: absolute; right: 7%; top: 74px; width: 64px; height: 64px; border-radius: 16px; background: #fff; box-shadow: var(--shadow); display: grid; place-items: center; font-size: 30px; }
+.dock-badge b { position: absolute; top: -8px; right: -8px; min-width: 24px; height: 24px; border-radius: 99px; background: #FF5A4F; color: #fff; font: 800 13px/24px "Nunito"; text-align: center; transform: scale(0); transition: transform .35s var(--pop); }
+.dock-badge.on b { transform: scale(1); }
+.floor { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: rgba(255, 255, 255, .4); }
+.pet { position: absolute; bottom: 14px; left: 0; width: 150px; height: 161px; cursor: pointer; transform-origin: 50% 100%; touch-action: manipulation; }
+.pet img { width: 100%; height: 100%; object-fit: contain; object-position: bottom; pointer-events: none; filter: drop-shadow(0 8px 6px rgba(59, 47, 42, .18)); }
+.pet.wiggle { animation: wiggle .5s var(--pop); }
+@keyframes wiggle { 25% { rotate: -6deg; } 75% { rotate: 6deg; } }
+.bubble { position: absolute; bottom: 168px; left: 50%; translate: -50% 0; white-space: nowrap; background: var(--cream); border: 2px solid var(--blush); padding: 8px 16px; border-radius: 999px; font: 800 15px "Nunito"; box-shadow: var(--shadow); scale: 0; transition: scale .3s var(--pop); pointer-events: none; }
+.bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 12px; height: 12px; background: var(--cream); border-right: 2px solid var(--blush); border-bottom: 2px solid var(--blush); translate: -50% 0; rotate: 45deg; }
+.bubble.show { scale: 1; }
+.heart { position: absolute; pointer-events: none; font-size: 22px; animation: float 1.2s var(--settle) forwards; }
+@keyframes float { from { opacity: 1; transform: translateY(0) scale(.6); } to { opacity: 0; transform: translateY(-90px) scale(1.2); } }
+.desk-hint { position: absolute; right: 18px; bottom: 34px; font: 700 14px "Nunito"; color: var(--ink-soft); background: rgba(255, 255, 255, .7); padding: 6px 14px; border-radius: 99px; }
+.controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+.chip { border: 0; background: #fff; padding: 10px 18px; border-radius: 999px; font: 800 14px "Nunito"; color: var(--ink); cursor: pointer; box-shadow: var(--shadow); transition: transform .25s var(--pop), background .2s; }
+.chip:hover { transform: translateY(-2px); background: #FFF1E6; }
+.chip.on { background: var(--honey); }
+@media (max-width: 640px) { .desk { height: 380px; } .pet { width: 116px; height: 125px; } .bubble { bottom: 132px; } .dock-badge { display: none; } .term { width: 86%; left: 7%; } .desk-hint { display: none; } }
+
+/* marquee of poses */
+.poses { padding: 30px 0 10px; overflow: hidden; }
+.track { display: flex; gap: 28px; width: max-content; animation: scroll 38s linear infinite; }
+.track img { height: 130px; width: auto; }
+@keyframes scroll { to { transform: translateX(-50%); } }
+
+/* steps */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 48px; }
+.card { background: #fff; border-radius: var(--radius); padding: 30px; box-shadow: var(--shadow); position: relative; transition: transform .35s var(--pop); }
+.card:hover { transform: translateY(-6px) rotate(-.4deg); }
+.num { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font: 700 22px "Fredoka"; margin-bottom: 18px; }
+.card p { color: var(--ink-soft); margin-top: 10px; }
+.steps .card:nth-child(1) .num { background: var(--blush); }
+.steps .card:nth-child(2) .num { background: var(--honey); }
+.steps .card:nth-child(3) .num { background: var(--sky); }
+.split { display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; }
+.split.rev > :first-child { order: 2; }
+.shot { border-radius: var(--radius); box-shadow: var(--shadow-lg); border: 6px solid #fff; background: #fff; }
+.shot-tall { max-width: 380px; margin-inline: auto; }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } .split { grid-template-columns: 1fr; gap: 36px; } .split.rev > :first-child { order: 0; } section { padding: 72px 0; } }
+
+/* reactions */
+.reacts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 48px; }
+.react { border-radius: var(--radius); padding: 30px; box-shadow: var(--shadow); }
+.react .ico { font-size: 40px; margin-bottom: 12px; }
+.react p { margin-top: 10px; color: var(--ink-soft); }
+.react:nth-child(1) { background: #FFE6E2; } .react:nth-child(2) { background: #FFF1D3; } .react:nth-child(3) { background: #E1F1F8; }
+@media (max-width: 860px) { .reacts { grid-template-columns: 1fr; } }
+.band { background: #fff; border-radius: 48px; margin: 0 16px; box-shadow: var(--shadow); }
+
+/* voice */
+.kbd { display: inline-flex; gap: 10px; align-items: center; margin: 28px 0 22px; }
+.key { min-width: 64px; padding: 14px 20px; border-radius: 16px; background: #fff; box-shadow: 0 6px 0 #E8D6C3, var(--shadow); font: 700 22px "Fredoka"; text-align: center; }
+.key.wide { min-width: 180px; }
+.say { display: flex; flex-wrap: wrap; gap: 10px; }
+.say span { padding: 10px 18px; border-radius: 999px; background: var(--cream-deep); font-weight: 800; }
+
+/* moments list */
+.list { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 14px; }
+.list li { display: flex; gap: 14px; align-items: flex-start; font-weight: 600; }
+.list li span { flex: none; width: 38px; height: 38px; border-radius: 12px; background: #fff; display: grid; place-items: center; box-shadow: var(--shadow); font-size: 18px; }
+
+/* overload */
+.overload { text-align: center; background: linear-gradient(135deg, #FFD9D3, #FFEBC7 50%, #D9EFF8); border-radius: 48px; margin: 0 16px; padding: 90px 24px; overflow: hidden; }
+.overload h2 { font-size: clamp(40px, 7vw, 76px); }
+.overload .btn { font-size: 19px; padding: 18px 34px; margin-top: 30px; }
+.rain { position: fixed; inset: 0; pointer-events: none; z-index: 100; overflow: hidden; }
+.rain img { position: absolute; bottom: -4px; object-fit: contain; object-position: bottom; filter: drop-shadow(0 6px 5px rgba(59, 47, 42, .2)); }
+
+/* privacy + meta */
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-top: 44px; }
+.mini { background: #fff; border-radius: 22px; padding: 24px; box-shadow: var(--shadow); }
+.mini b { display: block; font: 600 19px "Fredoka"; margin: 8px 0 6px; }
+.mini p { color: var(--ink-soft); font-size: 15px; }
+.mini .e { font-size: 28px; }
+.big-promise { margin-top: 40px; display: inline-block; padding: 18px 30px; border-radius: 22px; background: var(--mint); font: 600 clamp(18px, 2.6vw, 24px) "Fredoka"; }
+.model { border-top: 6px solid var(--blush); }
+.model:nth-child(2) { border-color: var(--honey); } .model:nth-child(3) { border-color: var(--sky); } .model:nth-child(4) { border-color: #B9DDB8; }
+.model code { font: 700 12px ui-monospace, Menlo, monospace; background: var(--cream); padding: 3px 8px; border-radius: 6px; }
+
+/* install */
+.install { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 44px; counter-reset: s; text-align: left; }
+.install li { list-style: none; background: #fff; border-radius: 22px; padding: 26px; box-shadow: var(--shadow); counter-increment: s; }
+.install li::before { content: counter(s); display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--honey); font: 700 18px "Fredoka"; margin-bottom: 12px; }
+.install code { background: var(--cream); padding: 2px 7px; border-radius: 6px; font-size: 14px; }
+@media (max-width: 860px) { .install { grid-template-columns: 1fr; } }
+footer { padding: 70px 0 120px; text-align: center; color: var(--ink-soft); font-weight: 600; }
+footer .sleepy { width: 130px; margin: 0 auto 16px; }
+
+.js .reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s var(--settle), transform .7s var(--settle); }
+.js .reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  .js .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="#top"><img src="img/pakkun/sit.png" alt="">PixyPup</a>
+    <ul>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#notices">He notices</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+      <li><a href="https://github.com/BbekShr/pixypup">GitHub ↗</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero wrap" id="top">
+  <span class="pill">🐾 Meta Global AI Developer Hackathon 2026</span>
+  <h1><span class="name">PixyPup</span> puts your pet on your Mac.</h1>
+  <p class="lede">One photo of your dog or cat becomes a 3D companion who trots along your desktop, does tricks when you click, and sniffs out your failing tests. Until you make yours, meet Pakkun. Cuteness overload, zero distraction.</p>
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases">⬇ Download for macOS</a>
+    <a class="btn btn-ghost" href="https://github.com/BbekShr/pixypup">★ Star on GitHub</a>
+  </div>
+
+  <div class="desk" id="desk" aria-label="Interactive demo: Pakkun walking on a pretend desktop">
+    <div class="menubar"><span>🐾</span><span>Finder</span><span style="opacity:.6">File</span><span style="opacity:.6">Edit</span><span class="spacer"></span><img src="img/pakkun/idle_0.png" alt=""><span id="clock">9:41</span></div>
+    <div class="term" id="term">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <pre id="termText"><span class="dim">~/app $</span> npm test</pre>
+    </div>
+    <div class="dock-badge" id="badge">💬<b>1</b></div>
+    <div class="floor"></div>
+    <div class="pet" id="pet" role="button" tabindex="0" aria-label="Pakkun. Click for a trick">
+      <div class="bubble" id="bubble">Woof!</div>
+      <img id="petImg" src="img/pakkun/idle_0.png" alt="Pakkun, a cream golden retriever pup">
+    </div>
+    <div class="desk-hint">psst… click him 🐾</div>
+  </div>
+  <div class="controls" role="group" aria-label="Try a reaction">
+    <button class="chip" data-act="fail">🧪 Break a test</button>
+    <button class="chip" data-act="fix">✅ Fix it</button>
+    <button class="chip" data-act="badge">💬 New message</button>
+    <button class="chip" data-act="trick">🎾 Do a trick</button>
+  </div>
+</header>
+
+<div class="poses" aria-hidden="true">
+  <div class="track" id="track"></div>
+</div>
+
+<section id="how" class="wrap center">
+  <span class="eyebrow">✨ How it works</span>
+  <h2 class="reveal">One photo in.<br>One very good pup out.</h2>
+  <p class="lede reveal" style="margin-top:16px">No 3D artist, no rigging, about a minute of waiting. Meta's models do the drawing while you watch each pose pop in.</p>
+  <div class="steps">
+    <div class="card reveal"><div class="num">1</div><h3>📸 Drop a photo</h3><p>Any photo of your dog or cat, whole body in view. Give them a name. That's the whole form.</p></div>
+    <div class="card reveal"><div class="num">2</div><h3>🎨 Watch them come alive</h3><p><b>SAM 3.1</b> cuts your pet out, <b>Muse Image</b> draws a matching set of 3D poses: standing, stepping, sitting, napping, barking, rolling, blinking.</p></div>
+    <div class="card reveal"><div class="num">3</div><h3>👋 Say hi</h3><p>The window shrinks to the floor, the old pet trots off, and yours drops in with a happy bounce. Right-click any time.</p></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="split">
+    <div class="reveal">
+      <span class="eyebrow">🐶 Birth, not a spinner</span>
+      <h2>A little personality, from the first second.</h2>
+      <p class="lede" style="margin-top:16px">While the poses are drawn, Pakkun learns your pet's breed and quirks ("Gentle · Goofy · Foodie") and shares a fun fact. Every pose fills its own bubble as it arrives.</p>
+      <ul class="list">
+        <li><span>⏱️</span>About 60 to 90 seconds from photo to pet</li>
+        <li><span>🔑</span>Your own Meta key, kept in the macOS Keychain, never in a file</li>
+        <li><span>🧸</span>No key? Pakkun is built in and ready to play</li>
+      </ul>
+    </div>
+    <img class="shot shot-tall reveal" src="meet-your-pet.png" alt="Onboarding window: Meeting Pakkun, English Cream Golden Retriever, Gentle Goofy Foodie, with pose bubbles filling in" loading="lazy">
+  </div>
+</section>
+
+<section id="notices" class="band">
+  <div class="wrap center">
+    <span class="eyebrow">👀 He notices your work</span>
+    <h2 class="reveal">A pet who gets your workday.</h2>
+    <p class="lede reveal" style="margin-top:16px">Turn on "Notice my screen" and Pakkun reacts to what's actually happening. Off by default, of course.</p>
+    <div class="reacts">
+      <div class="react reveal"><div class="ico">🧪</div><h3>Sniffs failing tests</h3><p>A red line in your Terminal? He runs over, sniffs, and barks a line written by <b>Muse Spark 1.3</b>. Click him for a hint about why it failed. Make it green and he rolls over and cheers.</p></div>
+      <div class="react reveal"><div class="ico">💬</div><h3>Perks up at messages</h3><p>A new Dock badge from Slack, Mail, Messages or any app, and his ears go up. You'll never miss a ping again (sorry).</p></div>
+      <div class="react reveal"><div class="ico">🙈</div><h3>Hides on calls</h3><p>Zoom or Meet window open? He tiptoes to the edge of the screen and waits until your call ends. A very professional pup.</p></div>
+    </div>
+    <div class="split" style="margin-top:64px; text-align:left">
+      <img class="shot reveal" src="sniff.png" alt="Pakkun under a terminal with a failing test, saying Found a bug!" loading="lazy">
+      <div class="reveal">
+        <h3 style="font-size:30px">"Found a bug!"</h3>
+        <p class="lede" style="margin-top:12px">He reads only the front Terminal's text and the list of open windows. The one failing line is quoted to Muse Spark as data, never as instructions, and nothing is saved. Want to see his brain? "Show what Pakkun sees" opens a little card with his every decision.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="split rev">
+    <div class="reveal">
+      <span class="eyebrow">🎙️ Voice tricks</span>
+      <h2>Hold the key. Say the word.</h2>
+      <div class="kbd"><span class="key">⌥</span><span style="font:700 22px Fredoka">+</span><span class="key wide">Space</span></div>
+      <div class="say"><span>"Pakkun, sit"</span><span>"roll over"</span><span>"go to bed"</span><span>"come here"</span><span>"bark"</span></div>
+      <p class="lede" style="margin-top:20px">Meta Voice Transcribe hears you for up to four seconds, only while you ask. The mic is off the rest of the time.</p>
+    </div>
+    <img class="shot shot-tall reveal" src="voice-consent.png" alt="Voice consent window" loading="lazy">
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="split">
+    <div class="reveal">
+      <span class="eyebrow">💕 Little moments</span>
+      <h2>Made of tiny delights.</h2>
+      <ul class="list">
+        <li><span>👀</span>Hover and he turns to look at you</li>
+        <li><span>🤲</span>Wiggle the cursor over him to pet him: hearts!</li>
+        <li><span>🥱</span>He yawns before a nap and stretches when he wakes</li>
+        <li><span>😉</span>He blinks, sits, barks, rolls over</li>
+        <li><span>🖐️</span>Drag him anywhere; he never steals a click from your work</li>
+      </ul>
+    </div>
+    <img class="shot reveal" src="little-moments.png" alt="Four Pakkun moments, including I love belly rubs the most!" loading="lazy">
+  </div>
+</section>
+
+<section class="overload" id="overload">
+  <span class="eyebrow">⚠️ Warning: dangerously cute</span>
+  <h2>PixyPup Overload!</h2>
+  <p class="lede" style="margin:16px auto 0">One menu item drops every pet you've ever made, up to 24 of them, across your screen for 25 seconds of pure chaos. It never takes a click and ends by itself.</p>
+  <button class="btn btn-primary" id="overloadBtn">🐾 Unleash the pups</button>
+</section>
+
+<section id="privacy" class="wrap center">
+  <span class="eyebrow">🔒 Calm and in your control</span>
+  <h2 class="reveal">Cute, never creepy.</h2>
+  <p class="lede reveal" style="margin-top:16px">Every sense is opt-in, explained first, and one click to switch off.</p>
+  <div class="big-promise reveal">Screen and voice off = zero network calls. Not one.</div>
+  <div class="grid4">
+    <div class="mini reveal"><span class="e">😴</span><b>Snooze</b><p>An hour, or until 8 tomorrow. A snoozed pet does no work at all.</p></div>
+    <div class="mini reveal"><span class="e">📏</span><b>Size & energy</b><p>Small, medium or large. Sleepy, normal or playful.</p></div>
+    <div class="mini reveal"><span class="e">🖥️</span><b>Stays out of the way</b><p>Click-through everywhere but his fur. Optionally hidden from screen shares.</p></div>
+    <div class="mini reveal"><span class="e">💾</span><b>Nothing saved</b><p>No screen captures or recorded audio, ever. Your key lives in the Keychain.</p></div>
+    <div class="mini reveal"><span class="e">🏢</span><b>Work-laptop friendly</b><p>An admin file can lock screen and voice off for a whole team.</p></div>
+    <div class="mini reveal"><span class="e">🧘</span><b>Reduce motion</b><p>Follows the macOS setting. Calm mode, automatically.</p></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap center">
+    <span class="eyebrow">🦙 Built with Meta AI</span>
+    <h2 class="reveal">Four Meta models, one good boy.</h2>
+    <div class="grid4" style="text-align:left">
+      <div class="mini model reveal"><b>SAM 3.1</b><p>Cuts your pet cleanly out of the photo and tidies every pose.</p><p style="margin-top:10px"><code>sam-3.1</code></p></div>
+      <div class="mini model reveal"><b>Muse Image</b><p>Draws a consistent set of 3D poses and walk frames from one photo.</p><p style="margin-top:10px"><code>muse-image-1.0</code></p></div>
+      <div class="mini model reveal"><b>Muse Spark 1.3</b><p>Reads the failing line, decides how to react and writes his speech bubble and hints.</p><p style="margin-top:10px"><code>muse-spark-1.3</code></p></div>
+      <div class="mini model reveal"><b>Voice Transcribe</b><p>Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space.</p><p style="margin-top:10px"><code>muse-voice-transcribe-1.0</code></p></div>
+    </div>
+    <img class="shot reveal" style="margin-top:48px" src="pack-sheet.png" alt="Ten Pakkun poses generated from one photo: standing, blinking, walking, sitting, sleeping, barking, rolling" loading="lazy">
+  </div>
+</section>
+
+<section id="install" class="wrap center">
+  <span class="eyebrow">🏠 Bring him home</span>
+  <h2 class="reveal">Install in three hops.</h2>
+  <ol class="install" style="padding:0">
+    <li>Download <code>PixyPup-0.1.0-arm64.dmg</code> from Releases and open it.</li>
+    <li>Drag Pakkun onto Applications. ("Drag me home.")</li>
+    <li>First open only: right-click the app, choose <b>Open</b>, then <b>Open</b> again. It's an indie app, not notarised yet.</li>
+  </ol>
+  <div class="cta" style="margin-top:40px">
+    <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases">⬇ Download for macOS</a>
+    <a class="btn btn-ghost" href="https://github.com/BbekShr/pixypup#develop">Build from source</a>
+  </div>
+</section>
+
+<footer>
+  <img class="sleepy" src="img/pakkun/sleep.png" alt="Pakkun napping">
+  <p>Made with 🐾 for the Meta Global AI Developer Hackathon 2026 · <a href="https://github.com/BbekShr/pixypup">github.com/BbekShr/pixypup</a></p>
+</footer>
+
+<script>
+document.documentElement.classList.add("js");
+(() => {
+  const P = 'img/pakkun/';
+  const F = { idle: 'idle_0', blink: 'idle_blink', sit: 'sit', bark: 'bark', roll: 'roll', sleep: 'sleep', walk: ['side_0', 'side_1', 'side_2', 'side_3'] };
+  const all = ['idle_0', 'idle_blink', 'sit', 'bark', 'roll', 'sleep', ...F.walk];
+  all.forEach(n => { new Image().src = P + n + '.png'; });
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // pose marquee
+  const track = document.getElementById('track');
+  const strip = ['idle_0', 'side_1', 'sit', 'bark', 'side_3', 'roll', 'sleep', 'idle_blink', 'side_2'];
+  [...strip, ...strip].forEach(n => { const i = new Image(); i.src = P + n + '.png'; i.alt = ''; track.append(i); });
+
+  // the pet
+  const desk = document.getElementById('desk'), pet = document.getElementById('pet'), img = document.getElementById('petImg'), bubble = document.getElementById('bubble');
+  const term = document.getElementById('term'), termText = document.getElementById('termText'), badge = document.getElementById('badge');
+  let x = 60, dir = 1, target = 400, mode = 'walk', until = 0, frame = 0, lastStep = 0, speed = 70, trick = 'sit', bubbleTimer;
+  const TRICKS = { sit: 'bark', bark: 'roll', roll: 'sit' };
+  const LINES = { sit: 'Sitting pretty!', bark: 'Woof woof!', roll: 'Belly rubs?' };
+  const set = n => { const s = P + n + '.png'; if (!img.src.endsWith(s)) img.src = s; };
+  const say = (t, ms = 1800) => { bubble.textContent = t; bubble.classList.add('show'); clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => bubble.classList.remove('show'), ms); };
+  const W = () => desk.clientWidth - pet.clientWidth;
+  const pick = () => { target = 20 + Math.random() * (W() - 40); };
+  const hold = (pose, ms) => { mode = pose; until = performance.now() + ms; set(F[pose]); };
+
+  function walkTo(tx, then) { target = Math.max(0, Math.min(W(), tx)); mode = 'walk'; speed = 150; pet.onArrive = then; }
+
+  function tick(now) {
+    if (mode === 'walk') {
+      const dt = Math.min(50, now - (tick.t || now));
+      const d = target - x;
+      if (Math.abs(d) < 3) {
+        speed = 70;
+        if (pet.onArrive) { const f = pet.onArrive; pet.onArrive = null; f(); }
+        else if (Math.random() < .5) hold('idle', 1400 + Math.random() * 1800); else pick();
+      } else {
+        dir = Math.sign(d);
+        x += dir * Math.min(Math.abs(d), speed * dt / 1000);
+        if (now - lastStep > 125) { frame = (frame + 1) % 4; lastStep = now; set(F.walk[frame]); }
+      }
+    } else if (now > until) {
+      if (mode === 'sleep') { say('*stretch* ~'); }
+      mode = 'walk'; pick();
+    } else if (mode === 'idle') {
+      set(now % 3400 < 140 ? F.blink : F.idle);
+    }
+    pet.style.transform = `translateX(${x}px) scaleX(${mode === 'walk' ? dir : 1})`;
+    bubble.style.transform = `scaleX(${mode === 'walk' ? dir : 1})`;
+    tick.t = now;
+    requestAnimationFrame(tick);
+  }
+
+  function doTrick() {
+    pet.classList.remove('wiggle'); void pet.offsetWidth; pet.classList.add('wiggle');
+    hold(trick, 1700); say(LINES[trick]); hearts(2);
+    trick = TRICKS[trick];
+  }
+  function hearts(n) {
+    for (let i = 0; i < n; i++) {
+      const h = document.createElement('span'); h.className = 'heart'; h.textContent = Math.random() < .5 ? '💕' : '💗';
+      h.style.left = (x + pet.clientWidth / 2 - 12 + (Math.random() * 50 - 25)) + 'px';
+      h.style.bottom = (pet.clientHeight * .75) + 'px'; h.style.animationDelay = (i * 120) + 'ms';
+      desk.append(h); setTimeout(() => h.remove(), 1500);
+    }
+  }
+  pet.addEventListener('click', doTrick);
+  pet.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doTrick(); } });
+
+  // petting: wiggle the cursor across him
+  let lastX = null, rubs = 0, rubT = 0;
+  pet.addEventListener('mousemove', e => {
+    if (lastX !== null && Math.sign(e.movementX) !== Math.sign(lastX) && Math.abs(e.movementX) > 2) {
+      rubs++;
+      if (rubs > 5 && performance.now() - rubT > 900) { rubT = performance.now(); rubs = 0; hearts(3); say('I love belly rubs the most!', 1600); if (mode !== 'walk') pet.classList.add('wiggle'); }
+    }
+    lastX = e.movementX || lastX;
+  });
+  pet.addEventListener('mouseenter', () => { if (mode === 'walk' && !pet.onArrive) hold('idle', 1600); });
+  pet.addEventListener('animationend', () => pet.classList.remove('wiggle'));
+
+  // scripted reactions
+  const FAIL = '<span class="dim">~/app $</span> npm test\n\n <span class="fail failline">FAIL  src/math.test.ts &gt; adds numbers</span>\n   AssertionError: expected 4 to be 5\n\n <span class="dim">Tests  1 failed | 11 passed</span>';
+  const PASS = '<span class="dim">~/app $</span> npm test\n\n <span class="pass">✓ src/math.test.ts (12)</span>\n\n <span class="pass">Tests  12 passed</span> 🎉';
+  const act = {
+    fail() {
+      termText.innerHTML = FAIL; term.classList.add('flagged');
+      const r = term.getBoundingClientRect(), d = desk.getBoundingClientRect();
+      walkTo(r.left - d.left + r.width * .35, () => { hold('bark', 2600); say('Found a bug! Click me for a hint', 2600); });
+    },
+    fix() {
+      termText.innerHTML = PASS; term.classList.remove('flagged');
+      hold('roll', 2200); hearts(5); say('You fixed it! 🎉', 2200);
+    },
+    badge() {
+      badge.classList.add('on'); const b = badge.querySelector('b'); b.textContent = String((+b.textContent || 0) + (badge.dataset.n ? 1 : 0)); badge.dataset.n = 1;
+      walkTo(W(), () => { hold('sit', 2000); say('Ooh, a message!', 2000); });
+    },
+    trick: doTrick,
+  };
+  document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => act[b.dataset.act]()));
+
+  // clock
+  const clock = document.getElementById('clock');
+  const tickClock = () => { clock.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+  tickClock(); setInterval(tickClock, 30000);
+
+  if (reduce) { set(F.sit); pet.style.transform = `translateX(${W() / 2}px)`; }
+  else { pick(); requestAnimationFrame(tick); setTimeout(() => say('Hi, I\'m Pakkun!', 2200), 900); }
+
+  // overload
+  const btn = document.getElementById('overloadBtn');
+  let running = false;
+  btn.addEventListener('click', () => {
+    if (running) return; running = true; btn.textContent = '🐾🐾🐾 Overload!';
+    const rain = document.createElement('div'); rain.className = 'rain'; document.body.append(rain);
+    const pups = [], vw = innerWidth, N = reduce ? 8 : 24;
+    for (let i = 0; i < N; i++) {
+      const im = new Image(); const h = 70 + Math.random() * 110;
+      im.style.height = h + 'px'; im.style.width = (h * 1.03) + 'px';
+      const p = { im, x: Math.random() * vw, dir: Math.random() < .5 ? -1 : 1, v: 40 + Math.random() * 120, y: innerHeight + Math.random() * 300, vy: 0, f: Math.floor(Math.random() * 4), pose: null, delay: i * 90 };
+      rain.append(im); pups.push(p);
+    }
+    const start = performance.now(); let last = start;
+    (function run(now) {
+      const t = now - start, dt = Math.min(50, now - last) / 1000; last = now;
+      pups.forEach(p => {
+        if (t < p.delay) { p.im.style.opacity = 0; return; }
+        p.vy -= 2400 * dt; p.y += p.vy * dt;
+        if (p.y <= 0) { p.y = 0; p.vy = p.bounced ? 0 : 520; p.bounced = true; }
+        if (p.y === 0 && p.bounced && !p.pose && Math.random() < .006) p.vy = 380;
+        if (Math.random() < .004 && !p.pose) { p.pose = ['sit', 'bark', 'roll'][Math.floor(Math.random() * 3)]; p.poseEnd = t + 900; }
+        if (p.pose && t > p.poseEnd) p.pose = null;
+        if (!p.pose) { p.x += p.dir * p.v * dt; if (p.x < -60 || p.x > vw - 60) p.dir *= -1; }
+        p.f = (p.f + dt * 9) % 4;
+        p.im.src = P + (p.pose || F.walk[Math.floor(p.f)]) + '.png';
+        p.im.style.opacity = t > 6200 ? Math.max(0, 1 - (t - 6200) / 800) : 1;
+        p.im.style.transform = `translate(${p.x}px, ${-p.y}px) scaleX(${p.pose ? 1 : p.dir})`;
+      });
+      if (t < 7000) requestAnimationFrame(run); else { rain.remove(); running = false; btn.textContent = '🐾 Again! Again!'; }
+    })(start);
+  });
+
+  // reveal on scroll
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0, rootMargin: "0px 0px -8% 0px" });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+})();
+</script>
+</body>
+</html>

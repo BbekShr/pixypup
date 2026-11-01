@@ -15,6 +15,7 @@ const toggle = (label: string, key: string, on: boolean): MenuItem => ({ label, 
 const overloadItem = (running?: boolean): MenuItem => (running ? { label: 'End the overload', command: 'overload:end' } : { label: 'PixyPup Overload!', command: 'overload' });
 /** One "Send X home" per pet, only while there is more than one: the last pet can't leave. */
 const sendHome = (pets: MenuState['pets']): MenuItem[] => ((pets?.length ?? 0) > 1 ? pets!.map((p) => ({ label: `Send ${p.name} home`, command: `home:${p.slug}` })) : []);
+const talkItem = (name: string): MenuItem => ({ label: `Talk to ${name}…`, command: 'talk' });
 const LOCKED = ' (set by your organisation)';
 
 /** Plain descriptors so the menu is testable without Electron; main.ts maps them to native items. */
@@ -25,6 +26,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     { label: 'Roll over', command: 'roll' },
     { label: 'Nap', command: 'bed' },
     { label: 'Come here', command: 'come' },
+    talkItem(o.name),
     { type: 'separator' },
     o.snoozed ? { label: 'Wake up', command: 'wake' } : SNOOZE,
     { label: 'Size', submenu: (Object.keys(SIZES) as Size[]).map((s) => ({ label: `${SIZE_LABELS[s]} ${SIZES[s]} px`, command: `size:${s}`, checked: o.size === s, radio: true })) },
@@ -45,6 +47,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
 }
 
 export const trayMenuTemplate = (o: Pick<MenuState, 'snoozed' | 'name' | 'overload' | 'pets'>): MenuItem[] => [
+  talkItem(o.name),
   o.snoozed ? { label: `Wake up ${o.name}`, command: 'wake' } : SNOOZE,
   overloadItem(o.overload),
   { label: 'Add another pet…', command: 'new-pet' },

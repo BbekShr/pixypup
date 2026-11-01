@@ -11,12 +11,16 @@ const sub = (t: MenuItem[], label: string): MenuItem[] => {
 
 describe('petMenuTemplate', () => {
   it('has the agreed order, tricks first and Quit last', () => {
-    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Add another pet…', 'PixyPup Overload!', '-', 'Quit PixyPup']);
+    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', 'Talk to Pakkun…', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Add another pet…', 'PixyPup Overload!', '-', 'Quit PixyPup']);
     expect(petMenuTemplate(base).at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
   });
   it('maps the tricks to overlay command strings', () => {
     const cmds = petMenuTemplate(base).flatMap((i) => ('command' in i ? [[i.label, i.command]] : []));
     expect(cmds.slice(0, 5)).toEqual([['Sit', 'sit'], ['Bark', 'bark'], ['Roll over', 'roll'], ['Nap', 'bed'], ['Come here', 'come']]);
+  });
+  it('Talk to <name> sends the talk command from both menus', () => {
+    expect(find(petMenuTemplate(base), 'Talk to Pakkun…')).toEqual({ label: 'Talk to Pakkun…', command: 'talk' });
+    expect(find(trayMenuTemplate(base), 'Talk to Pakkun…')).toEqual({ label: 'Talk to Pakkun…', command: 'talk' });
   });
   it('the stay checkbox reflects state and toggles back to wander', () => {
     expect(petMenuTemplate({ ...base, stay: true }).find((i) => 'label' in i && i.label === 'Stay here')).toEqual({ label: 'Stay here', command: 'wander', checked: true });
@@ -64,9 +68,9 @@ describe('petMenuTemplate', () => {
 });
 
 describe('trayMenuTemplate', () => {
-  it('is Snooze, new pet, Quit; snoozed it says Wake up <name>', () => {
-    expect(labels(trayMenuTemplate(base))).toEqual(['Snooze', 'PixyPup Overload!', 'Add another pet…', '-', 'Quit PixyPup']);
-    expect(trayMenuTemplate({ snoozed: true, name: 'Rex' })[0]).toEqual({ label: 'Wake up Rex', command: 'wake' });
+  it('is Talk, Snooze, new pet, Quit; snoozed it says Wake up <name>', () => {
+    expect(labels(trayMenuTemplate(base))).toEqual(['Talk to Pakkun…', 'Snooze', 'PixyPup Overload!', 'Add another pet…', '-', 'Quit PixyPup']);
+    expect(trayMenuTemplate({ snoozed: true, name: 'Rex' })[1]).toEqual({ label: 'Wake up Rex', command: 'wake' });
   });
   it('both menus offer the overload, and the tray swaps it for End while it runs', () => {
     expect(find(petMenuTemplate(base), 'PixyPup Overload!')).toEqual({ label: 'PixyPup Overload!', command: 'overload' });

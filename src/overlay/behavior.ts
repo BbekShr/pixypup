@@ -1,17 +1,20 @@
 // Pure rules for the screen-aware behaviours. Everything here arrives from screen text via main, so it is validated.
+import { TALK_ACTIONS, type TalkAction } from '../api/pet-talk';
 import { handoffBusy, type Handoff } from './handoff';
 
 export type Behavior = {
   seq: number;
-  action: 'sniff' | 'perk_up' | 'hide' | 'celebrate';
+  action: 'sniff' | 'perk_up' | 'hide' | 'celebrate' | 'talk';
   target?: { x: number; y: number }; // overlay coordinates
   bubble?: string;
   on?: boolean; // hide only: level-triggered
   hint?: boolean; // sniff only: a fix hint can be asked for by clicking the pet
+  mood?: TalkAction; // talk only
+  crisis?: boolean; // talk only: the help card is up, so no cheering
   reason: string;
 };
 
-const ACTIONS = ['sniff', 'perk_up', 'hide', 'celebrate'];
+const ACTIONS = ['sniff', 'perk_up', 'hide', 'celebrate', 'talk'];
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 export function parseBehavior(raw: unknown): Behavior | null {
@@ -24,6 +27,11 @@ export function parseBehavior(raw: unknown): Behavior | null {
   if (typeof r['bubble'] === 'string' && r['bubble'].trim()) b.bubble = r['bubble'].trim().slice(0, 40);
   if (typeof r['on'] === 'boolean') b.on = r['on'];
   if (r['hint'] === true && b.action === 'sniff') b.hint = true;
+  if (b.action === 'talk') {
+    if (!(TALK_ACTIONS as readonly unknown[]).includes(r['mood'])) return null;
+    b.mood = r['mood'] as TalkAction;
+    if (r['crisis'] === true) b.crisis = true;
+  }
   if (b.action === 'sniff' && !b.target) return null;
   if (b.action === 'hide' && b.on === undefined) return null;
   return b;
@@ -41,9 +49,10 @@ export const behaviorBusy = (o: { dragging: boolean; falling: boolean; resting: 
   o.dragging || o.falling || o.resting || o.snoozed || handoffBusy(o.handoff) || o.handoff === 'greet';
 
 /** Hiding wins over everything; while hidden or mid-behaviour, other behaviours wait (queue) or are dropped (hidden). */
-export function routeBehavior(b: Behavior, o: { busy: boolean; acting: 'hide' | 'other' | null }): 'run' | 'queue' | 'drop' {
+export function routeBehavior(b: Behavior, o: { busy: boolean; acting: 'hide' | 'talk' | 'other' | null }): 'run' | 'queue' | 'drop' {
   if (b.action === 'hide') return o.busy ? 'queue' : 'run';
   if (o.acting === 'hide') return 'drop';
+  if (b.action === 'talk' && b.crisis && o.acting === 'talk') return o.busy ? 'queue' : 'run'; // a crisis does not wait behind a chat act
   return o.busy || o.acting ? 'queue' : 'run';
 }
 
@@ -69,4 +78,18 @@ export function sniffPose(ageMs: number): { tilt: number; dy: number } {
 export function toOverlayPoint(p: { x: number; y: number }, bounds: { x: number; y: number; width: number; height: number }): { x: number; y: number } {
   const c = (v: number, max: number): number => Math.min(max, Math.max(0, v));
   return { x: c(p.x - bounds.x, bounds.width), y: c(p.y - bounds.y, bounds.height) };
+}
+
+export interface TalkPlan { walk: boolean; pose: 'sit' | 'sleep' | 'roll' | 'celebrate'; hearts: boolean }
+
+/** What the pet does for a chat reply, from the existing poses only. A crisis is never met with a party. */
+export function talkPlan(mood: TalkAction, crisis: boolean): TalkPlan {
+  if (crisis) return { walk: true, pose: 'sit', hearts: false };
+  switch (mood) {
+    case 'comfort': return { walk: true, pose: 'sit', hearts: true };
+    case 'cheer': return { walk: false, pose: 'celebrate', hearts: true };
+    case 'play': return { walk: false, pose: 'roll', hearts: true };
+    case 'nap': return { walk: true, pose: 'sleep', hearts: false };
+    case 'listen': return { walk: true, pose: 'sit', hearts: false };
+  }
 }
