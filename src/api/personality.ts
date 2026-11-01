@@ -2,7 +2,7 @@
 // Privacy: the only inputs are the cutout, the pet's name and species/breed. Never screen data.
 
 import type { Personality, PetFact, Species } from '../../contracts/types.js';
-import { citedUrls, parseResponseText, sparkJson, sparkResponse } from './muse-spark.js';
+import { citedUrls, extractJson, parseResponseText, sparkJson, sparkResponse } from './muse-spark.js';
 import type { MetaClient } from './meta-client.js';
 
 export type { Personality, PetFact };
@@ -93,7 +93,7 @@ const FACTS_SCHEMA = {
         required: ['text', 'source'],
         properties: {
           text: { type: 'string', description: 'One true, kid-friendly fact, at most 90 characters.' },
-          source: { type: 'string', description: 'URL of the page that supports the fact.' },
+          source: { type: 'string', description: 'URL of the page that supports the fact, or an empty string.' },
         },
       },
     },
@@ -118,7 +118,7 @@ export async function breedFacts(
       signal,
       tools: [{ type: 'web_search' }],
     });
-    const raw = (JSON.parse(parseResponseText(res)) as { facts?: { text?: unknown; source?: unknown }[] }).facts ?? [];
+    const raw = (extractJson(parseResponseText(res)) as { facts?: { text?: unknown; source?: unknown }[] }).facts ?? [];
     const cited = citedUrls(res);
     const facts: PetFact[] = [];
     for (const f of raw) {

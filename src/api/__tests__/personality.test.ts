@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MetaClient } from '../meta-client.js';
-import { parseResponseText, sparkRequestBody } from '../muse-spark.js';
+import { extractJson, parseResponseText, sparkRequestBody } from '../muse-spark.js';
 import { breedFacts, meetPet, sanitizePersonality } from '../personality.js';
 import { validateManifest } from '../manifest.js';
 
@@ -43,6 +43,20 @@ describe('parseResponseText', () => {
   });
 });
 
+describe('extractJson', () => {
+  const narrated =
+    "Gathering kid-friendly facts about this breed for you.I've got some friendly traits in mind — now I'll pull the sources to verify them." +
+    '{"facts": [{"text": "A } brace and \\"quote\\" inside", "source": "https://a.org"}]}';
+  it('takes the JSON after narration, respecting braces inside strings', () => {
+    expect(extractJson(narrated)).toEqual({ facts: [{ text: 'A } brace and "quote" inside', source: 'https://a.org' }] });
+  });
+  it('returns the last object, skips stray braces, throws when none', () => {
+    expect(extractJson('{"a":1} then {"b":2}')).toEqual({ b: 2 });
+    expect(extractJson('oops { not json {"a":1}')).toEqual({ a: 1 });
+    expect(() => extractJson('no json')).toThrow();
+  });
+});
+
 describe('request shapes', () => {
   it('meetPet sends image data URL, json_schema text.format, low effort, store false, standard model', async () => {
     const calls: Body[] = [];
@@ -65,6 +79,25 @@ describe('request shapes', () => {
     expect(calls[0]!.tools).toEqual([{ type: 'web_search' }]);
     expect(calls[0]!.include).toEqual(['web_search_call.results']);
     expect(JSON.stringify(calls[0])).not.toMatch(/image/);
+  });
+
+  it('uses strict schemas: every object closed, every property required', async () => {
+    const calls: Body[] = [];
+    await meetPet(fake(text('x'), calls), Buffer.from(''), 'P', 'dog');
+    await breedFacts(fake(text('x'), calls), 'Shiba', 'dog');
+    const closed = (n: unknown): void => {
+      if (typeof n !== 'object' || n === null) return;
+      const o = n as { type?: string; properties?: object; required?: string[] };
+      if (o.type === 'object') {
+        expect(o).toMatchObject({ additionalProperties: false });
+        expect([...(o.required ?? [])].sort()).toEqual(Object.keys(o.properties ?? {}).sort());
+      }
+      Object.values(n).forEach(closed);
+    };
+    for (const c of calls) {
+      expect(c.text.format).toMatchObject({ strict: true });
+      closed((c.text.format as { schema: unknown }).schema);
+    }
   });
 
   it('never sends effort none', () => {
@@ -119,6 +152,13 @@ describe('breedFacts', () => {
       { text: 'Shibas are very old.', source: 'https://a.org/shiba' },
       { text: 'They scream a lot.' },
     ]);
+  });
+  it('reads narrated output and ignores garbled keys and an empty source', async () => {
+    const body =
+      'Searching now.' +
+      JSON.stringify({ facts: [{ text: 'Garbled key.', 'source人生': 'https://a.org' }, { text: 'Empty source.', source: '' }] });
+    const res = { status: 'completed', output: [{ type: 'web_search_call', results: [{ url: 'https://a.org' }] }, { type: 'message', content: [{ type: 'output_text', text: body }] }] };
+    expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([{ text: 'Garbled key.' }, { text: 'Empty source.' }]);
   });
   it('null when nothing usable or the call fails', async () => {
     expect(await breedFacts(fake(text(facts())), 'Shiba', 'dog')).toBeNull();

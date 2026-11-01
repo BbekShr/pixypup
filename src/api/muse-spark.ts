@@ -48,7 +48,7 @@ export function sparkRequestBody(o: SparkOptions) {
     input: o.input,
     reasoning: { effort: o.effort },
     max_output_tokens: o.maxOutputTokens ?? 4096,
-    text: { format: { type: 'json_schema', name: o.name, schema: o.schema, strict: false } },
+    text: { format: { type: 'json_schema', name: o.name, schema: o.schema, strict: true } },
     ...(o.tools ? { tools: o.tools, include: ['web_search_call.results'] } : {}),
   };
 }
@@ -73,12 +73,46 @@ export function citedUrls(res: SparkResponse): Set<string> {
   return urls;
 }
 
+/**
+ * The LAST top-level JSON object in `text`. With web_search on, the model narrates before the JSON
+ * ("Gathering facts...{"facts":[...]}"), so JSON.parse on the whole text fails.
+ */
+export function extractJson(text: string): unknown {
+  let last: unknown;
+  let found = false;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    let depth = 0;
+    let inStr = false;
+    for (let j = i; j < text.length; j++) {
+      const c = text[j];
+      if (inStr) {
+        if (c === '\\') j++;
+        else if (c === '"') inStr = false;
+      } else if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}' && --depth === 0) {
+        try {
+          last = JSON.parse(text.slice(i, j + 1));
+          found = true;
+          i = j;
+        } catch {
+          /* a brace in the narration: keep scanning */
+        }
+        break;
+      }
+    }
+  }
+  if (!found) throw new Error('Muse Spark text has no JSON object.');
+  return last;
+}
+
 export function sparkResponse(client: MetaClient, o: SparkOptions): Promise<SparkResponse> {
   return client.postJson<SparkResponse>('/responses', sparkRequestBody(o), o.signal);
 }
 
 export async function sparkJson<T>(client: MetaClient, o: SparkOptions & { validate: (v: unknown) => T }): Promise<T> {
-  return o.validate(JSON.parse(parseResponseText(await sparkResponse(client, o))));
+  return o.validate(extractJson(parseResponseText(await sparkResponse(client, o))));
 }
 
 // TODO(F7): LLM behavior decision; must validate against contracts/behavior-decision.schema.json.
