@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, fall, gait, headX, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -71,34 +71,119 @@ describe('motion', () => {
   });
 });
 
-describe('fall', () => {
-  const run = (lift: number) => {
-    let l = lift, v = 0, impacts = 0, maxV = 0, peak = 0, steps = 0, settled = false;
-    while (!settled && steps++ < 1000) {
-      const r = fall(l, v, 1 / 60);
-      l = r.lift; v = r.vy; settled = r.settled;
-      if (r.impact) impacts++;
-      maxV = Math.max(maxV, v);
-      if (impacts) peak = Math.max(peak, -l);
+describe('airStep', () => {
+  const run = (lift: number, vx = 0, maxX = 1000, x = 500) => {
+    let b = { x, lift, vx, vy: 0 };
+    const apexes: number[] = [];
+    let steps = 0, maxV = 0, settled = false, minX = x, maxSeen = x;
+    const speeds: number[] = [];
+    while (!settled && steps++ < 2000) {
+      const r = airStep(b, 1 / 60, maxX, 1e9);
+      if (b.vy < 0 && r.vy >= 0) apexes.push(-r.lift);
+      b = r;
+      settled = r.settled;
+      maxV = Math.max(maxV, r.vy);
+      minX = Math.min(minX, r.x);
+      maxSeen = Math.max(maxSeen, r.x);
+      speeds.push(r.vx);
     }
-    return { l, impacts, maxV, peak, steps, settled };
+    return { b, apexes, steps, maxV, settled, minX, maxSeen, speeds };
   };
-  it('lands on the floor from anywhere, with speed capped, one impact and a ~12 px bounce', () => {
-    const r = run(-700);
+  it('a 600 px drop bounces at least twice, each apex lower, and settles in bounded time', () => {
+    const r = run(-600);
     expect(r.settled).toBe(true);
-    expect(r.l).toBe(0);
-    expect(r.impacts).toBe(1);
+    expect(r.b.lift).toBe(0);
+    expect(r.apexes.length).toBeGreaterThanOrEqual(2);
+    r.apexes.slice(1).forEach((a, i) => expect(a).toBeLessThan(r.apexes[i]!));
+    expect(r.steps).toBeLessThan(240);
     expect(r.maxV).toBeLessThanOrEqual(1400);
-    expect(r.peak).toBeGreaterThan(8);
-    expect(r.peak).toBeLessThan(14);
   });
-  it('a tiny drop settles without an impact bounce', () => {
-    const r = run(-3);
-    expect(r.impacts).toBe(0);
-    expect(r.settled).toBe(true);
+  it('a 10 px drop barely bounces', () => {
+    expect(Math.max(0, ...run(-10).apexes)).toBeLessThan(2);
   });
   it('a pet below the floor is pulled back to it', () => {
-    expect(run(50).l).toBe(0);
+    expect(run(50).b.lift).toBe(0);
+  });
+  it('a throw at the wall stays inside [0, maxX] and comes back slower', () => {
+    const r = run(-100, 1500, 700, 600);
+    expect(r.minX).toBeGreaterThanOrEqual(0);
+    expect(r.maxSeen).toBeLessThanOrEqual(700);
+    const hit = r.speeds.findIndex((v) => v < 0);
+    expect(hit).toBeGreaterThan(0);
+    expect(Math.abs(r.speeds[hit]!)).toBeLessThan(1500);
+  });
+  it('an upward flick bounces off the top of the window, but a pet spawned above it falls in', () => {
+    let b = { x: 100, lift: -50, vx: 0, vy: -1600 };
+    let top = 0;
+    for (let i = 0; i < 300; i++) { b = airStep(b, 1 / 60, 500, 300); top = Math.min(top, b.lift); }
+    expect(top).toBeGreaterThanOrEqual(-300);
+    const spawn = airStep({ x: 100, lift: -900, vx: 0, vy: 0 }, 1 / 60, 500, 300);
+    expect(spawn.lift).toBeGreaterThan(-900);
+  });
+  it('a floor slide slows monotonically to rest', () => {
+    let b = { x: 100, lift: 0, vx: 600, vy: 0 };
+    let prev = 600, steps = 0;
+    for (; steps < 600; steps++) {
+      const r = airStep(b, 1 / 60, 5000, 1e9);
+      expect(Math.abs(r.vx)).toBeLessThanOrEqual(prev);
+      prev = Math.abs(r.vx);
+      b = r;
+      if (r.settled) break;
+    }
+    expect(b.vx).toBe(0);
+    expect(b.x).toBeGreaterThan(100);
+    expect(steps).toBeLessThan(120);
+  });
+});
+
+describe('releaseVelocity', () => {
+  const flick = (v: number, until = 1000) => Array.from({ length: 10 }, (_, i) => ({ x: (v * (i * 16)) / 1000, y: 0, t: until - (9 - i) * 16 }));
+  it('a steady flick returns its speed', () => {
+    expect(releaseVelocity(flick(800), 1005).vx).toBeGreaterThan(720);
+    expect(releaseVelocity(flick(800), 1005).vx).toBeLessThan(880);
+  });
+  it('a pointer held still before release returns 0', () => {
+    expect(releaseVelocity(flick(800), 1100)).toEqual({ vx: 0, vy: 0 });
+  });
+  it('huge flicks are clamped', () => {
+    const v = releaseVelocity(flick(20000), 1005);
+    expect(Math.hypot(v.vx, v.vy)).toBeLessThanOrEqual(1600.001);
+  });
+});
+
+describe('dangle', () => {
+  it('lags a hand accelerating right (negative first), settles when left alone, never passes the clamp', () => {
+    let s = { angle: 0, omega: 0 };
+    s = dangle(s, 5000, 1 / 60, 60);
+    expect(s.angle).toBeLessThan(0);
+    let worst = 0;
+    for (let i = 0; i < 20; i++) { s = dangle(s, 100000, 1 / 60, 60); worst = Math.max(worst, Math.abs(s.angle)); }
+    expect(worst).toBeLessThanOrEqual(35);
+    s = { angle: 25, omega: 0 };
+    for (let i = 0; i < 180; i++) s = dangle(s, 0, 1 / 60, 60);
+    expect(Math.abs(s.angle)).toBeLessThan(0.5);
+  });
+});
+
+describe('pivotShift', () => {
+  it.each([1, -1])('keeps the grab point fixed under rotation (flip %i)', (flip) => {
+    const g = { x: 30, y: -40 }; // local grab point from the origin
+    const q = { x: g.x * flip * 1.1, y: g.y * 0.95 }; // where scale(flip*sx, sy) puts it on screen
+    for (const deg of [-35, -8, 12, 35]) {
+      const t = pivotShift(q.x, q.y, deg);
+      const r = (deg * Math.PI) / 180;
+      expect(t.dx + Math.cos(r) * q.x - Math.sin(r) * q.y).toBeCloseTo(q.x, 6);
+      expect(t.dy + Math.sin(r) * q.x + Math.cos(r) * q.y).toBeCloseTo(q.y, 6);
+    }
+  });
+});
+
+describe('landSquash', () => {
+  it('dips more for harder impacts and returns to 1', () => {
+    expect(landSquash(0, 200)).toBeGreaterThan(landSquash(0, 800));
+    expect(landSquash(0, 800)).toBeGreaterThan(landSquash(0, 1400));
+    expect(landSquash(0, 1400)).toBeGreaterThanOrEqual(0.75);
+    expect(landSquash(220, 1400)).toBe(1);
   });
 });
 

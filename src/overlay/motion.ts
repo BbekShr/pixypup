@@ -60,17 +60,81 @@ export function rollAngle(tMs: number): number {
 
 const GRAVITY = 2000; // px/s^2
 const MAX_FALL = 1400; // px/s
-const BOUNCE_PX = 12;
-const BOUNCE_MIN_V = 300;
+const RESTITUTION = 0.35; // floor: vy keeps 35% on the bounce
+const WALL_RESTITUTION = 0.5;
+const BOUNCE_MIN_V = 120; // px/s; slower impacts just stop
+const IMPACT_MIN_V = 60; // px/s; below this the touch is not worth reporting
+const FLOOR_FRICTION = 0.8; // vx kept per floor impact
+const SLIDE_DECEL = 1200; // px/s^2, kinetic friction on the floor
+const AIR_DRAG = 0.3; // 1/s
+const REST_V = 5; // px/s
 
-/** One gravity step. lift is the offset from the floor (negative = above it). Bounces once, then settles. */
-export function fall(lift: number, vy: number, dt: number): { lift: number; vy: number; impact: boolean; settled: boolean } {
-  const v = Math.min(vy + GRAVITY * dt, MAX_FALL);
-  const l = lift + v * dt;
-  if (l < 0) return { lift: l, vy: v, impact: false, settled: false };
-  if (v > BOUNCE_MIN_V) return { lift: 0, vy: -Math.sqrt(2 * GRAVITY * BOUNCE_PX), impact: true, settled: false };
-  return { lift: 0, vy: 0, impact: false, settled: true };
+export interface Air { x: number; lift: number; vx: number; vy: number }
+
+/** One ballistic step. lift is the offset from the floor (negative = above it); x stays in [0, maxX] and a pet rising past maxUp px bounces off the top (a pet spawned above it is left alone). impact is the floor hit speed (px/s, 0 if none). */
+export function airStep(b: Air, dt: number, maxX: number, maxUp: number): Air & { impact: number; settled: boolean } {
+  let { x, lift, vx, vy } = b;
+  vy = Math.min(vy + GRAVITY * dt, MAX_FALL);
+  vx *= Math.exp(-AIR_DRAG * dt);
+  x += vx * dt;
+  lift += vy * dt;
+  if (x < 0 || x > maxX) { x = Math.min(maxX, Math.max(0, x)); vx *= -WALL_RESTITUTION; }
+  if (lift < -maxUp && vy < 0) { lift = -maxUp; vy *= -WALL_RESTITUTION; }
+  let impact = 0;
+  if (lift >= 0) {
+    lift = 0;
+    if (vy > BOUNCE_MIN_V) { impact = vy; vy *= -RESTITUTION; vx *= FLOOR_FRICTION; }
+    else { if (vy > IMPACT_MIN_V) impact = vy; vy = 0; }
+    if (vy === 0) {
+      const d = SLIDE_DECEL * dt;
+      vx = Math.abs(vx) <= Math.max(d, REST_V) ? 0 : vx - Math.sign(vx) * d;
+    }
+  }
+  return { x, lift, vx, vy, impact, settled: lift === 0 && vy === 0 && vx === 0 };
 }
+
+/** Translation that makes a rotation of deg about the origin act as a rotation about the point q (px from the origin, screen space). */
+export function pivotShift(qx: number, qy: number, deg: number): { dx: number; dy: number } {
+  const c = Math.cos((deg * Math.PI) / 180);
+  const s = Math.sin((deg * Math.PI) / 180);
+  return { dx: qx - (c * qx - s * qy), dy: qy - (s * qx + c * qy) };
+}
+
+const FLICK_WINDOW_MS = 80;
+const STOPPED_MS = 50;
+const MAX_THROW = 1600; // px/s
+
+/** Hand velocity (px/s) from pointer samples over the last ~80 ms; 0 if the pointer had stopped (set down, not thrown). */
+export function releaseVelocity(samples: { x: number; y: number; t: number }[], nowMs: number): { vx: number; vy: number } {
+  const w = samples.filter((p) => p.t >= nowMs - FLICK_WINDOW_MS);
+  const a = w[0];
+  const z = w[w.length - 1];
+  if (!a || !z || z.t === a.t || nowMs - z.t > STOPPED_MS) return { vx: 0, vy: 0 };
+  let vx = ((z.x - a.x) / (z.t - a.t)) * 1000;
+  let vy = ((z.y - a.y) / (z.t - a.t)) * 1000;
+  const k = Math.min(1, MAX_THROW / Math.hypot(vx, vy));
+  vx *= k;
+  vy *= k;
+  return { vx, vy };
+}
+
+const DANGLE_MAX = 35; // deg
+const DANGLE_DAMP = 3.2; // 1/s; ~2 visible swings, under 0.5 deg in 3 s
+
+/** Damped pendulum hung from the hand. angle is deg, positive = body swung right (so a hand accelerating right gives negative first); omega is deg/s; ax is px/s^2; armPx is grab point to body centre. */
+export function dangle(s: { angle: number; omega: number }, ax: number, dt: number, armPx: number): { angle: number; omega: number } {
+  const th = (s.angle * Math.PI) / 180;
+  const alpha = -(GRAVITY / armPx) * Math.sin(th) - DANGLE_DAMP * ((s.omega * Math.PI) / 180) - (ax / armPx) * Math.cos(th);
+  const omega = s.omega + ((alpha * 180) / Math.PI) * dt;
+  const angle = s.angle + omega * dt;
+  return Math.abs(angle) > DANGLE_MAX ? { angle: Math.sign(angle) * DANGLE_MAX, omega: 0 } : { angle, omega };
+}
+
+export const LAND_SQUASH_MS = 220;
+
+/** sy on landing: dip grows with impact speed (cap 0.25), then recovers with a small damped overshoot. */
+export const landSquash = (tMs: number, impactV: number): number =>
+  tMs < 0 || tMs >= LAND_SQUASH_MS ? 1 : 1 - 0.25 * Math.min(1, impactV / MAX_FALL) * Math.exp(-tMs / 60) * Math.cos((2 * Math.PI * tMs) / 300);
 
 export const BLINK_MS = 120;
 

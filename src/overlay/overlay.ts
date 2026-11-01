@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, breathe, envelope, fall, gait, headX, hop, lean, overlap, petTransform, pickTarget, rollAngle, settle, squash, walkFrame, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -181,6 +181,11 @@ let state: PetState = 'walk';
 let x = 100;
 let lift = 0; // offset from the floor line (negative = above); only non-zero while dragged or falling
 let vy = 0;
+let vx = 0; // px/s, only while thrown or sliding
+let landV = 0; // impact speed of the last floor hit, scales the squash
+let dang = { angle: 0, omega: 0 }; // body swing under the hand, deg
+let handX = 0;
+let handV = 0;
 let falling = false;
 let landAt = -1e9;
 let raf = 0;
@@ -326,12 +331,13 @@ function frame(now: number): void {
   if (queuedCmd && !act && !handoffBusy(handoff) && handoff !== 'greet') { const q = queuedCmd; queuedCmd = null; command(q); }
   if (act && act.until && now >= act.until) actTimeout(now);
   if (falling) {
-    const r = fall(lift, vy, dt);
-    lift = r.lift;
-    vy = r.vy;
-    if (r.impact) landAt = now;
+    const r = airStep({ x, lift, vx, vy }, dt, window.innerWidth - W, floorY());
+    ({ x, lift, vx, vy } = r);
+    if (r.impact) { landAt = now; landV = r.impact; }
     if (r.settled) {
       falling = false;
+      home = x;
+      if (state === 'walk' && !act && !handoff) target = pickTarget(x, window.innerWidth - W, home, Math.random(), Math.random()); // not back toward the release side
       walkAt = now;
       if (greet) {
         const g = greet;
@@ -390,6 +396,16 @@ function frame(now: number): void {
   const life = upright && !act && now < lifeUntil;
   const turning = state === 'walk' && now < turnUntil;
   y = floorY() + lift;
+  if (dragging && !calm) {
+    const d = Math.max(dt, 0.001);
+    const v = handV + ((x - handX) / d - handV) * 0.5;
+    const arm = Math.max(40, Math.hypot(offX - W / 2, offY - H / 2));
+    dang = dangle(dang, Math.max(-30000, Math.min(30000, (v - handV) / d)), dt, arm);
+    handV = v;
+  } else if (dang.angle) {
+    dang = { angle: Math.abs(dang.angle) < 0.05 ? 0 : dang.angle * Math.exp(-10 * dt), omega: 0 }; // lets go of the swing
+  }
+  handX = x;
 
   const px = nat ? W / nat.w : 1; // display px per natural px
   const shownW = (src: string | undefined): number => (src && nat ? (widths.get(src) ?? nat.w) * px : W);
@@ -472,11 +488,18 @@ function frame(now: number): void {
     sx *= p * st.sx * (1 + (1 - se) / 2);
     sy *= p * st.sy * se * (yawn ? yawnSy(age) : 1);
   }
-  if (now - landAt < 180) sy *= squash(now - landAt, 0.15, 180);
+  if (now - landAt < LAND_SQUASH_MS) { const k = landSquash(now - landAt, landV); sy *= k; sx *= 1 + (1 - k) / 2; }
+  const swing = dang.angle ? -dang.angle : 0;
+  if (dang.angle) { rot += swing; sy *= 1.03; }
   const flip = facing * (life && lifeKind === 'look' ? -1 : 1);
+  dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
-  dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
+  if (swing && state !== 'roll') { // rotate about the grab point: shift by what the origin-pivot rotation moved it
+    const s = pivotShift(offX - dx - fw / 2, offY - dy - footY * H, swing);
+    dx += s.dx;
+    dy += s.dy;
+  }
   img.style.transform = petTransform(x + dx, y + dy, rot, flip, sx, sy);
   fx.style.transform = `translate(${x + W / 2 + flip * W * 0.3}px, ${y + dy}px)`;
   raf = requestAnimationFrame(frame);
@@ -537,6 +560,8 @@ let downX = 0;
 let downY = 0;
 let ptrX = 0; // last pointer position while dragging
 let ptrY = 0;
+let path: { x: number; y: number; t: number }[] = []; // recent pointer path for the throw
+const track = (e: PointerEvent): void => { path = [...path.filter((p) => e.timeStamp - p.t < 200), { x: e.clientX, y: e.clientY, t: e.timeStamp }]; };
 img.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   menuCalls++;
@@ -557,6 +582,12 @@ img.addEventListener('pointerdown', (e) => {
   downY = e.clientY;
   ptrX = downX;
   ptrY = downY;
+  path = [];
+  track(e);
+  dang = { angle: 0, omega: 0 };
+  handX = x;
+  handV = 0;
+  vx = 0;
   lastInteraction = downAt;
   img.setPointerCapture(e.pointerId);
   setState('dragStart');
@@ -565,6 +596,7 @@ img.addEventListener('pointermove', (e) => {
   if (!dragging) return;
   ptrX = e.clientX;
   ptrY = e.clientY;
+  track(e);
   x = Math.min(Math.max(0, e.clientX - offX), window.innerWidth - W);
   const top = Math.min(Math.max(0, e.clientY - offY), window.innerHeight - H);
   lift = top - floorY();
@@ -596,7 +628,8 @@ function finish(e: PointerEvent): void {
     clearTimeout(clickTimer);
     clickTimer = setTimeout(() => { if (state === 'drag' && !dragging && !resting) go(); }, CLICK_WIGGLE_MS);
   } else go();
-  if (lift < 0) { falling = true; vy = 0; }
+  const t = click || calm ? { vx: 0, vy: 0 } : releaseVelocity(path, e.timeStamp);
+  if (lift < 0 || Math.abs(t.vx) > 60) { falling = true; vx = t.vx; vy = t.vy; if (Math.abs(vx) > 200) dir = Math.sign(vx); }
   if (act?.kind === 'hide') { act.phase = 'go'; setState('walk', { target: act.spot }); } // poked out of hiding: go back
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
   if (!img.matches(':hover')) window.pixy.setClickThrough(true);
@@ -654,6 +687,7 @@ function applyRest(): void {
   sayAt = nextSayAt(now, Math.random(), chatty); // no chatter line right after "Hi again"
   falling = !calm;
   vy = 0;
+  vx = 0;
   lift = calm ? 0 : -(floorY() + H);
   setState('idle', { ms: 3000 });
   if (calm) { wakeSay = false; setState('sit', { ms: 3000 }); say('Hi again… *yawn*', 3000); }
@@ -898,6 +932,7 @@ function dropIn(): void {
   x = home = dropLeft(n.cx, W, window.innerWidth);
   lift = -(floorY() + H);
   vy = 0;
+  vx = 0;
   falling = true;
   greet = n.pack.name;
   setState('idle', { ms: 10_000 });
