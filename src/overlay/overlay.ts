@@ -417,7 +417,7 @@ function frame(now: number): void {
   let rot = 0;
   if (walking) {
     if (!calm) {
-      const g = gait(walked, stride);
+      const g = gait(walked, stride, shownW(poses['walk']?.srcs[0]) !== W); // a wider walk frame is the drawn profile cycle
       dy = g.dy;
       sx = g.sx;
       sy = g.sy;

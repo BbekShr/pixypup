@@ -153,6 +153,12 @@ describe('gait, bark, settle', () => {
     expect(gait(30, 20).rot).toBeCloseTo(-1.2);
     expect(gait(10, 20).dy).toBe(bob(10, 20));
   });
+  it('adds only a light footfall and no rock to a drawn side-on cycle', () => {
+    expect(gait(10, 20, true).rot).toBe(0);
+    expect(gait(30, 20, true).rot).toBe(0);
+    expect(gait(10, 20, true).dy).toBeCloseTo(0.4 * bob(10, 20));
+    expect(gait(10, 20, true).sy).toBeCloseTo(1.006);
+  });
   it('each woof winds up (nose down, crouch) then pops (nose up, chest up), and is calm between bursts', () => {
     const wind = barkPose(140);
     expect(wind.rot).toBeLessThan(0);

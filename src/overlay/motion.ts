@@ -121,11 +121,14 @@ export interface Pose { dx: number; dy: number; rot: number; sx: number; sy: num
  * Per-step body motion for the walk, by distance so it stays locked to the frames: a small squash at each
  * footfall and a stretch mid-stride (volume kept: sx moves half as much the other way), plus a side-to-side rock
  * that changes sign every step. rot is nose-down positive; the caller signs it for the facing.
+ * `drawn`: the frames are a real side-on cycle that already draws the legs and body height, so only a light
+ * footfall is added; a rock would pitch the long body like a rocking horse.
  */
-export function gait(distancePx: number, stridePx: number): Pose {
+export function gait(distancePx: number, stridePx: number, drawn = false): Pose {
   const p = distancePx / stridePx;
-  const sy = 1 + 0.03 * Math.sin(Math.PI * (p % 1)) - 0.015;
-  return { dx: 0, dy: bob(distancePx, stridePx), rot: 1.2 * Math.sin(Math.PI * p), sx: 1 - (sy - 1) / 2, sy };
+  const k = drawn ? 0.4 : 1;
+  const sy = 1 + k * (0.03 * Math.sin(Math.PI * (p % 1)) - 0.015);
+  return { dx: 0, dy: k * bob(distancePx, stridePx), rot: drawn ? 0 : 1.2 * Math.sin(Math.PI * p), sx: 1 - (sy - 1) / 2, sy };
 }
 
 const WOOFS = [180, 520]; // two woofs per burst
