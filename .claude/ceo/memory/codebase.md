@@ -37,4 +37,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (P2): `openClient(purpose, loadSettings(), key)` in `src/api/gate.ts` is the only MetaClient path; scripts use `clientForScripts()`; `offline` defaults false (admin restriction). Tests 265 in 22 files. `src/api/__tests__/network-gate.test.ts`
 
+- 2026-11-01 (F6a): `native/bin/pixyhelper windows|badges|capture <id>`; under the Claude-hosted shells `windows` returns unredacted titles but `capture` fails (SCStream -3811) and `badges` returns permission. `helperPath()` in `src/main/helper-path.ts`. Tests 267 in 23 files.
+
 ## Clean audits (so discovery skips these grounds)
