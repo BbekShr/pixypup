@@ -20,5 +20,7 @@
 - Reviewers stay read-only: never `git checkout`/`switch` in the shared tree, even detached (F5a reviewer slip).
 - A multi-phase sequence that owns the pet gates every input (menu, pointer) on a pure busy(phase) predicate and queues the last command (F5b `src/overlay/handoff.ts`).
 - Reduced motion: never `animation-duration:1ms` on infinite animations without `animation-iteration-count:1` (strobe); WAAPI loops need their own check.
+- Muse Spark: use `strict: true` schemas (strict:false garbled keys live); with web_search on, extract the last JSON object from narrated text; JSON output carries no url_citation annotations, so ground sources against web_search_call results (F18).
+- Side tasks that must not outlive a pipeline share one AbortController aborted in a catch around the main stage; bound how long the main result waits for them (F18).
 
 ## Archive

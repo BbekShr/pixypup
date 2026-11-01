@@ -20,4 +20,5 @@ Level: **L1** (target L1) since 2026-10-31.
 | 2026-10-31 | F13 | #6 | landed-clean | yes (CEO one-line import) | 4 (live render 3, perf 1) | no | 4 sonnet editor runs, 1 sonnet lens, 3 live runs (~$0.25) |
 | 2026-10-31 | F15 | #8 | landed-clean | no | 0 | no | 1 sonnet editor run; CEO inline review |
 | 2026-10-31 | F5a | #9 | landed-clean | yes (CEO dev-hook one-liner) | 3 CONFIRMED + 9 lower | no | 2 sonnet editor runs, 2 sonnet lenses, 1 real run (~$0.08) |
-| 2026-11-01 | F5b | (this PR) | open | no | 2 PLAUSIBLE + 4 lower | no | 2 sonnet editor runs, 1 sonnet combined lens |
+| 2026-11-01 | F5b | #10 | landed-clean | no | 2 PLAUSIBLE + 4 lower | no | 2 sonnet editor runs, 1 sonnet combined lens |
+| 2026-11-01 | F18 | (this PR) | open | no | 4 CONFIRMED + 4 lower | no | 4 sonnet editor runs (2 roles), 1 sonnet lens, 4 live probes (~$0.15) |
