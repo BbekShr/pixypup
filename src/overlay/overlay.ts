@@ -35,6 +35,7 @@ let poses: Record<string, PoseSet> = { idle: { srcs: [pupUrl], fps: 1 } };
 let W = 120;
 let H = 120;
 let footY = 1;
+// TODO(F16): personality.energy is stored but unused; the Energy setting should default from it.
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
 let sayAt = Infinity;
 let speakingUntil = 0;
