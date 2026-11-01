@@ -470,6 +470,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     }, timeoutMs);
     try {
       const [img] = await editImage(o.client, prompt, refs, 1, { signal: ctl.signal });
+      clearTimeout(timer); // the timeout bounds the request; local keying after it must not abort a good reply
       const keyed = await chromaKey(img!.buffer);
       if (keyed.opaque < 0.02 || keyed.opaque > 0.9 || keyed.edge > 0.01) throw new BadOutputError('degenerate pose');
       return await finish(img!, keyed);
