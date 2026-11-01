@@ -25,6 +25,19 @@ export function turnScale(tMs: number, durMs: number): number {
   return u < 0.5 ? Math.max(c, TURN_FLOOR) : Math.min(c, -TURN_FLOOR);
 }
 
+export interface Mirror { from: 1 | -1; to: 1 | -1; at: number }
+
+/** The drawn facing only ever changes through a turn: a new want starts one, a reversal mid-turn turns back from exactly where it is (turnScale(T-e) = -turnScale(e)). */
+export function steer(m: Mirror, want: 1 | -1, now: number, durMs: number): Mirror {
+  if (want === m.to) return m;
+  const e = now - m.at;
+  return e >= durMs ? { from: m.to, to: want, at: now } : { from: m.to, to: m.from, at: now - (durMs - e) };
+}
+
+/** Signed horizontal scale of the mirror: sign is the side currently drawn, magnitude the foreshortening. */
+export const mirrorScale = (m: Mirror, now: number, durMs: number): number =>
+  now - m.at >= durMs ? m.to : m.from * turnScale(now - m.at, durMs);
+
 /** Wander 120-400 px from x, heading back toward home when it has strayed, always inside [0, maxX]. */
 export function pickTarget(x: number, maxX: number, home: number, r1: number, r2: number): number {
   let dir = x > home + 200 ? -1 : x < home - 200 ? 1 : r1 < 0.5 ? -1 : 1;

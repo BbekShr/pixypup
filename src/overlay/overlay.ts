@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, turnScale, WALK_ACCEL } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -193,7 +193,8 @@ let y = floorY();
 let home = x;
 let target = x;
 let dir = 1; // where it is heading
-let facing = 1; // what is drawn (lags dir until the turn ends)
+let facing = 1; // the side drawn this frame (follows dir through a turn)
+let mir: Mirror = { from: -1, to: 1, at: -Infinity };
 let turnUntil = 0;
 let stateAt = performance.now();
 let walkV = 0; // px/s
@@ -329,7 +330,6 @@ function frame(now: number): void {
   last = now;
   const age = now - stateAt;
 
-  if (now >= turnUntil) facing = dir;
   if (queuedBehavior && !busyNow() && (!act || queuedBehavior.action === 'hide')) { const q = queuedBehavior; queuedBehavior = null; start(q); }
   if (queuedCmd && !act && !handoffBusy(handoff) && handoff !== 'greet') { const q = queuedCmd; queuedCmd = null; command(q); }
   if (act && act.until && now >= act.until) actTimeout(now);
@@ -403,6 +403,11 @@ function frame(now: number): void {
   }
   const life = upright && !act && now < lifeUntil;
   const turning = state === 'walk' && now < turnUntil;
+  const turnMs = calm ? 0 : TURN_MS;
+  mir = steer(mir, dir * (life && lifeKind === 'look' ? -1 : 1) as 1 | -1, now, turnMs); // look: the head turns away and back, any interruption turns too
+  const ms = mirrorScale(mir, now, turnMs);
+  const flip = Math.sign(ms);
+  facing = flip;
   y = floorY() + lift;
   if (dragging && !calm) {
     const d = Math.max(dt, 0.001);
@@ -439,8 +444,6 @@ function frame(now: number): void {
   let sx = 1;
   let sy = 1;
   let rot = 0;
-  let turnS = 1; // signed horizontal turn scale
-  let turnE = 0; // dip while turning
   if (walking) {
     if (!calm) {
       const g = gait(walked, stride, shownW(poses['walk']?.srcs[0]) !== W); // a wider walk frame is the drawn profile cycle
@@ -461,9 +464,6 @@ function frame(now: number): void {
         if (lifeKind === 'tilt') rot += lifeTilt * e;
         else if (lifeKind === 'sniff') { rot += 5 * e * facing; dy = -1.5 * e * Math.abs(Math.sin(t / 70)); }
         else if (lifeKind === 'wag') rot += 1.2 * e * Math.sin((Math.PI * t) / WAG_FRAME_MS);
-        else if (t < TURN_MS) { turnS = turnScale(t, TURN_MS); turnE = envelope(t, TURN_MS); } // look: turns away and back like the walk turn
-        else if (lifeUntil - now < TURN_MS) { turnS = -turnScale(TURN_MS - (lifeUntil - now), TURN_MS); turnE = envelope(TURN_MS - (lifeUntil - now), TURN_MS); }
-        else if (lifeKind === 'look') turnS = -1;
       }
     }
     if (act?.kind === 'sniff' && act.phase === 'sniff' && !calm) {
@@ -489,9 +489,9 @@ function frame(now: number): void {
   } else if (state === 'roll' && !calm) {
     rot = rollAngle(age);
   }
-  if (turning) { sx = 1; sy = 1; turnS = turnScale(now - (turnUntil - TURN_MS), TURN_MS); turnE = envelope(now - (turnUntil - TURN_MS), TURN_MS); }
-  sx *= Math.abs(turnS); // the sign lives in flip, so the head registration mirrors with it
-  sy *= 1 - 0.04 * turnE;
+  if (turning) { sx = 1; sy = 1; }
+  sx *= Math.abs(ms); // the sign lives in flip, so the head registration mirrors with it
+  sy *= 1 - 0.04 * envelope(now - mir.at, turnMs);
   if (!calm) {
     const ok = hovering && microOk();
     tilt += ((ok ? HOVER_TILT_DEG * hoverSide : 0) - tilt) * Math.min(1, dt * 12);
@@ -505,7 +505,6 @@ function frame(now: number): void {
   if (now - landAt < LAND_SQUASH_MS) { const k = landSquash(now - landAt, landV); sy *= k; sx *= 1 + (1 - k) / 2; }
   const swing = dang.angle ? -dang.angle : 0;
   if (dang.angle) { rot += swing; sy *= 1.03; }
-  const flip = facing * Math.sign(turnS);
   dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
@@ -740,7 +739,7 @@ function onBehavior(raw: unknown): void {
 }
 
 function face(toward: number): void {
-  dir = facing = toward >= 0 ? 1 : -1;
+  dir = toward >= 0 ? 1 : -1;
   turnUntil = 0;
 }
 

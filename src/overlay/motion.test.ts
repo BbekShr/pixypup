@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, type Mirror, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -352,5 +352,44 @@ describe('gait, bark, settle', () => {
     expect(envelope(500, 1000)).toBeCloseTo(1);
     expect(envelope(1000, 1000)).toBe(0);
     expect(envelope(250, 1000)).toBeCloseTo(0.5);
+  });
+});
+
+describe('mirror', () => {
+  const D = 380;
+  const settled: Mirror = { from: -1, to: 1, at: -Infinity };
+
+  it('a full turn goes from -> to with one sign change', () => {
+    const m = steer(settled, -1, 1000, D);
+    const v = Array.from({ length: 39 }, (_, i) => mirrorScale(m, 1000 + i * 10, D));
+    expect(v[0]).toBe(1);
+    expect(v.filter((a, i) => i && Math.sign(a) !== Math.sign(v[i - 1]!))).toHaveLength(1);
+    expect(mirrorScale(m, 1000 + D, D)).toBe(-1);
+    expect(mirrorScale(m, 5000, D)).toBe(-1);
+  });
+
+  it('want === to is a no-op', () => {
+    expect(steer(settled, 1, 50, D)).toBe(settled);
+    const m = steer(settled, -1, 0, D);
+    expect(steer(m, -1, 100, D)).toBe(m);
+  });
+
+  it('a reversal at any point does not jump, and ends at the original facing', () => {
+    const step = Math.max(...Array.from({ length: 38 }, (_, i) => Math.abs(turnScale((i + 1) * 10, D) - turnScale(i * 10, D))));
+    for (const e of [1, 40, 95, 150, 189, 191, 230, 300, 379]) {
+      const t0 = 1000;
+      const m = steer(settled, -1, t0, D);
+      const before = mirrorScale(m, t0 + e - 1, D);
+      const r = steer(m, 1, t0 + e, D);
+      const after = mirrorScale(r, t0 + e, D);
+      expect(Math.abs(after - before)).toBeLessThanOrEqual(step + 1e-9);
+      expect(mirrorScale(r, t0 + e + D, D)).toBe(1);
+    }
+  });
+
+  it('durMs 0 is instant', () => {
+    const m = steer(settled, -1, 10, 0);
+    expect(mirrorScale(m, 10, 0)).toBe(-1);
+    expect(mirrorScale(steer(m, 1, 11, 0), 11, 0)).toBe(1);
   });
 });
