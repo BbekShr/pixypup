@@ -27,4 +27,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-10-31 (F13): pipeline = SAM cutout → idle → parallel [walk sheet, sit, sleep, bark, roll, blink edit]; 7 Muse Image requests + 1 SAM per run; live 52 s; manifest poses idle, blink, walk(4 frames, fps 8), sit, sleep, bark, roll. Tests 134 in 12 files. `src/api/pose-pipeline.ts`, `src/api/manifest.ts`
 
+- 2026-10-31 (F15): pack order PIXY_PACK_DIR (dev) → userData/pets/<petName> → built-in assets/pets/Pakkun → placeholder; settings (petName) are read once at startup, so creating a pet must re-resolve the pack. `--user-data-dir=<dir>` after `--` isolates userData in dev. Tests 138 in 12 files. `src/main/main.ts`
+
 ## Clean audits (so discovery skips these grounds)

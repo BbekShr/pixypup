@@ -1,0 +1,58 @@
+{
+  "pet": "Pakkun",
+  "species": "dog",
+  "poses": {
+    "idle": {
+      "frames": [
+        "idle_0.png"
+      ],
+      "fps": 2,
+      "footY": 0.9922779922779923
+    },
+    "walk": {
+      "frames": [
+        "walk_0.png",
+        "walk_1.png",
+        "walk_2.png",
+        "walk_3.png"
+      ],
+      "fps": 8,
+      "footY": 0.9922779922779923
+    },
+    "sit": {
+      "frames": [
+        "sit.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922779922779923
+    },
+    "sleep": {
+      "frames": [
+        "sleep.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922779922779923
+    },
+    "bark": {
+      "frames": [
+        "bark.png"
+      ],
+      "fps": 4,
+      "footY": 0.9922779922779923
+    },
+    "roll": {
+      "frames": [
+        "roll.png"
+      ],
+      "fps": 2,
+      "footY": 0.9922779922779923
+    },
+    "blink": {
+      "frames": [
+        "idle_blink.png"
+      ],
+      "fps": 1,
+      "footY": 0.9922779922779923
+    }
+  }
+}

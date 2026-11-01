@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_SPEED, bob, fall, lean, petTransform, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, blinkDelay, bob, fall, lean, petTransform, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -99,5 +99,13 @@ describe('fall', () => {
   });
   it('a pet below the floor is pulled back to it', () => {
     expect(run(50).l).toBe(0);
+  });
+});
+
+describe('blink', () => {
+  it('waits 3-6 s between blinks and holds the frame ~120 ms', () => {
+    expect(blinkDelay(0)).toBe(3000);
+    expect(blinkDelay(0.999)).toBeLessThan(6000);
+    expect(BLINK_MS).toBe(120);
   });
 });

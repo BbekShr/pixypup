@@ -34,3 +34,9 @@ export async function loadPack(dir: string): Promise<Pack | null> {
     return null;
   }
 }
+
+/** First candidate dir that passes `ok` (pack-valid in production), or null: user pack -> built-in -> placeholder. */
+export async function pickPackDir(candidates: string[], ok: (dir: string) => Promise<boolean>): Promise<string | null> {
+  for (const d of candidates) if (await ok(d)) return d;
+  return null;
+}

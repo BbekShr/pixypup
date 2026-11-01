@@ -1,7 +1,7 @@
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { DISPLAY_H, displayWidth, footOffset } from './layout';
-import { bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
+import { BLINK_MS, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -86,6 +86,8 @@ let lifeAt = stateAt + 3000;
 let lifeUntil = 0;
 let lifeKind: 'look' | 'tilt' = 'look';
 let lifeTilt = 0;
+let blinkAt = stateAt + blinkDelay(Math.random());
+let blinkUntil = 0;
 let last = stateAt;
 let stay = false; // menu toggle: no wander targets, idle/sit/sleep only
 let menuCalls = 0;
@@ -180,13 +182,18 @@ function frame(now: number): void {
     lifeUntil = now + 1000;
     lifeAt = now + 3000 + Math.random() * 3000;
   }
+  if (state === 'idle' && now >= blinkAt) {
+    blinkUntil = now + BLINK_MS;
+    blinkAt = now + blinkDelay(Math.random());
+  }
   const life = state === 'idle' && now < lifeUntil;
   const turning = state === 'walk' && now < turnUntil;
   y = floorY() + lift;
 
   const stride = STRIDE * W;
   const walking = state === 'walk' && !turning && !falling;
-  const pose = poses[walking ? 'walk' : state === 'drag' || state === 'walk' || falling ? 'idle' : state] ?? poses['idle']!;
+  const blinking = state === 'idle' && now < blinkUntil && !!poses['blink'];
+  const pose = poses[blinking ? 'blink' : walking ? 'walk' : state === 'drag' || state === 'walk' || falling ? 'idle' : state] ?? poses['idle']!;
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const src = pose.srcs[i]!;
   if (src !== shownSrc) { img.src = src; shownSrc = src; }
