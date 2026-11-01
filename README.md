@@ -41,6 +41,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute late
 | 💬 **Perks up at messages** | A new Dock badge from Slack, Mail, Messages or any app, and his ears go up. |
 | 🙈 **Hides on calls** | Zoom or Meet open? He tiptoes to the screen edge until your call ends. |
 | 🎙️ **Voice tricks** | Hold <kbd>⌥</kbd> <kbd>Space</kbd> and say *"Pakkun, sit"*, *"roll over"*, *"go to bed"*, *"come here"* or *"bark"*. Powered by **Meta Voice Transcribe**. |
+| 🫂 **Talk to Pakkun** | A desk buddy for rough days. Right-click him, choose *Talk to Pakkun…*, and tell him how your day is going. He answers in woofs and acts it out beside the chat. Nothing leaves your Mac until you press Send. |
 | 🤲 **Little moments** | He turns to look at you, wiggles with hearts when you pet him, blinks, yawns before naps and stretches when he wakes. |
 | 🌪️ **PixyPup Overload!** | One menu item drops every pet you've ever made, up to 24, across your screen for 25 seconds of pure chaos. |
 | 😴 **Calm and in control** | Snooze, size, energy, launch at login, hide from screen shares. He never steals a click or your focus. |
@@ -55,7 +56,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute late
 | Model | What it does for your pet |
 |---|---|
 | 🎯 **SAM 3.1** (`sam-3.1`) | Cuts your pet cleanly out of the photo and tidies every pose. |
-| 🎨 **Muse Image** (`muse-image-1.0`) | Draws a consistent set of 3D poses and walk frames from one photo. |
+| 🎨 **Muse Image** (`muse-image-1.0`) | Draws a consistent set of 3D poses from one photo. Walk frames are baked from the standing pose, so your pet's face never pops between steps. |
 | ⚡ **Muse Spark 1.3** (`muse-spark-1.3`) | Reads the failing test line (as quoted data, never as instructions), decides how to react, and writes his speech bubble and hints. |
 | 🎙️ **Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space. |
 
@@ -63,7 +64,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute late
 
 ## 🔒 Cute, never creepy
 
-> **Screen and voice off means zero network calls. Not one.**
+> **Screen and voice off, and no message sent, means zero network calls. Not one.**
 
 - 🙅 **Everything is opt-in.** Screen awareness and voice are off by default, each explained before you turn it on.
 - 💾 **Nothing is saved.** No screen captures, no recorded audio. Only your pets and settings are kept. Your Meta key lives in the macOS Keychain, never in a file.
@@ -114,7 +115,7 @@ npm run make-art        # regenerate the app icon and DMG background
 On first launch a small welcome window offers to turn a photo of your dog or cat into a pet (right-click the pet, "Make a new pet…", any time). While the pet is drawn the photo melts into the cutout and poses pop in; at the end the window shrinks to the floor, the old pet trots off, and the new one drops in and says hi. Rehearse without a key: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` (dev builds only).
 
 ### Little moments
-Hover over your pet and it turns to look at you. Move the cursor back and forth over it to pet it: a happy wiggle and a few hearts. It yawns before a nap and stretches when it wakes. All of this is off when macOS "Reduce motion" is on.
+Dogs and cats walk on a leg rig baked from the standing pose (24 frames at load), falling back to the AI walk if that fails. Hover over your pet and it turns to look at you. Move the cursor back and forth over it to pet it: a happy wiggle and a few hearts. It yawns before a nap and stretches when it wakes. All of this is off when macOS "Reduce motion" is on.
 
 ### Calm and control
 Right-click the pet (or use the menu bar icon) to Snooze it (1 hour, or until 8:00 tomorrow), change its Size (110/140/180 px) and Energy (sleepy/normal/playful), keep it in place, hide it from screen sharing (off by default), or open it at login (off by default). Choices persist in settings.json; a snoozed pet does no animation work at all. "PixyPup Overload!" (pet menu or menu bar icon) drops every saved pet, duplicated up to 24, over the screen for 25 seconds of cute chaos: it never takes a click, ends by itself, and "End the overload" in the menu bar stops it early.
