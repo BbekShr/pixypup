@@ -8,7 +8,7 @@ import { dataUrl, generateSpritePack, type PipelineEvent } from '../api/pose-pip
 import { openClient } from '../api/gate';
 import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
-import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, slugify, type ErrorCode } from './pet-input';
+import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, reuseOnboardingWindow, slugify, type ErrorCode } from './pet-input';
 import { loadPack } from './pack';
 import { takenSlug } from './pets';
 import { factViews, finishRun, noRuns, record, recordFailed, recordInfo, sourceFor, startRun, walkFailed, type Progress, type Runs } from './run-state';
@@ -31,6 +31,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   // Set when a pet was just made: the overlay hand-off waits until the window has shrunk away, so the old pet leaves as this one lands.
   let handoff: { x?: number } | null = null;
   let handoffTimer: NodeJS.Timeout | undefined;
+  let shown = { fromMenu: false, add: false }; // what the open window was opened for
   let adding = false; // opened to add a pet next to the others, not to replace the first
   let pendingAdd: string | null = null;
   const centreX = (): number | undefined => {
@@ -214,9 +215,15 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   return {
     open(fromMenu, add = false) {
       if (win && !win.isDestroyed()) {
-        win.show();
-        return;
+        if (reuseOnboardingWindow(shown, { fromMenu, add }, !!runs.current)) {
+          win.show();
+          return;
+        }
+        const old = win;
+        win = null; // its 'closed' must not clear the replacement
+        old.destroy();
       }
+      shown = { fromMenu, add };
       if (!runs.current) photoBuf = null;
       adding = add;
       win = new BrowserWindow({
@@ -237,8 +244,9 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
         const x = centreX();
         if (handoff && x !== undefined) handoff.x = x;
       });
+      const w = win;
       win.on('closed', () => {
-        win = null;
+        if (win === w) win = null;
         sendHandoff();
       });
       win.once('ready-to-show', () => win?.show());

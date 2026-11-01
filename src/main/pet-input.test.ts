@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MetaApiError } from '../api/meta-client';
 import { NoPetFoundError } from '../api/pose-pipeline';
-import { checkCreateArgs, checkKey, checkPhoto, errorCode, loadPhoto, MAX_PHOTO_BYTES, pickSlug, slugify } from './pet-input';
+import { checkCreateArgs, checkKey, checkPhoto, errorCode, loadPhoto, MAX_PHOTO_BYTES, pickSlug, reuseOnboardingWindow, slugify } from './pet-input';
 
 describe('slugify', () => {
   it.each([
@@ -103,5 +103,17 @@ describe('errorCode', () => {
     expect(errorCode(new TypeError("Cannot read properties of undefined (reading 'x')"))).toBe('generation-failed');
     expect(errorCode(new Error('boom'))).toBe('generation-failed');
     expect(errorCode('weird')).toBe('generation-failed');
+  });
+});
+
+describe('reuseOnboardingWindow', () => {
+  const first = { fromMenu: false, add: false };
+  const addPet = { fromMenu: true, add: true };
+  it('add-another over an open first-run window gets a fresh window', () => {
+    expect(reuseOnboardingWindow(first, addPet, false)).toBe(false);
+  });
+  it('same mode, or a run in flight, just shows the window', () => {
+    expect(reuseOnboardingWindow(addPet, addPet, false)).toBe(true);
+    expect(reuseOnboardingWindow(first, addPet, true)).toBe(true);
   });
 });

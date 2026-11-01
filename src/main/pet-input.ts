@@ -70,3 +70,7 @@ export function errorCode(err: unknown): ErrorCode {
   if (err instanceof Error && (err.name === 'AbortError' || (err instanceof TypeError && (err.cause != null || /fetch failed/i.test(err.message))))) return 'network';
   return 'generation-failed';
 }
+
+/** An open onboarding window is reused unless it was opened for a different mode and no create run is using it (a run keeps its own mode). */
+export const reuseOnboardingWindow = (shown: { fromMenu: boolean; add: boolean }, want: { fromMenu: boolean; add: boolean }, runInFlight: boolean): boolean =>
+  runInFlight || (shown.fromMenu === want.fromMenu && shown.add === want.add);
