@@ -76,3 +76,83 @@ export const BLINK_MS = 120;
 
 /** Gap before the next idle blink: 3-6 s for r in [0, 1). */
 export const blinkDelay = (r: number): number => 3000 + r * 3000;
+
+/**
+ * Horizontal centre of the head: mean x of the opaque pixels in the top 30% of the silhouette.
+ * Generated poses are bbox-centred, so the head lands up to ~10% of the width apart between frames;
+ * shifting each frame by its head offset keeps the face steady across frame swaps (null = blank frame).
+ */
+export function headX(alpha: ArrayLike<number>, w: number, h: number, stride = 1): number | null {
+  const solid = (x: number, y: number): boolean => (alpha[(y * w + x) * stride] ?? 0) > 128;
+  let top = -1;
+  let bottom = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!solid(x, y)) continue;
+      if (top < 0) top = y;
+      bottom = y;
+      break;
+    }
+  }
+  if (top < 0) return null;
+  const end = top + Math.max(1, Math.round((bottom - top) * 0.3));
+  let n = 0;
+  let sum = 0;
+  for (let y = top; y < end; y++) for (let x = 0; x < w; x++) if (solid(x, y)) { n++; sum += x; }
+  return sum / n;
+}
+
+/** Share of opaque pixels two same-size frames have in common (intersection over union). */
+export function overlap(a: ArrayLike<number>, b: ArrayLike<number>, stride = 1): number {
+  let both = 0;
+  let either = 0;
+  for (let i = 0; i < a.length; i += stride) {
+    const p = (a[i] ?? 0) > 128;
+    const q = (b[i] ?? 0) > 128;
+    if (p && q) both++;
+    if (p || q) either++;
+  }
+  return either ? both / either : 0;
+}
+
+export interface Pose { dx: number; dy: number; rot: number; sx: number; sy: number }
+
+/**
+ * Per-step body motion for the walk, by distance so it stays locked to the frames: a small squash at each
+ * footfall and a stretch mid-stride (volume kept: sx moves half as much the other way), plus a side-to-side rock
+ * that changes sign every step. rot is nose-down positive; the caller signs it for the facing.
+ */
+export function gait(distancePx: number, stridePx: number): Pose {
+  const p = distancePx / stridePx;
+  const sy = 1 + 0.03 * Math.sin(Math.PI * (p % 1)) - 0.015;
+  return { dx: 0, dy: bob(distancePx, stridePx), rot: 1.2 * Math.sin(Math.PI * p), sx: 1 - (sy - 1) / 2, sy };
+}
+
+const WOOFS = [180, 520]; // two woofs per burst
+const WOOF_EVERY = 1400;
+const WIND_MS = 90;
+
+/**
+ * A bark with one frame: each woof winds up (crouch, nose dips) then pops (chest up, nose up, a nudge forward)
+ * and settles with a damped wobble. rot is nose-up positive and dx is forward; the caller signs both for the facing.
+ */
+export function barkPose(tMs: number): Pose {
+  const t = tMs % WOOF_EVERY;
+  let k = 0;
+  for (const w of WOOFS) {
+    const u = t - w;
+    if (u >= -WIND_MS && u < 0) k -= 0.4 * Math.sin((Math.PI / 2) * ((u + WIND_MS) / WIND_MS));
+    else if (u >= 0 && u < 360) k += Math.exp(-u / 80) * Math.cos((2 * Math.PI * u) / 260);
+  }
+  return { dx: 3 * k, dy: 0, rot: 5 * k, sx: 1 - 0.03 * k, sy: 1 + 0.06 * k };
+}
+
+export const SETTLE_MS = 400;
+
+/** Follow-through when the pose changes: a dip to 0.94, a small overshoot, settled by SETTLE_MS. Returns sy. */
+export const settle = (tMs: number): number =>
+  tMs < 0 || tMs >= SETTLE_MS ? 1 : 1 - 0.06 * Math.exp(-tMs / 90) * Math.cos((2 * Math.PI * tMs) / 260);
+
+/** 0 -> 1 -> 0 over durMs with eased ends, for fidgets that lean in and back out instead of snapping. */
+export const envelope = (tMs: number, durMs: number): number =>
+  tMs <= 0 || tMs >= durMs ? 0 : Math.sin((Math.PI * tMs) / durMs) ** 2;
