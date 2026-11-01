@@ -505,7 +505,7 @@ describe('gaits', () => {
   it('the default dog profile reproduces the constants; other profiles scale and clamp', () => {
     expect(profileScale({ bounce: 0.03, pitchDeg: 2 })).toEqual({ bounce: 1, pitch: 1 });
     expect(profileScale(undefined)).toEqual({ bounce: 1, pitch: 1 });
-    expect(profileScale({ bounce: 0.15, pitchDeg: 40 })).toEqual({ bounce: 2.5, pitch: 3 });
+    expect(profileScale({ bounce: 0.15, pitchDeg: 40 })).toEqual({ bounce: 1.5, pitch: 1.5 });
     expect(profileScale({ bounce: 0, pitchDeg: 0 })).toEqual({ bounce: 0.3, pitch: 0 });
   });
 });

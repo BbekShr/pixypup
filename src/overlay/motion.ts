@@ -283,9 +283,9 @@ export const gaitParams = (kind: GaitKind): GaitParams => GAITS[kind];
 const DEFAULT_BOUNCE = 0.03; // MotionProfile gait.bounce and pitchDeg of the dog the constants below are tuned for
 const DEFAULT_PITCH = 2;
 
-/** How much a pack's own profile scales the body motion: 1 for the default dog, clamped so odd numbers can't wreck the walk. */
+/** How much a pack's own profile scales the body motion: 1 for the default dog, at most 1.5x (more rocks a long body like a rocking horse). */
 export const profileScale = (g?: { bounce: number; pitchDeg: number }): { bounce: number; pitch: number } =>
-  g ? { bounce: Math.min(2.5, Math.max(0.3, g.bounce / DEFAULT_BOUNCE)), pitch: Math.min(3, Math.max(0, g.pitchDeg / DEFAULT_PITCH)) } : { bounce: 1, pitch: 1 };
+  g ? { bounce: Math.min(1.5, Math.max(0.3, g.bounce / DEFAULT_BOUNCE)), pitch: Math.min(1.5, Math.max(0, g.pitchDeg / DEFAULT_PITCH)) } : { bounce: 1, pitch: 1 };
 
 /**
  * Body motion for a drawn walk cycle, locked to the cycle phase p (0 = contact, 1/8 = down, 2/8 = pass, 3/8 = up, then
