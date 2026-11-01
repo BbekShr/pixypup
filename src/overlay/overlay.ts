@@ -651,6 +651,7 @@ function frame(now: number): void {
 }
 
 img.addEventListener('mouseenter', (e) => {
+  if (resting) return; // snooze fade: click-through stays on until the img is hidden
   window.pixy.setClickThrough(false);
   hoverSide = e.clientX >= x + W / 2 ? 1 : -1;
   if (!microOk()) return;
