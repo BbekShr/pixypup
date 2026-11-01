@@ -1,0 +1,206 @@
+{
+  "agent_org_version": "0.1.0",
+  "generated": "2026-10-31",
+  "project": "PixyPup",
+  "slug": "pixypup",
+  "size": "small",
+  "ceo_skill": "pixypup-ceo",
+  "base_branch": "main",
+  "branch_prefix": "org/",
+  "autonomy_level": "L1",
+  "autonomy_target": "L1",
+  "models": {
+    "top": "sonnet",
+    "mid": "sonnet",
+    "small": "haiku",
+    "note": "maintainer asked for lower models: no opus tier in this org"
+  },
+  "gates": [
+    {
+      "name": "typecheck",
+      "cmd": "npm run typecheck",
+      "when": "always",
+      "cheap": true
+    },
+    {
+      "name": "lint",
+      "cmd": "npm run lint",
+      "when": "always",
+      "cheap": true
+    },
+    {
+      "name": "test",
+      "cmd": "npm test",
+      "when": "always",
+      "cheap": true
+    },
+    {
+      "name": "build",
+      "cmd": "npm run build",
+      "when": "always",
+      "cheap": true
+    },
+    {
+      "name": "runtime",
+      "cmd": "/pixypup-verify",
+      "when": "UI or main-process diffs",
+      "cheap": false,
+      "note": "binds 5173 + 9222"
+    },
+    {
+      "name": "feature-check",
+      "cmd": "",
+      "when": "always",
+      "note": "supplied by the CEO's brief per item"
+    }
+  ],
+  "gate_files": [
+    "tsconfig.json",
+    "eslint.config.js",
+    "vitest.config.ts"
+  ],
+  "protected_paths": [
+    "CLAUDE.md",
+    ".github/workflows/**",
+    ".env*",
+    "tsconfig.json",
+    "eslint.config.js",
+    "vitest.config.ts",
+    "src/main/secrets.ts",
+    "src/main/settings.ts",
+    "src/api/meta-client.ts",
+    "docs/ENTERPRISE.md",
+    ".claude/ceo/org.json",
+    ".claude/ceo/AUTONOMY.md",
+    ".claude/settings.json",
+    ".claude/hooks/**"
+  ],
+  "user_data_paths": [
+    "~/Library/Application Support/PixyPup/**",
+    "/Library/Application Support/PixyPup/admin.json"
+  ],
+  "shipped_paths_note": "electron-builder packages dist/**, assets/**, package.json into the .dmg. No CLAUDE.md or .claude/ ships. assets/** currently includes assets/photos/ (F10 narrows it).",
+  "agents": [
+    {
+      "name": "pixypup-app-engineer",
+      "access": "editor",
+      "role": "app-engineer",
+      "perimeter": [
+        "src/main/**",
+        "src/overlay/**",
+        "src/onboarding/**",
+        "src/voice/**",
+        "native/**",
+        "scripts/build-native.sh",
+        "assets/**"
+      ],
+      "except": []
+    },
+    {
+      "name": "pixypup-ai-engineer",
+      "access": "editor",
+      "role": "ai-engineer",
+      "perimeter": [
+        "src/api/**",
+        "src/screen/**",
+        "contracts/**",
+        "scripts/pose-test.ts"
+      ],
+      "except": []
+    },
+    {
+      "name": "pixypup-security-engineer",
+      "access": "report-only",
+      "role": "security-engineer",
+      "perimeter": [],
+      "except": []
+    },
+    {
+      "name": "pixypup-release-manager",
+      "access": "report-only",
+      "role": "release-manager",
+      "perimeter": [],
+      "except": []
+    },
+    {
+      "name": "pixypup-repro",
+      "access": "report-only",
+      "role": "repro",
+      "perimeter": [],
+      "except": []
+    }
+  ],
+  "skills": {
+    "ponytail": {
+      "agents": [
+        "pixypup-app-engineer",
+        "pixypup-ai-engineer"
+      ],
+      "when": "before writing any code, level full",
+      "fallback": "say so in the report; apply the anti-churn rules from the brief"
+    },
+    "ponytail-review": {
+      "agents": [],
+      "ceo": true,
+      "when": "full diff before the final gate, every apply run",
+      "fallback": "skip and note degraded in the report"
+    },
+    "ponytail-debt": {
+      "agents": [],
+      "ceo": true,
+      "when": "records step of every apply run",
+      "fallback": "grep -rn 'ponytail:' src scripts"
+    },
+    "code-review": {
+      "agents": [],
+      "ceo": true,
+      "when": "Review \u2225 QA on every diff (the correctness lens)",
+      "fallback": "dispatch the built-in general-purpose agent on sonnet with the correctness lens"
+    },
+    "security-review": {
+      "agents": [
+        "pixypup-security-engineer"
+      ],
+      "ceo": true,
+      "when": "diffs touching the security surface",
+      "fallback": "security engineer's checklist only"
+    },
+    "pixypup-verify": {
+      "agents": [
+        "pixypup-repro"
+      ],
+      "ceo": true,
+      "when": "any runtime check, repro, or UI claim",
+      "fallback": "read .claude/skills/pixypup-verify/SKILL.md directly"
+    }
+  },
+  "playbooks": ".claude/ceo/playbooks",
+  "feedback": {
+    "enabled": false,
+    "upstream": "BbekShr/agent-org"
+  },
+  "default_owner": "pixypup-app-engineer",
+  "kind": "desktop-app",
+  "modes": [
+    "audit",
+    "light",
+    "deep",
+    "id",
+    "request",
+    "triage"
+  ],
+  "guard": {
+    "block_stash": true,
+    "stop_check": {
+      "cmd": "npm run typecheck",
+      "watch": [
+        "src",
+        "scripts",
+        "contracts"
+      ],
+      "extensions": [
+        ".ts"
+      ]
+    }
+  }
+}

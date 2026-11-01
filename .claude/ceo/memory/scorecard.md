@@ -1,0 +1,15 @@
+# Scorecard
+
+Every org PR's fate. This is how autonomy is earned: success = PRs that land clean and stay clean,
+not activity. The CEO updates earlier rows' outcomes in preflight. Promotion criteria live in
+`.claude/ceo/AUTONOMY.md`.
+
+Level: **L1** (target L1) since 2026-10-31.
+
+## Weekly
+| week | PRs landed clean | landed edited | reverted | escaped defects | landed-clean % | cost per landed PR |
+|---|---|---|---|---|---|---|
+
+## Per PR
+| date | run | PR | outcome | human edits? | board CONFIRMED | escaped? | cost |
+|---|---|---|---|---|---|---|---|
