@@ -39,4 +39,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F6a): `native/bin/pixyhelper windows|badges|capture <id>`; under the Claude-hosted shells `windows` returns unredacted titles but `capture` fails (SCStream -3811) and `badges` returns permission. `helperPath()` in `src/main/helper-path.ts`. Tests 267 in 23 files.
 
+- 2026-11-01 (F6b): `src/screen/reader.ts` `createScreenReader({run, osa, decodePng?}).tick()` is F7's entry; terminal osascript output = rows\ncols\ntabs\nid\nleft\ntop\nright\nbottom\ncontents; first live osascript triggers the Automation prompt, so wire it only when screen-aware is on. Tests 320 in 24 files.
+
 ## Clean audits (so discovery skips these grounds)
