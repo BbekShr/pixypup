@@ -48,4 +48,37 @@ describe('editImage', () => {
     expect((err as Error).message).not.toContain('LEAKME');
     expect(err).toBeInstanceOf(Error);
   });
+
+  it('only follows https urls, with redirects off and a timeout signal', async () => {
+    const png = await img('png');
+    const seen: RequestInit[] = [];
+    const get = (async (_u: string, init?: RequestInit) => {
+      seen.push(init ?? {});
+      return new Response(png);
+    }) as unknown as typeof fetch;
+    await editImage(client({ data: [{ url: 'https://cdn/x.png' }] }), 'p', [], 1, { fetchImpl: get });
+    expect(seen[0]?.redirect).toBe('error');
+    expect(seen[0]?.signal).toBeInstanceOf(AbortSignal);
+    const never = (async () => new Response(png)) as unknown as typeof fetch;
+    await expect(editImage(client({ data: [{ url: 'http://cdn/x.png' }] }), 'p', [], 1, { fetchImpl: never })).rejects.toThrow(/https/);
+  });
+
+  it('rejects oversize downloads by content-length and by actual bytes', async () => {
+    const big = (headers: Record<string, string>) =>
+      (async () => new Response(Buffer.alloc(21 * 1024 * 1024), { headers })) as unknown as typeof fetch;
+    const c = () => client({ data: [{ url: 'https://cdn/x.png' }] });
+    await expect(editImage(c(), 'p', [], 1, { fetchImpl: big({ 'content-length': String(21 * 1024 * 1024) }) })).rejects.toThrow(/too large/);
+    await expect(editImage(c(), 'p', [], 1, { fetchImpl: big({}) })).rejects.toThrow(/too large/);
+  });
+
+  it('passes the abort signal to the API request', async () => {
+    let got: AbortSignal | null | undefined;
+    const fetchImpl = (async (_u: string, init?: RequestInit) => {
+      got = init?.signal;
+      return new Response(JSON.stringify({ data: [{ b64_json: (await img('png')).toString('base64') }] }));
+    }) as unknown as typeof fetch;
+    const ctl = new AbortController();
+    await editImage(new MetaClient({ apiKey: 'k', fetchImpl }), 'p', [], 1, { signal: ctl.signal });
+    expect(got).toBe(ctl.signal);
+  });
 });

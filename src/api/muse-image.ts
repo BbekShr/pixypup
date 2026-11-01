@@ -4,6 +4,8 @@
 import type { MetaClient } from './meta-client.js';
 
 export const IMAGE_MODEL = 'muse-image-1.0';
+const MAX_BYTES = 20 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 30_000;
 
 export interface EditedImage {
   buffer: Buffer;
@@ -31,12 +33,11 @@ export async function editImage(
   n = 1,
   opts: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
 ): Promise<EditedImage[]> {
-  const res = await client.postJson<ImagesResponse>('/images/edits', {
-    model: IMAGE_MODEL,
-    prompt,
-    images: images.map((image_url) => ({ image_url })),
-    n,
-  });
+  const res = await client.postJson<ImagesResponse>(
+    '/images/edits',
+    { model: IMAGE_MODEL, prompt, images: images.map((image_url) => ({ image_url })), n },
+    opts.signal,
+  );
   if (!res.data?.length) throw new Error('Muse Image returned no images.');
   const get = opts.fetchImpl ?? fetch;
   return Promise.all(
@@ -44,9 +45,13 @@ export async function editImage(
       let buffer: Buffer;
       if (item.b64_json) buffer = Buffer.from(item.b64_json, 'base64');
       else if (item.url) {
-        const r = await get(item.url, { signal: opts.signal });
+        if (!item.url.startsWith('https://')) throw new Error('Muse Image result URL is not https.');
+        const signal = AbortSignal.any([AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS), ...(opts.signal ? [opts.signal] : [])]);
+        const r = await get(item.url, { signal, redirect: 'error' });
         if (!r.ok) throw new Error(`Muse Image download failed with ${r.status}.`);
+        if (Number(r.headers.get('content-length')) > MAX_BYTES) throw new Error('Muse Image result is too large.');
         buffer = Buffer.from(await r.arrayBuffer());
+        if (buffer.length > MAX_BYTES) throw new Error('Muse Image result is too large.');
       } else throw new Error('Muse Image item has neither b64_json nor url.');
       return { buffer, mime: sniff(buffer) };
     }),
