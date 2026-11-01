@@ -111,11 +111,18 @@ describe('findRedLines', () => {
 });
 
 describe('parseVisible / clean', () => {
-  it('takes the last `rows` lines and the row count after the last comma', () => {
-    const v = parseVisible('a, b\nl1\nl2\nl3\n\n, 2\n');
-    expect(v).toEqual({ lines: ['l2', 'l3'], rows: 2 });
+  it('takes the last `rows` lines; trailing newlines dropped', () => {
+    expect(parseVisible('2\nl1\nl2\nl3\n\n')).toEqual({ lines: ['l2', 'l3'], rows: 2 });
   });
-  it('rejects bad row count', () => expect(parseVisible('x, y')).toBeNull());
+  it('contents ending in ", 42" are not confused with the row count', () => {
+    expect(parseVisible('5\nfoo, 42')).toEqual({ lines: ['foo, 42'], rows: 5 });
+  });
+  it('rejects bad row counts', () => {
+    expect(parseVisible('x\nabc')).toBeNull();
+    expect(parseVisible('0\nabc')).toBeNull();
+    expect(parseVisible('501\nabc')).toBeNull();
+    expect(parseVisible('no newline')).toBeNull();
+  });
   it('truncates and strips control chars', () => {
     expect(clean('a\u001b[31mb' + 'x'.repeat(300))).toHaveLength(200);
     expect(clean('a\u0007b')).toBe('a b');
@@ -131,13 +138,13 @@ describe('terminal reader', () => {
   });
   it('maps the last failing line and flags change once', async () => {
     const read = createTerminalReader();
-    const d = mk('Terminal', `${screen}, 4`);
+    const d = mk('Terminal', `4\n${screen}`);
     const a = await read(d);
     expect(a.terminalError?.text).toBe('Tests 1 failed');
     expect(a.terminalError?.box).toEqual(lineToScreen(win('Terminal').bounds, 4, 2));
     expect(a.changed).toBe(true);
     expect((await read(d)).changed).toBe(false);
-    expect((await read(mk('Terminal', 'ok, 4'))).changed).toBe(true);
+    expect((await read(mk('Terminal', '4\nok'))).changed).toBe(true);
   });
   it('never runs osascript when no supported terminal window exists', async () => {
     const calls: string[][] = [];
@@ -147,7 +154,7 @@ describe('terminal reader', () => {
   });
   it('uses the iTerm2 script', async () => {
     const calls: string[][] = [];
-    await createTerminalReader()(mk('iTerm2', 'x, 4', calls));
+    await createTerminalReader()(mk('iTerm2', '4\nx', calls));
     expect(calls[0][1]).toContain('iTerm2');
   });
   it('prefers the red-pixel box when capture decodes', async () => {
@@ -155,7 +162,7 @@ describe('terminal reader', () => {
     const buf = new Uint8Array(w * h * 4).fill(0);
     for (let y = 4; y < 6; y++) for (let x = 0; x < 8; x++) { const i = (y * w + x) * 4; buf[i] = 255; }
     const d = {
-      ...mk('Terminal', `${screen}, 4`),
+      ...mk('Terminal', `4\n${screen}`),
       run: (async () => ({ code: 0, stdout: Buffer.from('png'), stderr: '' })) as Run,
       decodePng: async () => ({ data: buf, w, h, channels: 4 }),
     };
@@ -174,7 +181,7 @@ describe('createScreenReader', () => {
       const o = args[0] === 'windows' ? { windows: [win('Terminal')], titlesRedacted: false } : { badges: { Slack: '1' } };
       return { code: 0, stdout: Buffer.from(JSON.stringify(o)), stderr: '' };
     };
-    const rd = createScreenReader({ run, osa: async () => 'FAIL x, 10' });
+    const rd = createScreenReader({ run, osa: async () => '10\nFAIL x' });
     const a = await rd.tick();
     expect(a.observation.slackBadge).toBe('1');
     expect(a.observation.terminalError?.text).toBe('FAIL x');

@@ -76,20 +76,20 @@ export function pickTerminal(windows: Win[]): Win | null {
   return windows.find((w) => w.owner === 'Terminal' || w.owner === 'iTerm2') ?? null;
 }
 
+// Rows first, then a newline, then the contents: unambiguous whatever the terminal text holds.
 const SCRIPTS: Record<string, string> = {
   Terminal:
-    'tell application "Terminal" to get {contents of selected tab of front window, number of rows of selected tab of front window}',
+    'tell application "Terminal" to tell selected tab of front window to return ((number of rows) as text) & linefeed & contents',
   iTerm2:
-    'tell application "iTerm2" to tell current session of current window to get {contents, rows}',
+    'tell application "iTerm2" to tell current session of current window to return (rows as text) & linefeed & contents',
 };
 
-// osascript prints a list as "a, b": the row count is after the LAST ", ".
 export function parseVisible(out: string): { lines: string[]; rows: number } | null {
-  const cut = out.lastIndexOf(', ');
-  if (cut < 0) return null;
-  const rows = Number(out.slice(cut + 2).trim());
-  if (!Number.isInteger(rows) || rows <= 0) return null;
-  const lines = out.slice(0, cut).replace(/\n+$/, '').split('\n');
+  const nl = out.indexOf('\n');
+  if (nl < 0) return null;
+  const rows = Number(out.slice(0, nl).trim());
+  if (!Number.isInteger(rows) || rows < 1 || rows > 500) return null;
+  const lines = out.slice(nl + 1).replace(/\n+$/, '').split('\n');
   return { lines: lines.slice(-rows), rows };
 }
 
