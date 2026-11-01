@@ -40,7 +40,7 @@ describe('ruleDecide', () => {
   });
   it('sniffs the error box center', () => {
     const d = ruleDecide({ ...base, terminalError: { text: 'boom', box: { x: 10, y: 20, w: 100, h: 40 } } });
-    expect(d).toMatchObject({ action: 'sniff', target: { x: 60, y: 40 } });
+    expect(d).toMatchObject({ action: 'sniff', target: { x: -6, y: 40 } });
   });
   it('sniffs window bottom-left without a box', () => {
     const d = ruleDecide({

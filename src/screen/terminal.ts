@@ -215,9 +215,7 @@ export function createTerminalReader() {
   return async (deps: TerminalDeps): Promise<TerminalRead> => {
     const done = (found: { text: string; box: Box } | null): TerminalRead => {
       const key = found
-        ? createHash('sha1')
-            .update(`${found.text}|${[found.box.x, found.box.y, found.box.w, found.box.h].map((n) => Math.round(n / 4)).join(',')}`)
-            .digest('hex')
+        ? createHash('sha1').update(found.text).digest('hex')
         : '';
       const changed = key !== prev;
       prev = key;

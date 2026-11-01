@@ -15,7 +15,7 @@ export const SNIFF_INSTRUCTIONS =
   'Reply with one short, kind, playful line (max 40 characters, no emojis, no URLs, no @) that names what failed in plain words.';
 
 export async function sniffBubble(client: MetaClient, failureLine: string, signal?: AbortSignal): Promise<{ bubble: string } | null> {
-  const data = JSON.stringify(failureLine.replaceAll('</screen_data>', '').slice(0, 200));
+  const data = JSON.stringify(failureLine.replace(/[<>]/g, '').slice(0, 200));
   try {
     return await sparkJson(client, {
       instructions: SNIFF_INSTRUCTIONS,

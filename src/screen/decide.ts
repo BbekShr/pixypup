@@ -21,7 +21,7 @@ export function ruleDecide(obs: Observation): BehaviorDecision | null {
     const box = obs.terminalError.box;
     let target: { x: number; y: number };
     if (box) {
-      target = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+      target = { x: box.x - 16, y: box.y + box.h / 2 };
     } else {
       const term = obs.windows.find((w) => TERMINALS.includes(w.owner.toLowerCase()));
       target = term
@@ -60,6 +60,7 @@ export function createDecider(deps: DeciderDeps = {}) {
     // The rules choose the action and target; Spark only words the bubble for a new failure.
     async decide(obs: Observation, key: string): Promise<Decided> {
       const decision = ruleDecide(obs);
+      if (!decision || !key) lastKey = null;
       if (!decision) return { decision, source: 'none' };
       if (decision.action !== 'sniff' || key === lastKey) return { decision, source: 'rule' };
       const t = now();
