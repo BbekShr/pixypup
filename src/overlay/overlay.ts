@@ -13,7 +13,7 @@ import { GAITS, bakeWalk, legBand, rigFor } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, registersByHead, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -139,6 +139,7 @@ function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], i
     }
     if (LYING.has(name)) continue; // lying poses are not lined up by their head
     const first = bitmap(p.srcs[0]);
+    if (!registersByHead(name, !first || sameSize(first))) continue;
     const ref = !first || sameSize(first) ? h0 : head(first);
     for (const src of p.srcs) {
       const b = bitmap(src) ?? idle;
