@@ -66,7 +66,8 @@
         "side_7.png"
       ],
       "fps": 8,
-      "footY": 0.9930795847750865
+      "footY": 0.9930795847750865,
+      "judge": "muse-wonder-1.0"
     },
     "turn": {
       "frames": [
