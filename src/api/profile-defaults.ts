@@ -37,7 +37,7 @@ export const STRIDE_PLAUSIBLE: Record<Locomotion, Range> = {
 export const clamp = (v: number, [lo, hi]: Range): number => Math.min(hi, Math.max(lo, v));
 
 // The dog strings are today's pose-pipeline.ts prompts (a test pins them to POSES).
-const SHEET =
+export const SHEET =
   "A horizontal sprite sheet of exactly 4 frames of this same character walking, drawn in strict side profile facing right: " +
   "the camera is level and perpendicular to the body, we see the pet's left side, only one eye visible, " +
   'the head points right in the walking direction and does not look at the camera. All four legs clearly visible and separated. ' +
@@ -90,6 +90,8 @@ const AIR = { minLiftBody: 1, maxLiftBody: 4, flutterHz: 6, perches: true, sway:
 const FLYER: MotionProfile = {
   ...DOG,
   locomotion: 'fly',
+  styleHints: 'wing shape and colours, beak or antennae',
+  idlePrompt: 'Pose: hovering in place, wings half open, side view facing right.',
   gait: { cadenceHz: 6, strideBody: 2, bounce: 0.05, pitchDeg: 8, speedBody: 1 },
   air: AIR,
   cycle: { kind: 'flap', prompt: flapSheet('flapping its wings in flight') },
@@ -104,6 +106,7 @@ const FLYER: MotionProfile = {
 
 const BUTTERFLY: MotionProfile = {
   ...FLYER,
+  styleHints: 'wing pattern and colours, antennae',
   gait: { cadenceHz: 3, strideBody: 1.5, bounce: 0.08, pitchDeg: 10, speedBody: 0.7 },
   air: { ...AIR, flutterHz: 3, perches: true, sway: 0.8 },
   fidgets: ['flutter', 'hover', 'bob'],
@@ -116,6 +119,8 @@ const BUTTERFLY: MotionProfile = {
 
 const FISH: MotionProfile = {
   ...FLYER,
+  styleHints: 'fins, tail and scale colours',
+  idlePrompt: 'Pose: floating still, fins relaxed, side view facing right.',
   gait: { cadenceHz: 2, strideBody: 1.5, bounce: 0.04, pitchDeg: 6, speedBody: 0.7 },
   air: { ...AIR, flutterHz: 2, perches: false, sway: 0.6 },
   cycle: { kind: 'undulate', prompt: flapSheet('swimming, tail and body swaying side to side') },
@@ -131,6 +136,7 @@ const FISH: MotionProfile = {
 const RABBIT: MotionProfile = {
   ...DOG,
   locomotion: 'hop',
+  styleHints: 'long upright ears, fluffy tail',
   gait: { cadenceHz: 1.5, strideBody: 1.6, bounce: 0.15, pitchDeg: 6, speedBody: 0.7 },
   cycle: { kind: 'hop', prompt: flapSheet('hopping (crouch, push off, mid-air, landing)').replace('only the wings move', 'only the legs and body arc move') },
   fidgets: ['groom', 'bob'],
@@ -144,6 +150,8 @@ const RABBIT: MotionProfile = {
 const SNAKE: MotionProfile = {
   ...DOG,
   locomotion: 'slither',
+  styleHints: 'scale pattern and head shape',
+  idlePrompt: 'Pose: resting with the head raised, body gently curved, side view facing right.',
   gait: { cadenceHz: 1.5, strideBody: 0.8, bounce: 0, pitchDeg: 0, speedBody: 0.4 },
   cycle: { kind: 'undulate', prompt: flapSheet('slithering, body in an S curve that shifts each frame').replace('only the wings move', 'only the body curve changes') },
   fidgets: ['bob', 'hover'],

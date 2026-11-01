@@ -9,11 +9,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
-import type { PetFact, Personality, SpriteManifest } from '../../contracts/types.js';
+import type { MotionProfile, PetFact, Personality, SpriteManifest } from '../../contracts/types.js';
 import { validateManifest } from './manifest.js';
 import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
+import { motionProfile } from './motion-profile.js';
 import { breedFacts, meetPet } from './personality.js';
+import { posesFor, styleFor } from './pose-prompts.js';
+import { defaultProfile } from './profile-defaults.js';
 import { largest, maskAt, segment } from './sam.js';
 import { isStaticSheet } from './static-sheet.js';
 
@@ -23,53 +26,9 @@ export const MAGENTA = { r: 255, g: 0, b: 255 };
 const TARGET_HEIGHT = 256;
 const MARGIN = 2;
 
-export const STYLE =
-  'Render the exact same pet from the reference photo as a cute 3D animated-movie character, ' +
-  'Pixar-style: soft volumetric fur, gentle studio lighting with soft highlights, subtle ambient occlusion, ' +
-  'slightly stylised proportions (big expressive glossy eyes, rounded body), same breed, same fur colour and markings. ' +
-  'Full body visible, centred, nothing cropped. Thin clean white outline around the silhouette. ' +
-  'Solid flat pure magenta background (#FF00FF) filling the whole canvas, no gradient, ' +
-  'no ground shadow, no reflections, no props, no text. ' +
-  'Keep the same soft ears (same shape and how they hang), same face shape and same collar as the reference; ' +
-  'do not change the breed or ear shape. ' +
-  'Leave a clear margin of empty background on all four sides so nothing touches the canvas edge.';
-
-// idle_0 is generated first and fed back as a second reference so every other pose copies its character design.
-// A strict side profile: a 3/4 view with the head turned to the camera hides the legs, so no walk reads from it.
-// Earlier wording ("side view", "passing (legs under body)") came back 3/4 with a crouched hop for the passing frames.
-const SHEET =
-  "A horizontal sprite sheet of exactly 4 frames of this same character walking, drawn in strict side profile facing right: " +
-  "the camera is level and perpendicular to the body, we see the pet's left side, only one eye visible, " +
-  'the head points right in the walking direction and does not look at the camera. All four legs clearly visible and separated. ' +
-  'Frame 1: left front leg reaching forward and right hind leg reaching back. ' +
-  'Frame 2: legs passing under the body, one front paw slightly lifted, body at the same height as frame 1, back level, ' +
-  'not crouching, not jumping. Frame 3: right front leg forward and left hind leg back. Frame 4: legs passing under the body again. ' +
-  'Same size, same body height and same head position in every frame; only the legs move. ' +
-  'Evenly spaced in 4 equal columns with wide magenta gaps between frames.';
-
-// Last resort when two 4-frame sheets failed: just the two contact poses, which Muse draws well.
-const PAIR =
-  'A horizontal sprite sheet of exactly 2 frames of this same character mid-stride, drawn in strict side profile facing right: ' +
-  "the camera is level and perpendicular to the body, we see the pet's left side, only one eye visible, the head points right. " +
-  'Frame 1: left front leg reaching far forward and right hind leg reaching far back. ' +
-  'Frame 2: right front leg reaching far forward and left hind leg reaching far back. ' +
-  'Same size, same body height and same head position in both frames; only the legs move. ' +
-  'Two equal columns with a wide magenta gap between the frames.';
-
-// The sheet is one request so the four frames come out as one coherent cycle (separate calls copied each other).
-// idle_blink is a pure edit of the idle image: no STYLE prefix, it would invite a redraw.
-export const POSES: Record<string, string> = {
-  idle_0: 'Pose: standing on all four legs, side view facing right, tail relaxed.',
-  walk_sheet: SHEET,
-  walk_pair: PAIR,
-  sit: 'Pose: sitting upright facing the viewer, front paws together.',
-  sleep: 'Pose: curled up asleep lying down, eyes closed, side view.',
-  bark: 'Pose: barking happily, side view facing right, mouth open, ears perked.',
-  roll: 'Pose: rolling over on its back, belly up, paws in the air, playful.',
-  idle_blink:
-    'Edit this exact image: gently close the eyes in a blink. Change nothing else: same pose, same framing, ' +
-    'same size, same position, same lighting, same magenta background.',
-};
+export const STYLE = styleFor(defaultProfile('dog'));
+/** The dog prompts, for scripts and tests; a pack draws from its own profile (posesFor). */
+export const POSES = posesFor(defaultProfile('dog'));
 
 // Profile walk frames sit on their own, wider canvas (see layoutFrames); old packs' walk_0..3 are 3/4 view.
 export const SIDE_FRAMES = ['side_0', 'side_1', 'side_2', 'side_3'];
@@ -82,6 +41,7 @@ const BLINK_MIN_IOU = 0.85;
 
 export type PipelineEvent =
   | { stage: 'cutout'; png: Buffer }
+  | { stage: 'profile'; profile: MotionProfile }
   | { stage: 'pose'; name: string; png: Buffer; index: number; total: number; fallback?: boolean }
   | { stage: 'pose-failed'; name: string; error: string }
   | { stage: 'personality'; personality: Personality }
@@ -96,7 +56,7 @@ export interface PackOptions {
   outDir: string;
   onProgress?: (e: PipelineEvent) => void;
   /** Per-pose request timeout and retry back-off (x3 after HTTP 429); tests shrink these. */
-  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number };
+  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number; profileMs?: number };
 }
 
 export class NoPetFoundError extends Error {
@@ -441,6 +401,19 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     emit({ stage: 'facts', facts: f });
   })().catch(() => undefined);
 
+  // Poses are drawn from the profile, so it is awaited (12 s at most); Spark failing or running late means the species default.
+  const profileMs = o.timing?.profileMs ?? 12_000;
+  const profile = await new Promise<MotionProfile | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), profileMs);
+    motionProfile(o.client, cutout, o.petName, o.species, AbortSignal.any([spark.signal, AbortSignal.timeout(profileMs)])).then(
+      (p) => (clearTimeout(timer), resolve(p)),
+      () => (clearTimeout(timer), resolve(null)),
+    );
+  }).then((p) => p ?? defaultProfile(o.species));
+  emit({ stage: 'profile', profile });
+  const style = styleFor(profile);
+  const poses = posesFor(profile);
+
   const keyed = await (async () => {
   const cutoutOnMagenta = dataUrl(await sharp(cutout).flatten({ background: MAGENTA }).png().toBuffer());
 
@@ -465,8 +438,8 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>, retry = true) => {
     const prompt =
       name === 'idle_blink'
-        ? POSES[name]!
-        : `${STYLE} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
+        ? poses[name]!
+        : `${style} ${poses[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
     try {
       return await attempt(prompt, refs, finish);
     } catch (first) {
@@ -551,6 +524,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const manifest: SpriteManifest = {
     pet: o.petName,
     species: o.species,
+    profile,
     poses: {
       idle: pose(['idle_0.png'], 2),
       ...(keyed['side_0'] ? { walk: pose(SIDE_FRAMES.map((f) => `${f}.png`), 8) } : {}),

@@ -17,6 +17,9 @@ import {
   writePack,
   type PipelineEvent,
 } from '../pose-pipeline.js';
+import { validateManifest } from '../manifest.js';
+import { posesFor, styleFor } from '../pose-prompts.js';
+import { defaultProfile } from '../profile-defaults.js';
 
 const SAM_OUTPUT =
   '<0f>0<|box;x1=211;y1=228;x2=270;y2=254;w=320;h=334|>' +
@@ -64,10 +67,13 @@ interface FakeOpts {
   /** answers POST /responses (Muse Spark); absent = Spark fails */
   spark?: (body: Record<string, unknown>) => Promise<unknown>;
   sparkLog?: string[];
+  /** prompts to recognise poses by; default the dog's */
+  poses?: Record<string, string>;
 }
 
 function fakeClient(o: FakeOpts = {}) {
   const requested: string[] = [];
+  const prompts: string[] = [];
   const seen: Record<string, number> = {};
   const stats = { inflight: 0, maxInflight: 0 };
   const client = {
@@ -78,8 +84,10 @@ function fakeClient(o: FakeOpts = {}) {
         if (!o.spark) throw new Error('spark down');
         return o.spark(body as unknown as Record<string, unknown>);
       }
-      const pose = Object.keys(POSES).find((k) => body.prompt.includes(POSES[k] as string)) as string;
+      const lookup = o.poses ?? POSES;
+      const pose = Object.keys(lookup).find((k) => body.prompt.includes(lookup[k] as string)) as string;
       requested.push(pose);
+      prompts.push(body.prompt);
       const attempt = (seen[pose] = (seen[pose] ?? 0) + 1);
       if (pose === 'sit' && signal) o.signals?.push(signal);
       if (o.hang?.(pose, attempt)) {
@@ -95,7 +103,7 @@ function fakeClient(o: FakeOpts = {}) {
       return { data: [{ b64_json: webp.toString('base64') }] };
     },
   } as unknown as MetaClient;
-  return { client, requested, stats };
+  return { client, requested, prompts, stats };
 }
 
 describe('chromaKey', () => {
@@ -352,6 +360,7 @@ const PERSONA = {
   energy: 'normal',
   lines: ['one', 'two', 'three', 'four', 'five', 'six'],
 };
+const sparkName = (b: Record<string, unknown>) => (b.text as { format: { name: string } }).format.name;
 const sparkReply = (body: Record<string, unknown>) => {
   const isFacts = body.tools !== undefined;
   const t = isFacts ? { facts: [{ text: 'Old breed.', source: 'https://a.org' }] } : PERSONA;
@@ -391,7 +400,7 @@ describe('generateSpritePack', () => {
     const events: PipelineEvent[] = [];
     const { p } = await run({}, events);
     const manifest = await p;
-    expect(events.map((e) => e.stage)).toEqual(['cutout', ...Array(10).fill('pose'), 'done']);
+    expect(events.map((e) => e.stage)).toEqual(['cutout', 'profile', ...Array(10).fill('pose'), 'done']);
     expect((await readdir(out)).sort()).toEqual([
       'bark.png',
       'idle_0.png',
@@ -713,7 +722,7 @@ describe('meet your pet in the pipeline', () => {
     const sparkLog: string[] = [];
     const manifest = await (await run({ delayMs: 60, spark: slow, sparkLog }, events)).p;
     expect(sparkLog[0]).toBe('spark:0'); // started before any pose request
-    expect(log).toEqual(['spark-start', 'spark-end', 'spark-start', 'spark-end']); // meetPet then breedFacts, both done before the pack
+    expect(log.filter((x) => x === 'spark-end')).toHaveLength(3); // profile, meetPet, breedFacts, all done before the pack
     expect(manifest.personality).toBeDefined(); // finished inside the grace, was not cut
     expect(events.at(-1)?.stage).toBe('done');
   });
@@ -731,7 +740,7 @@ describe('meet your pet in the pipeline', () => {
     // an infinite hang: the test completing at all proves the grace period cuts it off
     const manifest = await generateSpritePack({
       client, photo: await photo(), petName: 'P', species: 'dog', outDir: out,
-      onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 100 },
+      onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 100, profileMs: 50 },
     });
     expect(manifest.personality).toBeUndefined();
     expect(signal?.aborted).toBe(true);
@@ -747,6 +756,7 @@ describe('meet your pet in the pipeline', () => {
     const { client } = fakeClient({
       fail: (pose) => pose === 'idle_0',
       spark: async (b) => {
+        if (sparkName(b) === 'motion_profile') return sparkReply(b); // unparseable as a profile: the default is used at once
         bodies.push(b);
         await gate;
         return sparkReply(b);
@@ -764,6 +774,110 @@ describe('meet your pet in the pipeline', () => {
     release();
     await new Promise((r) => setTimeout(r, 50));
     expect(bodies).toHaveLength(1); // meetPet only
-    expect(events.map((e) => e.stage)).toEqual(['cutout']);
+    expect(events.map((e) => e.stage)).toEqual(['cutout', 'profile']);
+  });
+});
+
+describe('profile-driven prompts', () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'pixy-test-'));
+  });
+  afterEach(() => rm(root, { recursive: true, force: true }));
+
+  const profileReply = (p: unknown) => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(p) }] }] });
+  const pack = async (species: string, o: FakeOpts, timing: Record<string, number> = {}) => {
+    const events: PipelineEvent[] = [];
+    const f = fakeClient(o);
+    const manifest = await generateSpritePack({
+      client: f.client, photo: await photo(), petName: 'P', species, outDir: join(root, 'pack'),
+      onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 50, ...timing },
+    });
+    return { ...f, events, manifest };
+  };
+  const spark = (profile: unknown) => async (b: Record<string, unknown>) => (sparkName(b) === 'motion_profile' ? profileReply(profile) : sparkReply(b));
+
+  it('the dog default reproduces the original dog prompts', () => {
+    const d = posesFor(defaultProfile('dog'));
+    expect(styleFor(defaultProfile('dog'))).toBe(
+      'Render the exact same pet from the reference photo as a cute 3D animated-movie character, ' +
+        'Pixar-style: soft volumetric fur, gentle studio lighting with soft highlights, subtle ambient occlusion, ' +
+        'slightly stylised proportions (big expressive glossy eyes, rounded body), same breed, same fur colour and markings. ' +
+        'Full body visible, centred, nothing cropped. Thin clean white outline around the silhouette. ' +
+        'Solid flat pure magenta background (#FF00FF) filling the whole canvas, no gradient, ' +
+        'no ground shadow, no reflections, no props, no text. ' +
+        'Keep the same soft ears (same shape and how they hang), same face shape and same collar as the reference; ' +
+        'do not change the breed or ear shape. ' +
+        'Leave a clear margin of empty background on all four sides so nothing touches the canvas edge.',
+    );
+    expect(d.walk_sheet).toBe(defaultProfile('dog').cycle.prompt);
+    expect(d.walk_pair).toContain('left front leg reaching far forward');
+    expect(d.sit).toBe('Pose: sitting upright facing the viewer, front paws together.');
+  });
+
+  it('asks a butterfly for wing frames, with no fur and no legs walking', async () => {
+    const bf = { ...defaultProfile('butterfly'), cycle: { kind: 'flap' as const, prompt: 'slow, lazy wingbeats' } };
+    const poses = posesFor(bf);
+    const { prompts, manifest } = await pack('butterfly', { spark: spark(bf), poses, image: async (n) => (n === 'walk_sheet' ? sheetImg() : drawn(100, 100, 50, 50)) });
+    const sheet = prompts.find((p) => p.includes('exactly 4 frames'))!;
+    expect(sheet).toMatch(/wings raised high/);
+    expect(sheet).toContain('slow, lazy wingbeats');
+    expect(sheet).not.toMatch(/walking|legs reaching|front leg/);
+    expect(prompts.every((p) => !/fur|ears|four legs/.test(p) || p === poses.idle_blink)).toBe(true);
+    expect(manifest.profile?.cycle.kind).toBe('flap');
+    expect(manifest.poses.walk?.frames).toHaveLength(4);
+  });
+
+  it('asks a snake for body undulation', () => {
+    const p = posesFor(defaultProfile('snake'));
+    expect(p.walk_sheet).toMatch(/S curve/);
+    expect(p.walk_sheet).not.toMatch(/legs/);
+    expect(p.walk_pair).toMatch(/S curve/);
+    expect(p.idle_0).not.toMatch(/legs/);
+  });
+
+  it.each([['hop', /crouched low/], ['spin', /quarter turn/]] as const)('%s has its own scaffold', (kind, re) => {
+    expect(posesFor({ ...defaultProfile('dog'), cycle: { kind, prompt: 'x' } }).walk_sheet).toMatch(re);
+  });
+
+  it('wraps role prompts in the style and keeps the manifest pose keys', async () => {
+    const p = { ...defaultProfile('cat'), roles: { ...defaultProfile('cat').roles, voice: { label: 'Meow', prompt: 'Pose: yowling loudly.' } } };
+    const { prompts, manifest } = await pack('cat', { spark: spark(p), poses: posesFor(p) });
+    expect(prompts.find((x) => x.includes('yowling'))!.startsWith(styleFor(p))).toBe(true);
+    expect(Object.keys(manifest.poses).sort()).toEqual(['bark', 'blink', 'idle', 'roll', 'sit', 'sleep', 'walk']);
+  });
+
+  it('emits the profile before the first pose and puts it in a valid manifest', async () => {
+    const { events, manifest } = await pack('dog', { spark: spark(defaultProfile('dog')) });
+    const stages = events.map((e) => e.stage);
+    expect(stages.indexOf('profile')).toBeGreaterThan(stages.indexOf('cutout'));
+    expect(stages.indexOf('profile')).toBeLessThan(stages.indexOf('pose'));
+    const ev = events.find((e) => e.stage === 'profile');
+    expect(ev && ev.stage === 'profile' && ev.profile).toEqual(manifest.profile);
+    expect(() => validateManifest(JSON.parse(JSON.stringify(manifest)))).not.toThrow();
+  });
+
+  it.each([
+    ['Spark is down', {}, {}],
+    ['a profile that never answers', { spark: () => new Promise(() => undefined) }, { profileMs: 40 }],
+    ['an unusable profile', { spark: async () => profileReply({ locomotion: 'nope' }) }, {}],
+  ])('falls back to the species default when %s, and still completes', async (_n, o, timing) => {
+    const { manifest, events } = await pack('rabbit', o as FakeOpts, timing);
+    expect(manifest.profile).toEqual(defaultProfile('rabbit'));
+    expect(events.at(-1)?.stage).toBe('done');
+  });
+
+  it('makes SAM 1, Spark 3 (profile, personality, facts) and Image 7 requests', async () => {
+    const paths: string[] = [];
+    const f = fakeClient({ spark: spark(defaultProfile('dog')) });
+    const post = f.client.postJson.bind(f.client) as (p: string, b: unknown, s?: AbortSignal) => Promise<unknown>;
+    (f.client as unknown as { postJson: typeof post }).postJson = (path, b, s) => (paths.push(path), post(path, b, s));
+    let streams = 0;
+    const stream = f.client.postStream.bind(f.client);
+    (f.client as unknown as { postStream: typeof stream }).postStream = ((...a: Parameters<typeof stream>) => (streams++, stream(...a))) as typeof stream;
+    await generateSpritePack({ client: f.client, photo: await photo(), petName: 'P', species: 'dog', outDir: join(root, 'pack'), timing: { backoffMs: 1, sparkGraceMs: 200 } });
+    expect(streams).toBe(1);
+    expect(paths.filter((x) => x === '/responses')).toHaveLength(3);
+    expect(paths.filter((x) => x !== '/responses')).toHaveLength(7);
   });
 });

@@ -2,7 +2,7 @@
 // chroma-key cutouts, written to out/pose-test/ for a human to judge (6 poses or 4?).
 //
 //   export MODEL_API_KEY=...            (never put the key in a file)
-//   npm run pose-test -- [photo] [--species dog] [--terminal crop.png] [--only idle,sit]
+//   npm run pose-test -- [photo] [--species <free text, e.g. husky or monarch butterfly>] [--terminal crop.png] [--only idle,sit]
 //
 // Defaults to the first image in assets/photos/. Cost per full run: ~1 SAM call + 7 images,
 // well under $0.10.
@@ -13,20 +13,24 @@ import { parseArgs } from 'node:util';
 import sharp from 'sharp';
 import { clientForScripts } from '../src/api/meta-client.js';
 import { editImage } from '../src/api/muse-image.js';
-import { chromaKey, dataUrl, MAGENTA, normalizePhoto, POSES, readPhoto, samCutout, STYLE } from '../src/api/pose-pipeline.js';
+import { chromaKey, dataUrl, MAGENTA, normalizePhoto, readPhoto, samCutout } from '../src/api/pose-pipeline.js';
+import { motionProfile } from '../src/api/motion-profile.js';
+import { posesFor, styleFor } from '../src/api/pose-prompts.js';
+import { defaultProfile } from '../src/api/profile-defaults.js';
 import { breedFacts, meetPet } from '../src/api/personality.js';
 import { segment } from '../src/api/sam.js';
-
-const OUT = 'out/pose-test';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     species: { type: 'string', default: 'dog' },
+    out: { type: 'string' },
     terminal: { type: 'string' },
     only: { type: 'string' },
   },
 });
+
+const OUT = values.out ?? 'out/pose-test';
 
 async function firstPhoto(): Promise<string> {
   const dir = 'assets/photos';
@@ -54,6 +58,15 @@ async function main(): Promise<void> {
   await writeFile(join(OUT, 'cutout.png'), cutout);
   log(`- SAM cutout: ${Date.now() - t} ms -> cutout.png`);
 
+  t = Date.now();
+  const species = values.species ?? 'dog';
+  const live = await motionProfile(client, cutout, 'Pet', species);
+  const profile = live ?? defaultProfile(species);
+  log(`- Motion profile (${live ? 'Spark' : 'DEFAULT, Spark failed'}): ${Date.now() - t} ms`);
+  log(JSON.stringify(profile, null, 2));
+  const style = styleFor(profile);
+  const POSES = posesFor(profile);
+
   // Reference on magenta so Muse Image sees the target background too.
   const cutoutOnMagenta = await sharp(cutout).flatten({ background: MAGENTA }).png().toBuffer();
   const refs = [dataUrl(cutoutOnMagenta)];
@@ -63,7 +76,7 @@ async function main(): Promise<void> {
   for (const name of names) {
     t = Date.now();
     try {
-      const prompt = `${STYLE} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
+      const prompt = `${style} ${POSES[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '');
       const [edited] = await editImage(client, prompt, refs);
       const raw = (edited as { buffer: Buffer }).buffer;
       await writeFile(join(OUT, `${name}_raw.png`), raw);
