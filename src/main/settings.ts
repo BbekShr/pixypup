@@ -20,7 +20,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   screenAware: false,
   voice: false,
-  offline: true,
+  offline: false, // admin restriction only: an admin sets true to block all background network (screen, voice)
   adminDisableScreenAware: false,
   petName: 'Pakkun',
   onboarded: false,
