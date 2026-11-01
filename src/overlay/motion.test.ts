@@ -178,6 +178,30 @@ describe('pivotShift', () => {
   });
 });
 
+describe('dangle soft limit', () => {
+  it('a fast 200 px / 150 ms hand move peaks short of the stop and turns around smoothly', () => {
+    const dt = 1 / 60;
+    let s = { angle: 0, omega: 0 }, x = 0, hv = 0, peak = 0, turned = false;
+    for (let i = 0; i < 90; i++) {
+      const u = Math.min(1, (i + 1) / 9);
+      const nx = 200 * (3 * u * u - 2 * u ** 3);
+      const v = hv + ((nx - x) / dt - hv) * 0.5; // the overlay's hand smoothing
+      const ax = Math.max(-30000, Math.min(30000, (v - hv) / dt));
+      x = nx;
+      hv = v;
+      const prev = s;
+      s = dangle(s, ax, dt, 60);
+      peak = Math.max(peak, Math.abs(s.angle));
+      expect(Math.abs(s.angle)).toBeLessThan(35);
+      if (prev.omega * s.omega < 0) turned = true; // omega passes through 0 instead of being zeroed
+      if (Math.abs(prev.angle) > 10 && s.omega === 0) throw new Error('omega zeroed mid-swing');
+    }
+    expect(peak).toBeGreaterThan(10);
+    expect(peak).toBeLessThan(30);
+    expect(turned).toBe(true);
+  });
+});
+
 describe('landSquash', () => {
   it('dips more for harder impacts and returns to 1', () => {
     expect(landSquash(0, 200)).toBeGreaterThan(landSquash(0, 800));

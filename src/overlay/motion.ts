@@ -118,16 +118,26 @@ export function releaseVelocity(samples: { x: number; y: number; t: number }[], 
   return { vx, vy };
 }
 
-const DANGLE_MAX = 35; // deg
+const DANGLE_MAX = 35; // deg; safety stop, the soft limit below keeps normal drags well short of it
+const DANGLE_SOFT = 14; // deg; legs and spine stiffen past this
+const DANGLE_STIFF = 60000; // rad/s^2 per rad^3 beyond DANGLE_SOFT
+const DANGLE_AX = 2500; // px/s^2; a harder yank than this does not swing it any further
 const DANGLE_DAMP = 3.2; // 1/s; ~2 visible swings, under 0.5 deg in 3 s
 
 /** Damped pendulum hung from the hand. angle is deg, positive = body swung right (so a hand accelerating right gives negative first); omega is deg/s; ax is px/s^2; armPx is grab point to body centre. */
 export function dangle(s: { angle: number; omega: number }, ax: number, dt: number, armPx: number): { angle: number; omega: number } {
-  const th = (s.angle * Math.PI) / 180;
-  const alpha = -(GRAVITY / armPx) * Math.sin(th) - DANGLE_DAMP * ((s.omega * Math.PI) / 180) - (ax / armPx) * Math.cos(th);
-  const omega = s.omega + ((alpha * 180) / Math.PI) * dt;
-  const angle = s.angle + omega * dt;
-  return Math.abs(angle) > DANGLE_MAX ? { angle: Math.sign(angle) * DANGLE_MAX, omega: 0 } : { angle, omega };
+  const drive = Math.max(-DANGLE_AX, Math.min(DANGLE_AX, ax));
+  const soft = (DANGLE_SOFT * Math.PI) / 180;
+  const h = dt / 2; // two substeps keep the stiff term stable
+  let th = (s.angle * Math.PI) / 180;
+  let w = (s.omega * Math.PI) / 180;
+  for (let i = 0; i < 2; i++) {
+    const over = Math.max(0, Math.abs(th) - soft);
+    w += (-(GRAVITY / armPx) * Math.sin(th) - DANGLE_DAMP * w - (drive / armPx) * Math.cos(th) - DANGLE_STIFF * over ** 3 * Math.sign(th)) * h;
+    th += w * h;
+  }
+  const angle = (th * 180) / Math.PI;
+  return Math.abs(angle) > DANGLE_MAX ? { angle: Math.sign(angle) * DANGLE_MAX, omega: 0 } : { angle, omega: (w * 180) / Math.PI };
 }
 
 export const LAND_SQUASH_MS = 220;
