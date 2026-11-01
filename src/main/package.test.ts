@@ -12,4 +12,9 @@ describe('electron-builder files', () => {
     const mac = JSON.parse(readFileSync('package.json', 'utf8')).build.mac;
     expect(mac.extendInfo.NSMicrophoneUsageDescription).toMatch(/⌥ Space/);
   });
+  it('explains the Automation prompt and hides the Dock icon', () => {
+    const mac = JSON.parse(readFileSync('package.json', 'utf8')).build.mac;
+    expect(mac.extendInfo.NSAppleEventsUsageDescription).toMatch(/Terminal/);
+    expect(mac.extendInfo.LSUIElement).toBe(true);
+  });
 });

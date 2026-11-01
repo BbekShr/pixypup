@@ -19,7 +19,17 @@ npm run dist           # mac dmg (ad-hoc signed)
 
 ## Install
 
-The build is ad-hoc signed (no Apple Developer ID). After copying PixyPup.app to Applications, right-click it and choose Open the first time.
+1. Download `PixyPup-0.1.0-arm64.dmg` and open it.
+2. Drag Pakkun onto the Applications folder ("Drag me home").
+3. First open only: right-click PixyPup in Applications, choose **Open**, then **Open** again. PixyPup is an indie app signed ad hoc, not notarised by Apple yet, so a plain double-click is refused once. After that it opens normally.
+
+PixyPup has no Dock icon; look for your pet on the desktop floor and the menu bar icon.
+
+**Permissions.** None at install. macOS asks later, once each, and only when you turn the feature on: Automation (to read your front Terminal) when you enable "Notice my screen", and the microphone when you enable "Listen for my voice".
+
+**Uninstall.** Drag PixyPup to the Trash, then delete `~/Library/Application Support/PixyPup` (your pets and settings).
+
+Build it yourself: `npm run dist` writes the DMG to `release/`. `npm run make-art` regenerates the app icon and DMG background.
 
 All code written from Oct 31 2026 for the Meta Global AI Developer Hackathon.
 

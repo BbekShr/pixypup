@@ -14,7 +14,8 @@
     "test": "vitest run",
     "pose-test": "tsx scripts/pose-test.ts",
     "build-native": "bash scripts/build-native.sh",
-    "dist": "npm run build-native && npm run build && electron-builder --mac dmg"
+    "dist": "npm run build-native && npm run build && electron-builder --mac dmg",
+    "make-art": "tsx scripts/make-icon.mts && tsx scripts/make-dmg-art.mts"
   },
   "build": {
     "appId": "dev.pixypup.app",
@@ -28,17 +29,46 @@
     "mac": {
       "identity": null,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "PixyPup listens only while you press ⌥ Space so your pet can hear its name and a trick."
+        "NSMicrophoneUsageDescription": "PixyPup listens only while you press ⌥ Space so your pet can hear its name and a trick.",
+        "NSAppleEventsUsageDescription": "PixyPup reads your front Terminal's text, only when you turn on Notice my screen, so your pet can sniff a failing test.",
+        "LSUIElement": true
       },
       "target": "dmg",
-      "category": "public.app-category.entertainment"
+      "category": "public.app-category.entertainment",
+      "icon": "build/icon.icns"
     },
     "extraResources": [
       {
         "from": "native/bin/pixyhelper",
         "to": "pixyhelper"
       }
-    ]
+    ],
+    "afterPack": "scripts/ad-hoc-sign.mjs",
+    "dmg": {
+      "title": "PixyPup",
+      "background": "build/dmg-background.png",
+      "iconSize": 100,
+      "window": {
+        "width": 640,
+        "height": 420
+      },
+      "contents": [
+        {
+          "x": 215,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 470,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "directories": {
+      "output": "release"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
