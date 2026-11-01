@@ -10,15 +10,20 @@ export type Run = (
 export function makeRun(helperPath: string): Run {
   return (args, opts) =>
     new Promise((resolve) => {
-      execFile(
-        helperPath,
-        args,
-        { timeout: opts?.timeoutMs ?? 4000, maxBuffer: 32 * 1024 * 1024, encoding: 'buffer' },
-        (err, stdout, stderr) => {
-          const code = err ? (typeof err.code === 'number' ? err.code : -1) : 0;
-          resolve({ code, stdout: stdout ?? Buffer.alloc(0), stderr: (stderr ?? '').toString() });
-        },
-      );
+      const fail = () => resolve({ code: -1, stdout: Buffer.alloc(0), stderr: '' });
+      try {
+        execFile(
+          helperPath,
+          args,
+          { timeout: opts?.timeoutMs ?? 4000, maxBuffer: 32 * 1024 * 1024, encoding: 'buffer' },
+          (err, stdout, stderr) => {
+            const code = err ? (typeof err.code === 'number' ? err.code : -1) : 0;
+            resolve({ code, stdout: stdout ?? Buffer.alloc(0), stderr: (stderr ?? '').toString() });
+          },
+        );
+      } catch {
+        fail();
+      }
     });
 }
 

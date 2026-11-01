@@ -1,7 +1,7 @@
-import type { Observation } from './decide';
+import { ruleDecide, type Observation } from './decide';
 import { getSlackBadge } from './dock-badge';
 import type { Run } from './helper';
-import { createTerminalReader, type Decoded, type Osa } from './terminal';
+import { createTerminalReader, pickTerminal, type Decoded, type Osa } from './terminal';
 import { listWindows } from './window-list';
 
 export type ScreenReaderDeps = {
@@ -20,22 +20,27 @@ export function createScreenReader(deps: ScreenReaderDeps) {
       debug: { titlesRedacted: boolean; windowCount: number; terminalKey: string };
     }> {
       const { windows, titlesRedacted } = await listWindows(deps.run);
-      const [slackBadge, term] = await Promise.all([
+      const [slackBadge, termRead] = await Promise.all([
         getSlackBadge(deps.run),
         readTerminal({ ...deps, windows }),
       ]);
+      // Titles/bounds of unrelated windows (a browser tab) stay out of the observation.
+      const call = windows.filter(
+        (w) => ruleDecide({ windows: [w], slackBadge: null, terminalError: null })?.action === 'hide',
+      );
+      const term = pickTerminal(windows);
       const observation: Observation = {
-        windows: windows.map(({ owner, title, bounds }) => ({ owner, title, bounds })),
+        windows: [...call, ...(term ? [term] : [])].map(({ owner, title, bounds }) => ({ owner, title, bounds })),
         slackBadge,
-        terminalError: term.terminalError,
+        terminalError: termRead.terminalError,
       };
-      const sig = JSON.stringify([observation.windows, slackBadge, term.key]);
-      const changed = term.changed || sig !== prev;
+      const sig = JSON.stringify([call.length > 0, slackBadge, termRead.key]);
+      const changed = termRead.changed || sig !== prev;
       prev = sig;
       return {
         observation,
         changed,
-        debug: { titlesRedacted, windowCount: windows.length, terminalKey: term.key },
+        debug: { titlesRedacted, windowCount: windows.length, terminalKey: termRead.key },
       };
     },
   };

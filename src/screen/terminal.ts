@@ -7,12 +7,15 @@ import type { Win } from './window-list';
 export type Osa = (args: string[], timeoutMs: number) => Promise<string | null>;
 export type Decoded = { data: Uint8Array; w: number; h: number; channels: number };
 
-const FAIL = /\bFAIL(ED)?\b|✗|✖|×|\bError\b|AssertionError|\berror TS\d+|\b\d+ failed\b/;
-const NOT_FAIL = /\b0 failed\b|no errors?\b/i;
+const FAIL =
+  /\bFAIL(ED)?\b|✗|✖|✕|^\s*×|\b\w*Error:|^\s*\w*Error\b|\berror TS\d+|\b\d+ (failed|failing)\b/;
+const ZERO = /\b0 (failed|failing|errors?)\b|\bno errors?\b/gi;
+const ESLINT_OK = /^\s*✖ \d+ problems? \(0 errors/;
 
 export function findFailure(lines: string[]): { lineIndex: number; text: string } | null {
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (FAIL.test(lines[i]) && !NOT_FAIL.test(lines[i])) return { lineIndex: i, text: lines[i] };
+    const l = lines[i];
+    if (!ESLINT_OK.test(l) && FAIL.test(l.replace(ZERO, ''))) return { lineIndex: i, text: l };
   }
   return null;
 }
@@ -34,7 +37,13 @@ export function lineToScreen(
 }
 
 // Red-dominant pixels (docs/POSE-TEST.md) grouped into line boxes, in image pixels.
-export function findRedLines(rgba: Uint8Array, w: number, h: number, channels: number): Box[] {
+export function findRedLines(
+  rgba: Uint8Array,
+  w: number,
+  h: number,
+  channels: number,
+  fromY = 0,
+): Box[] {
   const MIN_PX = 3;
   const GAP = 2;
   const boxes: Box[] = [];
@@ -43,7 +52,7 @@ export function findRedLines(rgba: Uint8Array, w: number, h: number, channels: n
     if (cur) boxes.push({ x: cur.x0, y: cur.y0, w: cur.x1 - cur.x0 + 1, h: cur.y1 - cur.y0 + 1 });
     cur = null;
   };
-  for (let y = 0; y < h; y++) {
+  for (let y = fromY; y < h; y++) {
     let n = 0;
     let x0 = w;
     let x1 = -1;
@@ -71,35 +80,93 @@ export function findRedLines(rgba: Uint8Array, w: number, h: number, channels: n
   return boxes;
 }
 
+const OWN = ['PixyPup', 'Electron'];
+const TAB_BAR_PTS = 25;
+const TITLE_BAR_PTS = 28;
+
+// The helper lists layer-0 windows front to back; sniff only what the user is looking at.
 export function pickTerminal(windows: Win[]): Win | null {
-  // The helper lists layer-0 windows front to back.
-  return windows.find((w) => w.owner === 'Terminal' || w.owner === 'iTerm2') ?? null;
+  const front = windows.find((w) => !OWN.includes(w.owner));
+  return front && (front.owner === 'Terminal' || front.owner === 'iTerm2') ? front : null;
 }
 
-// Rows first, then a newline, then the contents: unambiguous whatever the terminal text holds.
+// Full-screen windows (no title bar) are unsupported: the geometry would be off by the title bar.
+const HEAD =
+  'return (nRows as text) & linefeed & (nCols as text) & linefeed & (tabCount as text) & linefeed & (winId as text) & linefeed & txt';
 const SCRIPTS: Record<string, string> = {
-  Terminal:
-    'tell application "Terminal" to tell selected tab of front window to return ((number of rows) as text) & linefeed & contents',
-  iTerm2:
-    'tell application "iTerm2" to tell current session of current window to return (rows as text) & linefeed & contents',
+  Terminal: `tell application "Terminal"
+set t to selected tab of front window
+set nRows to number of rows of t
+set nCols to number of columns of t
+set tabCount to count of tabs of front window
+set winId to id of front window
+set txt to contents of t
+${HEAD}
+end tell`,
+  // iTerm2's window id is not a CGWindowID, so 0 = unknown and the id check is skipped.
+  iTerm2: `tell application "iTerm2"
+tell current session of current window
+set nRows to rows
+set nCols to columns
+set txt to contents
+end tell
+set tabCount to count of tabs of current window
+set winId to 0
+${HEAD}
+end tell`,
 };
 
-export function parseVisible(out: string): { lines: string[]; rows: number } | null {
-  const nl = out.indexOf('\n');
-  if (nl < 0) return null;
-  const rows = Number(out.slice(0, nl).trim());
-  if (!Number.isInteger(rows) || rows < 1 || rows > 500) return null;
-  const lines = out.slice(nl + 1).replace(/\n+$/, '').split('\n');
-  return { lines: lines.slice(-rows), rows };
+export type Visible = {
+  lines: string[];
+  rowOf: number[];
+  rows: number;
+  tabs: number;
+  winId: number;
+};
+
+const int = (s: string, lo: number, hi: number) => {
+  const n = Number(s.trim());
+  return Number.isInteger(n) && n >= lo && n <= hi ? n : null;
+};
+
+// Output: rows, columns, tabs, window id, then the contents (everything after the 4th newline).
+export function parseVisible(out: string): Visible | null {
+  const parts = out.split('\n');
+  if (parts.length < 5) return null;
+  const rows = int(parts[0], 1, 500);
+  const cols = int(parts[1], 1, 1000);
+  const tabs = int(parts[2], 1, 100);
+  const winId = int(parts[3], 0, 2 ** 32);
+  if (rows === null || cols === null || tabs === null || winId === null) return null;
+  const all = parts.slice(4).join('\n').replace(/\n+$/, '').split('\n');
+  const height = (l: string) => Math.max(1, Math.ceil([...l].length / cols));
+  // Visible tail: fill `rows` screen rows from the bottom, counting wrapped lines at full height.
+  let used = 0;
+  let start = all.length;
+  while (start > 0 && used + height(all[start - 1]) <= rows) used += height(all[--start]);
+  const lines = all.slice(start);
+  const rowOf: number[] = [];
+  let r = 0;
+  for (const l of lines) {
+    rowOf.push(r);
+    r += height(l);
+  }
+  return { lines, rowOf, rows, tabs, winId };
 }
 
 export function clean(text: string): string {
-  const ctl = (c: string) => {
+  const ok = (c: string) => {
     const n = c.charCodeAt(0);
-    return n < 32 || (n >= 127 && n <= 159);
+    return !(n < 32 || (n >= 127 && n <= 159));
   };
-  return [...text].map((c) => (ctl(c) ? ' ' : c)).join('').trim().slice(0, 200);
+  return Array.from(text)
+    .map((c) => (ok(c) ? c : ' '))
+    .join('')
+    .replace(/\p{Cf}/gu, '')
+    .trim();
 }
+
+const truncate = (s: string) => Array.from(s).slice(0, 200).join('');
 
 export type TerminalDeps = {
   run: Run;
@@ -113,15 +180,16 @@ export type TerminalRead = {
   key: string;
 };
 
-async function redBox(deps: TerminalDeps, win: Win): Promise<Box | null> {
+async function redBox(deps: TerminalDeps, win: Win, chromePts: number): Promise<Box | null> {
   if (!deps.decodePng) return null;
   const r = await deps.run(['capture', String(win.id)], { binary: true });
   if (r.code !== 0) return null;
   const img = await deps.decodePng(r.stdout);
   if (!img) return null;
-  const last = findRedLines(img.data, img.w, img.h, img.channels).at(-1);
-  if (!last) return null;
   const s = img.w / win.bounds.w;
+  // Start below the title bar and tab bar: the close button is red.
+  const last = findRedLines(img.data, img.w, img.h, img.channels, Math.ceil(chromePts * s)).at(-1);
+  if (!last) return null;
   return {
     x: win.bounds.x + last.x / s,
     y: win.bounds.y + last.y / s,
@@ -149,9 +217,13 @@ export function createTerminalReader() {
     const out = await deps.osa(['-e', script], 3000);
     const vis = out && parseVisible(out);
     if (!vis) return done(null);
+    if (win.owner === 'Terminal' && vis.winId !== win.id) return done(null);
     const f = findFailure(vis.lines);
     if (!f) return done(null);
-    const box = (await redBox(deps, win)) ?? lineToScreen(win.bounds, vis.rows, f.lineIndex);
-    return done({ text: clean(f.text), box });
+    const chrome = TITLE_BAR_PTS + (vis.tabs > 1 ? TAB_BAR_PTS : 0);
+    const textBox = lineToScreen(win.bounds, vis.rows, vis.rowOf[f.lineIndex], chrome);
+    const red = await redBox(deps, win, chrome);
+    const box = red && Math.abs(red.y - textBox.y) <= 1.5 * textBox.h ? red : textBox;
+    return done({ text: truncate(clean(f.text)), box });
   };
 }

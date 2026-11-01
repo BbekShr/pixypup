@@ -4,6 +4,7 @@ import type { Run } from './helper';
 import { createScreenReader } from './reader';
 import { clean, createTerminalReader, findFailure, findRedLines, lineToScreen, parseVisible } from './terminal';
 import { listWindows, parseWindows } from './window-list';
+import { makeRun } from './helper';
 
 const win = (owner: string, id = 1) => ({
   id, pid: 10, owner, title: 'demo', bounds: { x: 100, y: 50, w: 800, h: 628 },
@@ -55,24 +56,44 @@ describe('badges', () => {
 });
 
 describe('findFailure', () => {
-  it.each([
-    [' FAIL  src/a.test.ts > adds'],
-    ['AssertionError: expected 1 to be 2'],
-    ['FAILED tests/test_x.py::test_a - assert 1 == 2'],
-    ['  ✗ adds numbers'],
-    ['src/a.ts(3,5): error TS2322: Type string is not assignable'],
-    ['Tests  2 failed | 5 passed (7)'],
-    ['● adds › fails  Error: boom'],
-  ])('positive: %s', (l) => expect(findFailure([l])?.lineIndex).toBe(0));
-  it.each([['Tests  0 failed | 5 passed'], ['failover ok'], ['no errors found'], ['10 passed'], ['  ✓ adds']])(
-    'negative: %s',
-    (l) => expect(findFailure([l])).toBeNull(),
-  );
+  const fails: Record<string, string[]> = {
+    vitest: [' ✓ src/b.test.ts (2 tests)', ' FAIL  src/a.test.ts > adds numbers', ' Tests  1 failed | 2 passed (3)'],
+    vitestVerbose: ['   × adds numbers 2ms'],
+    jest: ['FAIL src/a.test.ts', '  ✕ adds (3 ms)', 'Tests:       1 failed, 2 passed, 3 total'],
+    mocha: ['  2 passing (9ms)', '  1 failing'],
+    pytest: ['FAILED tests/test_x.py::test_a - assert 1 == 2', '=== 1 failed, 3 passed in 0.1s ==='],
+    tsc: ['src/a.ts(3,5): error TS2322: Type string is not assignable to type number.'],
+    eslint: ['✖ 5 problems (2 errors, 3 warnings)'],
+    node: ['AssertionError [ERR_ASSERTION]: expected 1 to be 2', 'TypeError: x is not a function'],
+  };
+  for (const [name, lines] of Object.entries(fails)) {
+    it(`positive: ${name}`, () => {
+      expect(findFailure(lines)).not.toBeNull();
+      for (const l of lines) if (findFailure([l])) return;
+      throw new Error('no line matched');
+    });
+  }
+  const passes: Record<string, string> = {
+    vitestPass: ' Tests  3 passed (3)',
+    vitestCheck: ' ✓ handles Error case 2ms',
+    zeroFailed: 'Tests  0 failed | 5 passed',
+    zeroErrors: 'Found 0 errors. Watching for file changes.',
+    eslintWarnings: '✖ 3 problems (0 errors, 3 warnings)',
+    eslintWarnLine: '  3:5  warning  Unexpected any  @typescript-eslint/no-explicit-any',
+    failover: 'failover ok',
+    noErrors: 'no errors found',
+    mochaPass: '  4 passing (12ms)',
+    mathX: 'a × b = 6',
+  };
+  for (const [name, l] of Object.entries(passes)) {
+    it(`negative: ${name}`, () => expect(findFailure([l])).toBeNull());
+  }
   it('returns the LAST failing line', () => {
     expect(findFailure(['FAIL a', 'ok', 'FAIL b', 'done'])).toEqual({ lineIndex: 2, text: 'FAIL b' });
   });
-  it('10 failed is a failure (not mistaken for 0 failed)', () => {
+  it('10 failed is a failure; 1 failed, 0 errors too', () => {
     expect(findFailure(['10 failed'])).not.toBeNull();
+    expect(findFailure(['1 failed, 0 errors'])).not.toBeNull();
   });
 });
 
@@ -105,87 +126,157 @@ describe('findRedLines', () => {
       { x: 5, y: 20, w: 11, h: 3 },
     ]);
   });
+  it('fromY skips the title-bar strip', () => {
+    const w = 10, h = 10;
+    const buf = new Uint8Array(w * h * 4);
+    for (const y of [0, 1, 7]) for (let x = 0; x < 6; x++) buf[(y * w + x) * 4] = 255;
+    expect(findRedLines(buf, w, h, 4, 3)).toEqual([{ x: 0, y: 7, w: 6, h: 1 }]);
+    expect(findRedLines(buf, w, h, 4)).toHaveLength(2);
+  });
   it('3-channel buffer, no red', () => {
     expect(findRedLines(new Uint8Array(5 * 5 * 3).fill(200), 5, 5, 3)).toEqual([]);
   });
 });
 
+const out = (rows: number, cols: number, tabs: number, id: number, text: string) =>
+  `${rows}\n${cols}\n${tabs}\n${id}\n${text}`;
+
 describe('parseVisible / clean', () => {
-  it('takes the last `rows` lines; trailing newlines dropped', () => {
-    expect(parseVisible('2\nl1\nl2\nl3\n\n')).toEqual({ lines: ['l2', 'l3'], rows: 2 });
+  it('takes the tail that fits `rows`; trailing newlines dropped', () => {
+    expect(parseVisible(out(2, 80, 1, 1, 'l1\nl2\nl3\n\n'))).toEqual({
+      lines: ['l2', 'l3'], rowOf: [0, 1], rows: 2, tabs: 1, winId: 1,
+    });
   });
-  it('contents ending in ", 42" are not confused with the row count', () => {
-    expect(parseVisible('5\nfoo, 42')).toEqual({ lines: ['foo, 42'], rows: 5 });
+  it('contents ending in ", 42" are not confused with metadata', () => {
+    expect(parseVisible(out(5, 80, 1, 1, 'foo, 42'))?.lines).toEqual(['foo, 42']);
   });
-  it('rejects bad row counts', () => {
+  it('wrapped lines count at full height when picking the tail', () => {
+    const long = 'x'.repeat(25); // 3 rows at 10 cols
+    const v = parseVisible(out(5, 10, 1, 1, `a\n${long}\nb\nc`));
+    // c(1) + b(1) + long(3) = 5 rows; a does not fit
+    expect(v?.lines).toEqual([long, 'b', 'c']);
+    expect(v?.rowOf).toEqual([0, 3, 4]);
+  });
+  it('rejects bad metadata', () => {
+    expect(parseVisible(out(0, 80, 1, 1, 'a'))).toBeNull();
+    expect(parseVisible(out(501, 80, 1, 1, 'a'))).toBeNull();
+    expect(parseVisible(out(5, 0, 1, 1, 'a'))).toBeNull();
     expect(parseVisible('x\nabc')).toBeNull();
-    expect(parseVisible('0\nabc')).toBeNull();
-    expect(parseVisible('501\nabc')).toBeNull();
     expect(parseVisible('no newline')).toBeNull();
   });
-  it('truncates and strips control chars', () => {
-    expect(clean('a\u001b[31mb' + 'x'.repeat(300))).toHaveLength(200);
-    expect(clean('a\u0007b')).toBe('a b');
+  it('strips control and bidi/zero-width chars, truncates by code points', () => {
+    expect(clean('a\u0007b\u202Ec\u200Bd')).toBe('a bcd');
+    const t = createTerminalReader();
+    return t({
+      run: json({}),
+      osa: async () => out(5, 400, 1, 1, 'FAIL ' + '😀'.repeat(300)),
+      windows: [win('Terminal')],
+    }).then((r) => expect(Array.from(r.terminalError!.text)).toHaveLength(200));
   });
 });
 
 describe('terminal reader', () => {
   const screen = 'ok\nFAIL src/a.test.ts\nTests 1 failed\n';
-  const mk = (owner: string, out: string | null, calls: string[][] = []) => ({
+  const mk = (owner: string, o: string | null, calls: string[][] = []) => ({
     run: json({}),
-    osa: async (a: string[]) => { calls.push(a); return out; },
-    windows: [win('Safari', 5), win(owner)],
+    osa: async (a: string[]) => { calls.push(a); return o; },
+    windows: [win(owner), win('Safari', 5)],
   });
+  const term = win('Terminal').bounds;
   it('maps the last failing line and flags change once', async () => {
     const read = createTerminalReader();
-    const d = mk('Terminal', `4\n${screen}`);
+    const d = mk('Terminal', out(4, 80, 1, 1, screen));
     const a = await read(d);
     expect(a.terminalError?.text).toBe('Tests 1 failed');
-    expect(a.terminalError?.box).toEqual(lineToScreen(win('Terminal').bounds, 4, 2));
+    expect(a.terminalError?.box).toEqual(lineToScreen(term, 4, 2));
     expect(a.changed).toBe(true);
     expect((await read(d)).changed).toBe(false);
-    expect((await read(mk('Terminal', '4\nok'))).changed).toBe(true);
+    expect((await read(mk('Terminal', out(4, 80, 1, 1, 'ok')))).changed).toBe(true);
   });
-  it('never runs osascript when no supported terminal window exists', async () => {
+  it('adds the tab bar when there are several tabs', async () => {
+    const r = await createTerminalReader()(mk('Terminal', out(4, 80, 2, 1, screen)));
+    expect(r.terminalError?.box).toEqual(lineToScreen(term, 4, 2, 53));
+  });
+  it('accounts for wrapped lines', async () => {
+    const r = await createTerminalReader()(mk('Terminal', out(6, 10, 1, 1, `${'y'.repeat(25)}\nFAIL z`)));
+    expect(r.terminalError?.box).toEqual(lineToScreen(term, 6, 3));
+  });
+  it('never runs osascript for an unsupported or non-frontmost terminal', async () => {
     const calls: string[][] = [];
-    const r = await createTerminalReader()({ ...mk('Warp', screen, calls) });
+    expect((await createTerminalReader()(mk('Warp', screen, calls))).terminalError).toBeNull();
+    const behind = { ...mk('Terminal', screen, calls), windows: [win('Safari', 5), win('Terminal')] };
+    expect((await createTerminalReader()(behind)).terminalError).toBeNull();
     expect(calls).toHaveLength(0);
-    expect(r.terminalError).toBeNull();
   });
-  it('uses the iTerm2 script', async () => {
+  it('skips PixyPup own window when finding the front window', async () => {
+    const d = { ...mk('Terminal', out(4, 80, 1, 1, screen)), windows: [win('PixyPup', 9), win('Terminal')] };
+    expect((await createTerminalReader()(d)).terminalError).not.toBeNull();
+  });
+  it('returns null when the AppleScript window id differs (Terminal only)', async () => {
+    expect((await createTerminalReader()(mk('Terminal', out(4, 80, 1, 77, screen)))).terminalError).toBeNull();
+  });
+  it('uses the iTerm2 script and skips the id check', async () => {
     const calls: string[][] = [];
-    await createTerminalReader()(mk('iTerm2', '4\nx', calls));
+    const r = await createTerminalReader()(mk('iTerm2', out(4, 80, 1, 0, 'FAIL x'), calls));
     expect(calls[0][1]).toContain('iTerm2');
+    expect(r.terminalError).not.toBeNull();
   });
-  it('prefers the red-pixel box when capture decodes', async () => {
+  const redImg = (y0: number) => {
     const w = 16, h = 16;
-    const buf = new Uint8Array(w * h * 4).fill(0);
-    for (let y = 4; y < 6; y++) for (let x = 0; x < 8; x++) { const i = (y * w + x) * 4; buf[i] = 255; }
-    const d = {
-      ...mk('Terminal', `4\n${screen}`),
-      run: (async () => ({ code: 0, stdout: Buffer.from('png'), stderr: '' })) as Run,
-      decodePng: async () => ({ data: buf, w, h, channels: 4 }),
-    };
-    const r = await createTerminalReader()(d);
-    // image 16 px wide over an 800 pt window: scale 0.02
-    expect(r.terminalError?.box.y).toBeCloseTo(50 + 4 / 0.02);
+    const buf = new Uint8Array(w * h * 4);
+    for (let y = y0; y < y0 + 2; y++) for (let x = 0; x < 8; x++) buf[(y * w + x) * 4] = 255;
+    return { data: buf, w, h, channels: 4 };
+  };
+  const withImg = (img: ReturnType<typeof redImg>) => ({
+    ...mk('Terminal', out(4, 80, 1, 1, screen)),
+    run: (async () => ({ code: 0, stdout: Buffer.from('png'), stderr: '' })) as Run,
+    decodePng: async () => img,
+  });
+  // image 16 px over an 800 pt window: scale 0.02, so 1 px = 50 pt. Text line 2 is at y = 50+32+2*149 = 380.
+  it('prefers a red box near the text-derived row', async () => {
+    const r = await createTerminalReader()(withImg(redImg(6)));
+    expect(r.terminalError?.box.y).toBeCloseTo(50 + 6 / 0.02);
+  });
+  it('ignores a red box far from the text row (e.g. a different detector hit)', async () => {
+    const r = await createTerminalReader()(withImg(redImg(14)));
+    expect(r.terminalError?.box).toEqual(lineToScreen(term, 4, 2));
+  });
+  it('ignores red pixels in the title bar (close button)', async () => {
+    // the scan starts below the title bar (see fromY test); fallback either way
+    const r = await createTerminalReader()(withImg(redImg(0)));
+    expect(r.terminalError?.box).toEqual(lineToScreen(term, 4, 2));
   });
   it('osascript failure gives null', async () => {
     expect((await createTerminalReader()(mk('Terminal', null))).terminalError).toBeNull();
   });
 });
 
+describe('makeRun', () => {
+  it('missing binary resolves with a non-zero code', async () => {
+    expect((await makeRun('/nonexistent/pixyhelper')(['windows'])).code).not.toBe(0);
+  });
+});
+
 describe('createScreenReader', () => {
-  it('composes and reports change only when something moved', async () => {
-    const run: Run = async (args) => {
-      const o = args[0] === 'windows' ? { windows: [win('Terminal')], titlesRedacted: false } : { badges: { Slack: '1' } };
-      return { code: 0, stdout: Buffer.from(JSON.stringify(o)), stderr: '' };
-    };
-    const rd = createScreenReader({ run, osa: async () => '10\nFAIL x' });
+  const mkRun = (windows: unknown[]): Run => async (args) => {
+    const o = args[0] === 'windows' ? { windows, titlesRedacted: false } : { badges: { Slack: '1' } };
+    return { code: 0, stdout: Buffer.from(JSON.stringify(o)), stderr: '' };
+  };
+  const osa = async () => out(10, 80, 1, 1, 'FAIL x');
+  it('composes and reports change only when something relevant moved', async () => {
+    let wins = [win('Terminal'), { ...win('Safari', 5), title: 'tab one' }];
+    const rd = createScreenReader({ run: (a, o) => mkRun(wins)(a, o), osa });
     const a = await rd.tick();
     expect(a.observation.slackBadge).toBe('1');
     expect(a.observation.terminalError?.text).toBe('FAIL x');
     expect(a.changed).toBe(true);
     expect((await rd.tick()).changed).toBe(false);
+    wins = [win('Terminal'), { ...win('Safari', 5), title: 'tab two' }];
+    expect((await rd.tick()).changed).toBe(false);
+  });
+  it('leaves unrelated window titles out; keeps call windows', async () => {
+    const wins = [win('Terminal'), { ...win('Safari', 5), title: 'secret doc' }, { ...win('zoom.us', 6), title: 'x' }];
+    const a = await createScreenReader({ run: mkRun(wins), osa }).tick();
+    expect(a.observation.windows.map((w) => w.owner).sort()).toEqual(['Terminal', 'zoom.us']);
   });
 });
