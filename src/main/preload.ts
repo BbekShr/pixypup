@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-const CH = { setClickThrough: 'pixy:set-click-through', command: 'pixy:command', getPack: 'pixy:get-pack', showMenu: 'pixy:show-menu', getStay: 'pixy:get-stay', packChanged: 'pixy:pack-changed', getPrefs: 'pixy:get-prefs', prefs: 'pixy:prefs', devCmd: 'pixy:dev-cmd', behavior: 'pixy:behavior', debug: 'pixy:debug', voice: 'pixy:voice' } as const;
+const CH = { setClickThrough: 'pixy:set-click-through', command: 'pixy:command', getPack: 'pixy:get-pack', showMenu: 'pixy:show-menu', getStay: 'pixy:get-stay', packChanged: 'pixy:pack-changed', getPrefs: 'pixy:get-prefs', prefs: 'pixy:prefs', devCmd: 'pixy:dev-cmd', behavior: 'pixy:behavior', askHint: 'pixy:ask-hint', debug: 'pixy:debug', voice: 'pixy:voice' } as const;
 
 contextBridge.exposeInMainWorld('pixy', {
   setClickThrough: (on: boolean): void => ipcRenderer.send(CH.setClickThrough, on),
@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('pixy', {
   },
   devCommand: (cmd: string): void => ipcRenderer.send(CH.devCmd, cmd), // main ignores it in a packaged app
   getPack: (): Promise<unknown> => ipcRenderer.invoke(CH.getPack),
+  askHint: (): Promise<unknown> => ipcRenderer.invoke(CH.askHint),
   onPackChanged: (cb: (h: { x?: number }) => void): void => {
     ipcRenderer.on(CH.packChanged, (_e, h: { x?: number }) => cb(h ?? {}));
   },

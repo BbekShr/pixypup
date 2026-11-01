@@ -19,7 +19,7 @@ if (new URLSearchParams(location.search).get('kind') === 'voice') {
 } else {
   $('title').textContent = `Let ${name} notice things?`;
   $('what').textContent = `${name} can notice a failing test, a new notification badge in your Dock or a video call.`;
-  $('reads').textContent = `${name} reads only your front Terminal's text and the list of open windows. Nothing is saved; the error line is sent to Meta's model only to write the speech bubble.`;
+  $('reads').textContent = `${name} reads only your front Terminal's text and the list of open windows. Nothing is saved; the error line is sent to Meta's model only to write the speech bubble. If you click ${name} for a hint, the failure's lines go to Meta's model once to write it.`;
 }
 $('yes').addEventListener('click', () => window.pixyScreen.answer(true));
 for (const id of ['no', 'close']) $(id).addEventListener('click', () => window.pixyScreen.answer(false));

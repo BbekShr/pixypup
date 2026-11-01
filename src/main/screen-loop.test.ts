@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Observation } from '../screen/decide';
 import type { Behavior } from '../overlay/behavior';
 import type { DebugInfo } from '../overlay/debug-panel';
-import { startScreenLoop, type LoopDeps } from './screen-loop';
+import { CHEERS, startScreenLoop, type LoopDeps } from './screen-loop';
 
 const obs = (o: Partial<Observation> = {}): Observation => ({ windows: [], badge: null, terminalError: null, ...o });
 const BOX = { x: 600, y: 300, w: 200, h: 16 };
@@ -53,6 +53,42 @@ describe('startScreenLoop', () => {
     await tick();
     expect(t.sent.map((b) => b.action)).toEqual(['sniff', 'sniff']);
     expect(t.sent.map((b) => b.seq)).toEqual([1, 2]);
+    t.stop();
+  });
+
+  it('celebrates once when the sniffed failure goes green, and remembers the failure only until then', async () => {
+    const failures: (string | null)[] = [];
+    const t = setup({ onFailure: (f) => failures.push(f), canHint: () => true });
+    const withCtx = obs({ terminalError: { text: 'Tests 1 failed', box: BOX, context: 'FAIL a.test.ts\nexpected 4 to be 5' } });
+    t.set(withCtx, 'k1');
+    await tick();
+    expect(t.sent[0]).toMatchObject({ action: 'sniff', hint: true });
+    expect(failures).toEqual(['FAIL a.test.ts\nexpected 4 to be 5']);
+    t.set(obs({ terminalPass: true }), '');
+    await tick(3);
+    expect(t.sent.map((b) => b.action)).toEqual(['sniff', 'celebrate']);
+    expect(t.sent[1]).toMatchObject({ seq: 2, bubble: CHEERS[0], reason: 'tests pass again' });
+    expect(failures).toEqual(['FAIL a.test.ts\nexpected 4 to be 5', null]);
+    t.stop();
+  });
+
+  it('a green run with no sniff before it, or during a call, is no party', async () => {
+    const t = setup();
+    t.set(obs({ terminalPass: true }), '');
+    await tick(2);
+    expect(t.sent).toEqual([]);
+    t.set(err, 'k1');
+    await tick();
+    t.set({ ...call, terminalPass: true }, '');
+    await tick();
+    expect(t.sent.map((b) => b.action)).toEqual(['sniff', 'hide']);
+    t.stop();
+  });
+
+  it('offers no hint without a key', async () => {
+    const t = setup({ canHint: () => false });
+    await tick();
+    expect(t.sent[0]?.hint).toBeUndefined();
     t.stop();
   });
 

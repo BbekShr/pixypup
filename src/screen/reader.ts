@@ -37,8 +37,9 @@ export function createScreenReader(deps: ScreenReaderDeps) {
         windows: [...call, ...(term ? [term] : [])].map(({ owner, title, bounds }) => ({ owner, title, bounds })),
         badge,
         terminalError: termRead.terminalError,
+        terminalPass: termRead.terminalPass,
       };
-      const sig = JSON.stringify([call.length > 0, badge, termRead.key]);
+      const sig = JSON.stringify([call.length > 0, badge, termRead.key, termRead.terminalPass]);
       const changed = termRead.changed || sig !== prev;
       prev = sig;
       return {

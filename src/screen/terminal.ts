@@ -20,6 +20,31 @@ export function findFailure(lines: string[]): { lineIndex: number; text: string 
   return null;
 }
 
+// A run's all-green summary (vitest, jest, pytest, mocha, tsc --watch). A line that also says "failed" is not green.
+const PASS = /\b\d+ (passed|passing)\b|^\s*PASS\b|\bFound 0 errors\b|\ball tests passed\b/i;
+
+export function findPass(lines: string[]): number | null {
+  for (let i = lines.length - 1; i >= 0; i--) if (PASS.test(lines[i]) && !findFailure([lines[i]])) return i;
+  return null;
+}
+
+/** Green only when the newest result on screen is a pass: an old failure above it is history. */
+export const greenAfter = (lines: string[], failIndex: number | null): boolean => {
+  const p = findPass(lines);
+  return p !== null && (failIndex === null || p > failIndex);
+};
+
+const CONTEXT_LINES = 16;
+const CONTEXT_CHARS = 1200;
+
+/** The failure's own story (assertion, expected/received, file:line): from the FIRST failing line, a few lines on. */
+export function failureContext(lines: string[]): string {
+  const first = lines.findIndex((l) => findFailure([l]) !== null);
+  if (first < 0) return '';
+  const text = lines.slice(first, first + CONTEXT_LINES).map(clean).filter(Boolean).join('\n');
+  return Array.from(text).slice(0, CONTEXT_CHARS).join('');
+}
+
 export function lineToScreen(
   b: Box,
   rows: number,
@@ -187,7 +212,9 @@ export type TerminalDeps = {
   decodePng?: (png: Buffer) => Promise<Decoded | null>;
 };
 export type TerminalRead = {
-  terminalError: { text: string; box: Box } | null;
+  terminalError: { text: string; box: Box; context: string } | null;
+  /** The newest result on screen is an all-green run. */
+  terminalPass: boolean;
   changed: boolean;
   key: string;
 };
@@ -213,13 +240,13 @@ async function redBox(deps: TerminalDeps, win: Win, chromePts: number): Promise<
 export function createTerminalReader() {
   let prev = '';
   return async (deps: TerminalDeps): Promise<TerminalRead> => {
-    const done = (found: { text: string; box: Box } | null): TerminalRead => {
+    const done = (found: { text: string; box: Box; context: string } | null, terminalPass = false): TerminalRead => {
       const key = found
         ? createHash('sha1').update(found.text).digest('hex')
         : '';
       const changed = key !== prev;
       prev = key;
-      return { terminalError: found, changed, key };
+      return { terminalError: found, terminalPass, changed, key };
     };
     const win = pickTerminal(deps.windows);
     const script = win && SCRIPTS[win.owner];
@@ -232,11 +259,12 @@ export function createTerminalReader() {
     if (!sameId && overlap(vis.bounds, win.bounds) < 0.8) return done(null);
     const asWin = { ...win, bounds: vis.bounds };
     const f = findFailure(vis.lines);
+    if (greenAfter(vis.lines, f?.lineIndex ?? null)) return done(null, true);
     if (!f) return done(null);
     const chrome = TITLE_BAR_PTS + (vis.tabs > 1 ? TAB_BAR_PTS : 0);
     const textBox = lineToScreen(vis.bounds, vis.rows, vis.rowOf[f.lineIndex], chrome);
     const red = await redBox(deps, asWin, chrome);
     const box = red && Math.abs(red.y - textBox.y) <= 1.5 * textBox.h ? red : textBox;
-    return done({ text: truncate(clean(f.text)), box });
+    return done({ text: truncate(clean(f.text)), box, context: failureContext(vis.lines) });
   };
 }

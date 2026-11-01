@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { behaviorBusy, hideSpot, parseBehavior, peekOutX, PEEK_PX, routeBehavior, sniffPose, toOverlayPoint, type Behavior } from './behavior';
+import { behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, toOverlayPoint, type Behavior } from './behavior';
 
 const sniff: Behavior = { seq: 1, action: 'sniff', target: { x: 10, y: 10 }, reason: 'r' };
 const free = { dragging: false, falling: false, resting: false, snoozed: false, handoff: null };
@@ -9,6 +9,17 @@ describe('parseBehavior', () => {
     expect(parseBehavior({ seq: 2, action: 'sniff', target: { x: 1, y: 2 }, bubble: ` ${'a'.repeat(60)} `, reason: 'x' })?.bubble).toHaveLength(40);
     expect(parseBehavior({ seq: 3, action: 'hide', on: true, reason: '' })).toMatchObject({ on: true });
     expect(parseBehavior({ seq: 4, action: 'perk_up', reason: '' })).not.toBeNull();
+    expect(parseBehavior({ seq: 5, action: 'celebrate', bubble: 'You fixed it!', reason: '' })).toMatchObject({ action: 'celebrate', bubble: 'You fixed it!' });
+  });
+  it('a hint offer rides only on a sniff, and only as true', () => {
+    expect(parseBehavior({ seq: 6, action: 'sniff', target: { x: 1, y: 2 }, hint: true, reason: '' })?.hint).toBe(true);
+    expect(parseBehavior({ seq: 7, action: 'sniff', target: { x: 1, y: 2 }, hint: 'yes', reason: '' })?.hint).toBeUndefined();
+    expect(parseBehavior({ seq: 8, action: 'perk_up', hint: true, reason: '' })?.hint).toBeUndefined();
+  });
+  it('a hint from main is a trimmed, capped string or nothing', () => {
+    expect(parseHint('  look at add  ')).toBe('look at add');
+    expect(parseHint('x'.repeat(300))).toHaveLength(200);
+    for (const bad of [null, undefined, 5, '   ', { hint: 'x' }]) expect(parseHint(bad)).toBeNull();
   });
   it('rejects anything outside the fixed enum or malformed', () => {
     for (const bad of [null, 'x', {}, { seq: 1, action: 'walk_to', reason: '' }, { seq: NaN, action: 'perk_up' }, { seq: 1, action: 'sniff', reason: '' }, { seq: 1, action: 'hide', reason: '' }, { seq: 1, action: 'sniff', target: { x: 'a', y: 1 } }]) {
