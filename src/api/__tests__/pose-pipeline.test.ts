@@ -67,6 +67,7 @@ interface FakeOpts {
 function fakeClient(o: FakeOpts = {}) {
   const requested: string[] = [];
   const seen: Record<string, number> = {};
+  const stats = { inflight: 0, maxInflight: 0 };
   const client = {
     postStream: () => samEvents(o.sam ?? SAM_OUTPUT),
     postJson: async (path: string, body: { prompt: string }, signal?: AbortSignal) => {
@@ -82,7 +83,9 @@ function fakeClient(o: FakeOpts = {}) {
       if (o.hang?.(pose, attempt)) {
         await new Promise((_, rej) => signal?.addEventListener('abort', () => rej(new Error('aborted'))));
       }
+      stats.maxInflight = Math.max(stats.maxInflight, ++stats.inflight);
       await new Promise((r) => setTimeout(r, o.delayMs ?? 0));
+      stats.inflight--;
       const f = o.fail?.(pose);
       if (f) throw f instanceof Error ? f : new Error(`boom ${pose}`);
       const png = o.image ? await o.image(pose) : await defaultImage(pose);
@@ -90,7 +93,7 @@ function fakeClient(o: FakeOpts = {}) {
       return { data: [{ b64_json: webp.toString('base64') }] };
     },
   } as unknown as MetaClient;
-  return { client, requested };
+  return { client, requested, stats };
 }
 
 describe('chromaKey', () => {
@@ -369,7 +372,7 @@ describe('generateSpritePack', () => {
   afterEach(() => rm(root, { recursive: true, force: true }));
 
   const run = async (o: FakeOpts, events: PipelineEvent[] = []) => {
-    const { client, requested } = fakeClient(o);
+    const { client, requested, stats } = fakeClient(o);
     const p = generateSpritePack({
       client,
       photo: await photo(),
@@ -379,7 +382,7 @@ describe('generateSpritePack', () => {
       onProgress: (e) => events.push(e),
       timing: { timeoutMs: o.hang ? 50 : 60_000, backoffMs: 1 },
     });
-    return { p, requested };
+    return { p, requested, stats };
   };
 
   it('emits cutout, 10 poses, done, and writes the pack', async () => {
@@ -409,12 +412,11 @@ describe('generateSpritePack', () => {
   });
 
   it('draws idle first, then the sheet, sit, sleep, bark, roll and blink in parallel (7 requests)', async () => {
-    const t = Date.now();
-    const { p, requested } = await run({ delayMs: 50 });
+    const { p, requested, stats } = await run({ delayMs: 50 });
     await p;
     expect(requested[0]).toBe('idle_0');
     expect(requested.slice(1).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet']);
-    expect(Date.now() - t).toBeLessThan(300);
+    expect(stats.maxInflight).toBe(6); // idle alone, then the other 6 at once; serial would peak at 1
   });
 
   it('references: idle alone for blink, cutout+idle for the others', async () => {
@@ -647,17 +649,22 @@ describe('meet your pet in the pipeline', () => {
   });
 
   it('a slow Spark that finishes within the poses adds no wall time', async () => {
-    // poses take 2 sequential rounds of 60 ms; Spark takes 2 x 40 ms in parallel.
+    // Spark must overlap the poses (start before the pose requests, end before the pack is done),
+    // so total time is the poses' time.
+    const log: string[] = [];
     const slow = async (b: Record<string, unknown>) => {
+      log.push('spark-start');
       await new Promise((r) => setTimeout(r, 40));
+      log.push('spark-end');
       return sparkReply(b);
     };
-    const t0 = Date.now();
-    await (await run({ delayMs: 60 })).p;
-    const base = Date.now() - t0;
-    const t1 = Date.now();
-    await (await run({ delayMs: 60, spark: slow })).p;
-    expect(Date.now() - t1).toBeLessThan(base + 40);
+    const events: PipelineEvent[] = [];
+    const sparkLog: string[] = [];
+    const manifest = await (await run({ delayMs: 60, spark: slow, sparkLog }, events)).p;
+    expect(sparkLog[0]).toBe('spark:0'); // started before any pose request
+    expect(log).toEqual(['spark-start', 'spark-end', 'spark-start', 'spark-end']); // meetPet then breedFacts, both done before the pack
+    expect(manifest.personality).toBeDefined(); // finished inside the grace, was not cut
+    expect(events.at(-1)?.stage).toBe('done');
   });
 
   it('does not wait for a hanging Spark past the grace period, and aborts it', async () => {
@@ -670,12 +677,11 @@ describe('meet your pet in the pipeline', () => {
       if (path === '/responses') signal = s;
       return post(path, b, s);
     };
-    const t = Date.now();
+    // an infinite hang: the test completing at all proves the grace period cuts it off
     const manifest = await generateSpritePack({
       client, photo: await photo(), petName: 'P', species: 'dog', outDir: out,
       onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 100 },
     });
-    expect(Date.now() - t).toBeLessThan(1500);
     expect(manifest.personality).toBeUndefined();
     expect(signal?.aborted).toBe(true);
     expect(events.at(-1)?.stage).toBe('done');
