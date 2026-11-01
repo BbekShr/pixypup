@@ -12,4 +12,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 - 2026-10-31 (bootstrap): `screencapture` from the agent's shell fails ("could not create image from display"): no Screen Recording permission. Use CDP `Page.captureScreenshot` for overlay screenshots.
 - 2026-10-31 (bootstrap): `npm install` may skip Electron's binary download; `node node_modules/electron/install.js` fetches it.
 
+- 2026-10-31 (org smoke @5fcf790): release manager on haiku reproduced the baseline (21/21 tests, 0 lint, 0 type errors, build ok) and followed the report contract. Agents in `.claude/agents/` register only in a session started after they exist.
+
 ## Clean audits (so discovery skips these grounds)
