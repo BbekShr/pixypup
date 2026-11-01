@@ -47,4 +47,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F10): `npm run dist` → release/PixyPup-0.1.0-arm64.dmg (~125 MB); afterPack `scripts/ad-hoc-sign.mjs`; art via `npm run make-art`; electron-builder output must stay `release/` (dist/ is in build.files). Tests 414.
 
+- 2026-11-01 (E2E): out/_e2e.mjs drives a full real-key run (13/13, docs/E2E.md). Pet display name = manifest `pet` via `displayName()` in main; settings.petName is the folder slug.
+
 ## Clean audits (so discovery skips these grounds)
