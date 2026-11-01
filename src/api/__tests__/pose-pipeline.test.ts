@@ -324,8 +324,8 @@ const sparkReply = (body: Record<string, unknown>) => {
   return {
     status: 'completed',
     output: [
-      { type: 'web_search_call', results: [{ url: 'https://a.org' }] },
-      { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(t) }] },
+      { type: 'web_search_call' },
+      { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(t), annotations: [{ type: 'url_citation', url: 'https://a.org' }] }] },
     ],
   };
 };
@@ -577,7 +577,7 @@ describe('meet your pet in the pipeline', () => {
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
-  const run = async (o: FakeOpts, events: PipelineEvent[] = []) => {
+  const run = async (o: FakeOpts, events: PipelineEvent[] = [], timing: Record<string, number> = {}) => {
     const { client } = fakeClient(o);
     const p = generateSpritePack({
       client,
@@ -586,7 +586,7 @@ describe('meet your pet in the pipeline', () => {
       species: 'dog',
       outDir: out,
       onProgress: (e) => events.push(e),
-      timing: { timeoutMs: 60_000, backoffMs: 1 },
+      timing: { timeoutMs: 60_000, backoffMs: 1, sparkGraceMs: 100, ...timing },
     });
     return { p };
   };
@@ -627,5 +627,55 @@ describe('meet your pet in the pipeline', () => {
     const t1 = Date.now();
     await (await run({ delayMs: 60, spark: slow })).p;
     expect(Date.now() - t1).toBeLessThan(base + 40);
+  });
+
+  it('does not wait for a hanging Spark past the grace period, and aborts it', async () => {
+    const events: PipelineEvent[] = [];
+    let signal: AbortSignal | undefined;
+    const hang = (_b: Record<string, unknown>) => new Promise(() => undefined);
+    const { client } = fakeClient({ spark: hang });
+    const post = client.postJson.bind(client) as (p: string, b: unknown, s?: AbortSignal) => Promise<unknown>;
+    (client as unknown as { postJson: typeof post }).postJson = (path, b, s) => {
+      if (path === '/responses') signal = s;
+      return post(path, b, s);
+    };
+    const t = Date.now();
+    const manifest = await generateSpritePack({
+      client, photo: await photo(), petName: 'P', species: 'dog', outDir: out,
+      onProgress: (e) => events.push(e), timing: { backoffMs: 1, sparkGraceMs: 100 },
+    });
+    expect(Date.now() - t).toBeLessThan(1500);
+    expect(manifest.personality).toBeUndefined();
+    expect(signal?.aborted).toBe(true);
+    expect(events.at(-1)?.stage).toBe('done');
+  });
+
+  it('a failed pack aborts Spark, never starts breedFacts, emits nothing after', async () => {
+    const events: PipelineEvent[] = [];
+    const bodies: Record<string, unknown>[] = [];
+    let signal: AbortSignal | undefined;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const { client } = fakeClient({
+      fail: (pose) => pose === 'idle_0',
+      spark: async (b) => {
+        bodies.push(b);
+        await gate;
+        return sparkReply(b);
+      },
+    });
+    const post = client.postJson.bind(client) as (p: string, b: unknown, s?: AbortSignal) => Promise<unknown>;
+    (client as unknown as { postJson: typeof post }).postJson = (path, b, s) => {
+      if (path === '/responses') signal ??= s;
+      return post(path, b, s);
+    };
+    await expect(
+      generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, onProgress: (e) => events.push(e), timing: { backoffMs: 1 } }),
+    ).rejects.toThrow();
+    expect(signal?.aborted).toBe(true);
+    release();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(bodies).toHaveLength(1); // meetPet only
+    expect(events.map((e) => e.stage)).toEqual(['cutout']);
   });
 });

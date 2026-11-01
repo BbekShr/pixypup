@@ -3,7 +3,10 @@ import type { SpriteManifest } from '../../contracts/types.js';
 
 const FRAME = /^[A-Za-z0-9_][\w.-]*\.png$/;
 
-const str = (v: unknown, max: number) => typeof v === 'string' && v.length > 0 && v.length <= max;
+// Mirrors the sanitizer in personality.ts: model text never carries URLs, @ or emoji.
+const str = (v: unknown, max: number) =>
+  typeof v === 'string' && v.length > 0 && v.length <= max && !/https?:|www\.|@|\p{Extended_Pictographic}/u.test(v);
+const url = (v: unknown) => typeof v === 'string' && v.startsWith('https://') && v.length <= 300;
 const only = (o: object, keys: string[]) => Object.keys(o).every((k) => keys.includes(k));
 
 function personalityOk(v: unknown): boolean {
@@ -14,7 +17,7 @@ function personalityOk(v: unknown): boolean {
   const facts = p.facts === undefined || (Array.isArray(p.facts) && p.facts.length <= 3 && p.facts.every((f) => {
     if (typeof f !== 'object' || f === null) return false;
     const d = f as Record<string, unknown>;
-    return only(d, ['text', 'source']) && str(d.text, 90) && (d.source === undefined || str(d.source, 300));
+    return only(d, ['text', 'source']) && str(d.text, 90) && (d.source === undefined || url(d.source));
   }));
   return (
     only(p, ['breed', 'coat', 'traits', 'energy', 'lines', 'facts']) &&

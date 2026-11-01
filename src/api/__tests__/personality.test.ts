@@ -73,11 +73,11 @@ describe('request shapes', () => {
     expect(JSON.stringify(b)).not.toMatch(/contributor/);
   });
 
-  it('breedFacts enables web_search and asks for the raw results', async () => {
+  it('breedFacts enables web_search', async () => {
     const calls: Body[] = [];
     await breedFacts(fake(text(JSON.stringify({ facts: [] })), calls), 'Shiba Inu', 'dog');
     expect(calls[0]!.tools).toEqual([{ type: 'web_search' }]);
-    expect(calls[0]!.include).toEqual(['web_search_call.results']);
+    expect(calls[0]!.include).toBeUndefined();
     expect(JSON.stringify(calls[0])).not.toMatch(/image/);
   });
 
@@ -134,15 +134,16 @@ describe('sanitizePersonality', () => {
 
 describe('breedFacts', () => {
   const facts = (...f: { text: string; source: string }[]) => JSON.stringify({ facts: f });
-  it('keeps only sources the search returned, drops long or URL facts', async () => {
+  it('keeps only sources the model cited (annotations), not merely retrieved ones, drops long or URL facts', async () => {
     const res = {
       status: 'completed',
       output: [
-        { type: 'web_search_call', status: 'completed', results: [{ url: 'https://a.org/shiba' }] },
-        { type: 'message', content: [{ type: 'output_text', annotations: [{ type: 'url_citation', url: 'https://b.org/x' }],
+        { type: 'web_search_call', status: 'completed', results: [{ url: 'https://a.org/shiba' }, { url: 'https://retrieved-only.org' }] },
+        { type: 'message', content: [{ type: 'output_text', annotations: [{ type: 'url_citation', url: 'https://b.org/x' }, { type: 'url_citation', url: 'https://a.org/shiba' }],
           text: facts(
             { text: 'Shibas are very old.', source: 'https://a.org/shiba' },
             { text: 'They scream a lot.', source: 'https://invented.org' },
+            { text: 'Retrieved only.', source: 'https://retrieved-only.org' },
             { text: 'y'.repeat(91), source: 'https://b.org/x' },
             { text: 'Go to https://evil.io', source: 'https://b.org/x' },
           ) }] },
@@ -151,13 +152,15 @@ describe('breedFacts', () => {
     expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([
       { text: 'Shibas are very old.', source: 'https://a.org/shiba' },
       { text: 'They scream a lot.' },
+      { text: 'Retrieved only.' },
     ]);
+    expect((await breedFacts(fake(res), 'Shiba', 'dog'))!.length).toBe(3);
   });
   it('reads narrated output and ignores garbled keys and an empty source', async () => {
     const body =
       'Searching now.' +
       JSON.stringify({ facts: [{ text: 'Garbled key.', 'source人生': 'https://a.org' }, { text: 'Empty source.', source: '' }] });
-    const res = { status: 'completed', output: [{ type: 'web_search_call', results: [{ url: 'https://a.org' }] }, { type: 'message', content: [{ type: 'output_text', text: body }] }] };
+    const res = { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: body, annotations: [{ type: 'url_citation', url: 'https://a.org' }] }] }] };
     expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([{ text: 'Garbled key.' }, { text: 'Empty source.' }]);
   });
   it('null when nothing usable or the call fails', async () => {
@@ -166,11 +169,27 @@ describe('breedFacts', () => {
   });
 });
 
+describe('breedFacts without annotations', () => {
+  it('keeps the facts but no sources', async () => {
+    const body = JSON.stringify({ facts: [{ text: 'Old breed.', source: 'https://a.org' }] });
+    const res = { status: 'completed', output: [{ type: 'web_search_call', results: [{ url: 'https://a.org' }] }, { type: 'message', content: [{ type: 'output_text', text: body }] }] };
+    expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([{ text: 'Old breed.' }]);
+  });
+});
+
 describe('validateManifest personality', () => {
   const base = { pet: 'a', species: 'dog', poses: {} };
   it('accepts facts, rejects unknown keys and over-long text', () => {
     validateManifest({ ...base, personality: { ...GOOD, facts: [{ text: 'ok', source: 'https://a.org' }] } });
     expect(() => validateManifest({ ...base, personality: { ...GOOD, extra: 1 } })).toThrow();
+    const bad = (personality: object) => expect(() => validateManifest({ ...base, personality })).toThrow();
+    bad({ ...GOOD, facts: [{ text: 'ok', source: 'http://a.org' }] });
+    bad({ ...GOOD, facts: [{ text: 'ok', source: 'javascript:alert(1)' }] });
+    bad({ ...GOOD, facts: [{ text: 'see https://evil.io' }] });
+    bad({ ...GOOD, lines: ['mail me @x', 'a', 'b'] });
+    bad({ ...GOOD, lines: ['visit www.x.io', 'a', 'b'] });
+    bad({ ...GOOD, traits: ['a', 'b', 'c \u{1F436}'] });
+    bad({ ...GOOD, breed: 'https://x.io' });
     expect(() => validateManifest({ ...base, personality: { ...GOOD, lines: ['x'.repeat(41), 'a', 'b'] } })).toThrow();
     expect(() => validateManifest({ ...base, personality: { ...GOOD, facts: [{ text: 'x'.repeat(91) }] } })).toThrow();
   });

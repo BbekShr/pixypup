@@ -77,7 +77,7 @@ export interface PackOptions {
   outDir: string;
   onProgress?: (e: PipelineEvent) => void;
   /** Per-pose request timeout and retry back-off (x3 after HTTP 429); tests shrink these. */
-  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number };
+  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number };
 }
 
 export class NoPetFoundError extends Error {
@@ -368,17 +368,20 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const sparkMs = o.timing?.sparkMs ?? 30_000;
   let personality: Personality | undefined;
   let facts: PetFact[] | undefined;
+  const spark = new AbortController();
+  const signal = () => AbortSignal.any([spark.signal, AbortSignal.timeout(sparkMs)]);
   const meeting = (async () => {
-    const p = await meetPet(o.client, cutout, o.petName, o.species, AbortSignal.timeout(sparkMs));
-    if (!p) return;
+    const p = await meetPet(o.client, cutout, o.petName, o.species, signal());
+    if (!p || spark.signal.aborted) return;
     personality = p;
     emit({ stage: 'personality', personality: p });
-    const f = await breedFacts(o.client, p.breed, o.species, AbortSignal.timeout(sparkMs));
-    if (!f) return;
+    const f = await breedFacts(o.client, p.breed, o.species, signal());
+    if (!f || spark.signal.aborted) return;
     facts = f;
     emit({ stage: 'facts', facts: f });
   })().catch(() => undefined);
 
+  const keyed = await (async () => {
   const cutoutOnMagenta = dataUrl(await sharp(cutout).flatten({ background: MAGENTA }).png().toBuffer());
 
   const attempt = async <T>(prompt: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>) => {
@@ -476,8 +479,15 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       }),
     ]),
   ]);
+  return keyed;
+  })().catch((err) => {
+    spark.abort(); // a failed pack must not leave Spark running and billing
+    throw err;
+  });
 
-  await meeting;
+  // Spark gets a short grace after the poses; whatever arrived by then goes in the manifest.
+  await Promise.race([meeting, new Promise((r) => setTimeout(r, o.timing?.sparkGraceMs ?? 2000).unref())]);
+  spark.abort();
   const { frames, footY } = await layoutFrames(keyed, 'idle_0');
   const pose = (frames: string[], fps: number) => ({ frames, fps, footY });
   const manifest: SpriteManifest = {

@@ -13,7 +13,6 @@ export const SPARK_MODEL = 'muse-spark-1.3';
 //   Reasoning tokens count against `max_output_tokens`.
 // https://dev.meta.ai/docs/search-grounding  `tools: [{type:'web_search'}]`; the model decides whether to search; output has a
 //   `web_search_call` item and `url_citation` annotations ({url, title, start_index, end_index}) on output_text parts;
-//   `include: ['web_search_call.results']` adds `results: [{type:'text_result', title, url, snippet}]` to the call item.
 
 export type Effort = 'minimal' | 'low' | 'medium' | 'high';
 
@@ -37,7 +36,7 @@ interface Part {
 }
 export interface SparkResponse {
   status?: string;
-  output?: { type?: string; content?: Part[]; results?: { url?: string }[] }[];
+  output?: { type?: string; content?: Part[] }[];
 }
 
 export function sparkRequestBody(o: SparkOptions) {
@@ -49,7 +48,7 @@ export function sparkRequestBody(o: SparkOptions) {
     reasoning: { effort: o.effort },
     max_output_tokens: o.maxOutputTokens ?? 4096,
     text: { format: { type: 'json_schema', name: o.name, schema: o.schema, strict: true } },
-    ...(o.tools ? { tools: o.tools, include: ['web_search_call.results'] } : {}),
+    ...(o.tools ? { tools: o.tools } : {}),
   };
 }
 
@@ -63,11 +62,10 @@ export function parseResponseText(res: SparkResponse): string {
   return text;
 }
 
-/** URLs the model actually retrieved or cited: the only sources we show. */
+/** URLs the model cited (url_citation annotations): the only sources we show. A retrieved-but-uncited page is not a source. */
 export function citedUrls(res: SparkResponse): Set<string> {
   const urls = new Set<string>();
   for (const item of res.output ?? []) {
-    for (const r of item.results ?? []) if (r.url) urls.add(r.url);
     for (const p of item.content ?? []) for (const a of p.annotations ?? []) if (a.type === 'url_citation' && a.url) urls.add(a.url);
   }
   return urls;
