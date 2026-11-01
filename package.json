@@ -14,7 +14,7 @@
     "test": "vitest run",
     "pose-test": "tsx scripts/pose-test.ts",
     "build-native": "bash scripts/build-native.sh",
-    "dist": "npm run build && electron-builder --mac dmg"
+    "dist": "npm run build-native && npm run build && electron-builder --mac dmg"
   },
   "build": {
     "appId": "dev.pixypup.app",
@@ -29,7 +29,13 @@
       "identity": null,
       "target": "dmg",
       "category": "public.app-category.entertainment"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "native/bin/pixyhelper",
+        "to": "pixyhelper"
+      }
+    ]
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
