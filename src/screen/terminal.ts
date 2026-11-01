@@ -118,7 +118,9 @@ export function pickTerminal(windows: Win[]): Win | null {
 // Full-screen windows (no title bar) are unsupported: the geometry would be off by the title bar.
 const HEAD =
   'return (nRows as text) & linefeed & (nCols as text) & linefeed & (tabCount as text) & linefeed & (winId as text) & linefeed & (item 1 of b as text) & linefeed & (item 2 of b as text) & linefeed & (item 3 of b as text) & linefeed & (item 4 of b as text) & linefeed & txt';
-const SCRIPTS: Record<string, string> = {
+// `contents of <variable>` is AppleScript's dereference operator: it returns the tab object, not its text, and the
+// final `& txt` then fails (-1700). Ask the tab itself for its contents.
+export const SCRIPTS: Record<string, string> = {
   Terminal: `tell application "Terminal"
 set t to selected tab of front window
 set nRows to number of rows of t
@@ -126,7 +128,7 @@ set nCols to number of columns of t
 set tabCount to count of tabs of front window
 set winId to id of front window
 set b to bounds of front window
-set txt to contents of t
+set txt to contents of selected tab of front window
 ${HEAD}
 end tell`,
   // iTerm2's window id is not a CGWindowID, so 0 = unknown; bounds decide.
