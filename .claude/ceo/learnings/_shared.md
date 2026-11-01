@@ -1,6 +1,8 @@
 # Shared lessons (every agent)
 
 ## Active
+- A generated bundle committed under `docs/` must be regenerated from the real source (`npm run site-js`), never hand-ported: the site's walk drifted from the app once already (docs-latest).
+- After scripting inline JS into `docs/index.html`, extract it and `node --check` it: one redeclaration silently kills the whole page (docs-latest).
 - A "never sent" promise covers every later-turn buffer (history, retries), not just the first request: F31 crisis text leaked via chat history on the next turn (`src/main/talk-history.ts`).
 - A route that forwards voice transcripts to a second model widens consent: prefill the UI and let the human press Send instead (F31 `prefill`).
 - Never `git commit --amend` on a branch another agent shares: it rewrites whatever HEAD is now. Make a new fixup commit (F31).

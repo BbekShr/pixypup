@@ -11,6 +11,7 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 <!-- decisions, deploys, migrations, secrets: with the exact command or question -->
 - Live sniff check in the real Terminal (one macOS Automation "Allow" click); Accessibility for the Slack badge; one real-microphone voice command (macOS mic prompt).
 - Run the pose test with your key and photos and record the 6-vs-4 pose call in `docs/POSE-TEST.md`: `npm run pose-test` (needs `MODEL_API_KEY` exported, photos in `assets/photos/`).
+- Add `'docs/js/**'` to the ignores in `eslint.config.js` (protected), then drop `--banner:js="/* eslint-disable */"` from the `site-js` script in `package.json`: the generated site bundle `docs/js/puppet.js` is linted today and carries a disable banner instead.
 - Read the Official Rules on the participants page; fill the TODO lines in `docs/HACKATHON.md` (platform, video cap, pre-existing-code rule).
 
 ## Active
@@ -69,6 +70,7 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 
 ## Done log
 <!-- ID, date, PR, one line. Prune entries older than ~90 days; git history keeps them. -->
+- docs-latest, 2026-11-01 (requested-by: maintainer, "fix the website and readme ... latest feature and cuteness", "walking pattern does not match", "does not show chat interface, make a cute demo", "download ... take me to empty repo"): README + site add the pet library (Mochi, Kuma, CREDITS link) and tail wag; site walk now runs the app's real rig via `npm run site-js` → docs/js/puppet.js; scripted offline Talk to Pakkun chat demo; Download links point at releases/latest/download/PixyPup-0.1.0-arm64.dmg; GitHub release v0.1.0 published (maintainer approved in chat).
 - F30, 2026-11-01 (requested-by: maintainer, "cuteness overload README + GitHub page for the About section"; then "change the name to Pakkun"): README rewritten as a Pakkun showcase (hero, features, four Meta models, privacy, install, fine print kept in <details>); docs/index.html GitHub Pages site with a live interactive Pakkun (walks, click tricks, petting hearts, scripted fail/fix/badge reactions, Overload rain); sprites copied to docs/img/pakkun; docs/.nojekyll. Branding: app = PixyPup, pet = Pakkun (maintainer clarified mid-run). Pages + About link need the maintainer (see report).
 - F11, 2026-11-01: perk-up on any app's new Dock badge; demo kit (demo/fail.command failing vitest, Badge Demo stand-in app, Meet stand-in page, scripts/stage-demo.sh fail|badge|call|reset), docs/DEMO.md rehearsal checklist.
 - F10, 2026-11-01, PR #20: cute DMG (Welcome to PixyPup, Drag me home, paw prints, 3D Pakkun), Pakkun app icon, ad-hoc signing incl. helper (afterPack), Info.plist usage strings + LSUIElement, release/ output; packaged app verified from a scratch copy.

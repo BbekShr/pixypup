@@ -165,6 +165,35 @@ nav ul a:hover { opacity: 1; }
 .mini b { display: block; font: 600 19px "Fredoka"; margin: 8px 0 6px; }
 .mini p { color: var(--ink-soft); font-size: 15px; }
 .mini .e { font-size: 28px; }
+/* talk demo */
+.chatdemo { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: end; }
+.chat-stage { height: 120px; overflow: hidden; position: relative; }
+.chat-stage img { position: absolute; bottom: 0; left: 0; width: 120px; height: 120px; object-fit: contain; object-position: bottom; filter: drop-shadow(0 6px 5px rgba(59, 47, 42, .18)); }
+.chat-card { background: var(--cream); border-radius: var(--radius); box-shadow: var(--shadow-lg); border: 6px solid #fff; display: flex; flex-direction: column; min-width: 0; }
+.chat-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font: 600 17px "Fredoka"; }
+.chat-head img { width: 34px; height: 34px; object-fit: contain; border-radius: 99px; background: #fff; box-shadow: 0 0 0 2px var(--honey); }
+.chat-log { height: 250px; overflow-y: auto; padding: 4px 16px 8px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+.chat-log .hello { margin: auto; text-align: center; color: var(--ink-soft); font-size: 14px; max-width: 220px; }
+.msg { max-width: 84%; padding: 9px 14px; border-radius: 18px; overflow-wrap: anywhere; animation: msgin .32s var(--pop) backwards; }
+@keyframes msgin { from { opacity: 0; transform: translateY(8px) scale(.94); } }
+.msg.me { align-self: flex-end; background: var(--honey); border-bottom-right-radius: 6px; }
+.msg.pup { align-self: flex-start; background: #fff; border-bottom-left-radius: 6px; box-shadow: 0 2px 8px rgba(59, 47, 42, .08); }
+.msg .woof { display: block; font: 600 22px/1.2 "Fredoka"; }
+.msg.pup em { display: block; margin-top: 2px; font-size: 13px; color: var(--ink-soft); }
+.dots { display: inline-flex; gap: 5px; padding: 6px 2px; }
+.dots i { width: 7px; height: 7px; border-radius: 99px; background: var(--blush); animation: dot 1s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes dot { 50% { transform: translateY(-4px); opacity: .5; } }
+.chat-card .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 8px; justify-content: flex-start; margin: 0; }
+.chat-card .chip { padding: 7px 12px; font-size: 13px; }
+.chat-bar { display: flex; gap: 8px; padding: 4px 16px 16px; }
+.chat-bar input { flex: 1; min-width: 0; font: 600 15px "Nunito"; padding: 11px 16px; border-radius: 99px; border: 2px solid var(--cream-deep); background: #fff; color: var(--ink); }
+.chat-bar input:focus-visible { outline: 3px solid var(--sky); }
+.chat-bar .btn { padding: 0 20px; }
+@media (max-width: 860px) { .chatdemo { grid-template-columns: 1fr; } .chat-stage { height: 96px; } .chat-stage img { width: 96px; height: 96px; } }
+.small-link { margin-top: 16px; font-size: 14px; color: var(--ink-soft); text-align: center; }
+.small-link code { background: var(--cream-deep); padding: 2px 7px; border-radius: 6px; }
+.pack .mini img { height: 150px; width: auto; margin: 0 auto; }
 .big-promise { margin-top: 40px; display: inline-block; padding: 18px 30px; border-radius: 22px; background: var(--mint); font: 600 clamp(18px, 2.6vw, 24px) "Fredoka"; }
 .model { border-top: 6px solid var(--blush); }
 .model:nth-child(2) { border-color: var(--honey); } .model:nth-child(3) { border-color: var(--sky); } .model:nth-child(4) { border-color: #B9DDB8; }
@@ -195,6 +224,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
     <ul>
       <li><a href="#how">How it works</a></li>
       <li><a href="#notices">He notices</a></li>
+      <li><a href="#pack">The pack</a></li>
       <li><a href="#privacy">Privacy</a></li>
       <li><a href="https://github.com/BbekShr/pixypup">GitHub ↗</a></li>
     </ul>
@@ -206,9 +236,10 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
   <h1><span class="name">PixyPup</span> puts your pet on your Mac.</h1>
   <p class="lede">One photo of your dog or cat becomes a 3D companion who trots along your desktop, does tricks when you click, and sniffs out your failing tests. Until you make yours, meet Pakkun. Cuteness overload, zero distraction.</p>
   <div class="cta">
-    <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases">⬇ Download for macOS</a>
+    <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg">⬇ Download for macOS</a>
     <a class="btn btn-ghost" href="https://github.com/BbekShr/pixypup">★ Star on GitHub</a>
   </div>
+  <p class="small-link"><a href="https://github.com/BbekShr/pixypup/releases">all releases</a></p>
 
   <div class="desk" id="desk" aria-label="Interactive demo: Pakkun walking on a pretend desktop">
     <div class="menubar"><span>🐾</span><span>Finder</span><span style="opacity:.6">File</span><span style="opacity:.6">Edit</span><span class="spacer"></span><img src="img/pakkun/idle_0.png" alt=""><span id="clock">9:41</span></div>
@@ -296,10 +327,31 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
   </div>
 </section>
 
-<section class="wrap center">
-  <span class="eyebrow">🫂 Talk to Pakkun</span>
-  <h2 class="reveal">A desk buddy for rough days.</h2>
-  <p class="lede reveal" style="margin-top:16px">Right-click him, choose "Talk to Pakkun…" and type how your day is going. He answers in woofs, with a small action like <i>leans against you</i>. Your words go to Meta's model only when you press Send, the last few turns stay in memory, and nothing is saved. If you mention hurting yourself, nothing is sent: a help card with 988 and findahelpline.com appears instead.</p>
+<section id="talk" class="wrap">
+  <div class="split">
+    <div class="reveal">
+      <span class="eyebrow">🫂 Talk to Pakkun</span>
+      <h2>A desk buddy for rough days.</h2>
+      <p class="lede" style="margin-top:16px">Right-click him, choose "Talk to Pakkun…" and type how your day is going. He answers in woofs, with a small action like <i>leans against you</i>. Your words go to Meta's model only when you press Send, the last few turns stay in memory, and nothing is saved. If you mention hurting yourself, nothing is sent: a help card with 988 and findahelpline.com appears instead.</p>
+      <p class="small-link" style="text-align:left">Try the demo: it's scripted and fully offline. On your Mac, Muse Spark 1.3 reads what you write (only when you press Send) and picks his reply.</p>
+    </div>
+    <div class="chatdemo reveal">
+      <div class="chat-stage" aria-hidden="true"><img id="chatPet" src="img/pakkun/sit.png" alt=""></div>
+      <div class="chat-card">
+        <div class="chat-head"><img src="img/pakkun/idle_0.png" alt=""><b>Talk to Pakkun</b></div>
+        <div class="chat-log" id="chatLog" role="log" aria-live="polite"><p class="hello">Tell Pakkun how your day is going.</p></div>
+        <div class="chips" role="group" aria-label="Try a message">
+          <button type="button" class="chip" data-say="Rough day at work 😩">Rough day at work 😩</button>
+          <button type="button" class="chip" data-say="My tests finally passed!">My tests finally passed!</button>
+          <button type="button" class="chip" data-say="I'm so tired">I'm so tired</button>
+        </div>
+        <form class="chat-bar" id="chatForm" autocomplete="off">
+          <input type="text" id="chatText" maxlength="500" aria-label="Your message to Pakkun" placeholder="Say something nice…">
+          <button class="btn btn-primary" type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section class="wrap">
@@ -311,6 +363,7 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
         <li><span>👀</span>Hover and he turns to look at you</li>
         <li><span>🤲</span>Wiggle the cursor over him to pet him: hearts!</li>
         <li><span>🥱</span>He yawns before a nap and stretches when he wakes</li>
+        <li><span>🐕</span>Dogs wag their tail while they trot; cats give a slow, smug sway</li>
         <li><span>😉</span>He blinks, sits, barks, rolls over</li>
         <li><span>🖐️</span>Drag him anywhere; he never steals a click from your work</li>
       </ul>
@@ -319,10 +372,21 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
   </div>
 </section>
 
+<section id="pack" class="wrap center">
+  <span class="eyebrow">🐾 Meet the pack</span>
+  <h2 class="reveal">Pakkun brought friends.</h2>
+  <p class="lede reveal" style="margin-top:16px">Say hi to <b>Mochi</b> the cat and <b>Kuma</b> the red Shiba. Right-click any pet (or the menu bar icon), open <b>Pet library</b>, and pick a friend to add. They stick around after a restart, and they all join the Overload.</p>
+  <div class="grid4 pack">
+    <div class="mini reveal"><img src="img/pakkun/sit.png" alt="Pakkun the golden retriever, sitting proudly"><b>Pakkun</b><p>Good boy. Founding member.</p></div>
+    <div class="mini reveal"><img src="img/mochi/sit.png" alt="Mochi the cat, sitting with perfect posture"><b>Mochi</b><p>Unbothered. Will still sit on your cursor.</p></div>
+    <div class="mini reveal"><img src="img/kuma/sit.png" alt="Kuma the red Shiba Inu, sitting and smiling"><b>Kuma</b><p>Fox-faced, full of opinions.</p></div>
+  </div>
+</section>
+
 <section class="overload" id="overload">
   <span class="eyebrow">⚠️ Warning: dangerously cute</span>
   <h2>PixyPup Overload!</h2>
-  <p class="lede" style="margin:16px auto 0">One menu item drops every pet you've ever made, up to 24 of them, across your screen for 25 seconds of pure chaos. It never takes a click and ends by itself.</p>
+  <p class="lede" style="margin:16px auto 0">One menu item drops every pet you've got (Pakkun, Mochi, Kuma and all your own), up to 24 of them, across your screen for 25 seconds of pure chaos. It never takes a click and ends by itself.</p>
   <button class="btn btn-primary" id="overloadBtn">🐾 Unleash the pups</button>
 </section>
 
@@ -359,29 +423,52 @@ footer .sleepy { width: 130px; margin: 0 auto 16px; }
   <span class="eyebrow">🏠 Bring him home</span>
   <h2 class="reveal">Install in three hops.</h2>
   <ol class="install" style="padding:0">
-    <li>Download <code>PixyPup-0.1.0-arm64.dmg</code> from Releases and open it.</li>
+    <li>Download <code>PixyPup-0.1.0-arm64.dmg</code> and open it.</li>
     <li>Drag Pakkun onto Applications. ("Drag me home.")</li>
     <li>First open only: right-click the app, choose <b>Open</b>, then <b>Open</b> again. It's an indie app, not notarised yet.</li>
   </ol>
   <div class="cta" style="margin-top:40px">
-    <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases">⬇ Download for macOS</a>
-    <a class="btn btn-ghost" href="https://github.com/BbekShr/pixypup#develop">Build from source</a>
+    <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg">⬇ Download for macOS</a>
+    <a class="btn btn-ghost" href="https://github.com/BbekShr/pixypup#build">Build it yourself</a>
   </div>
+  <p class="small-link">Or build it yourself with <code>npm run dist</code>. <a href="https://github.com/BbekShr/pixypup/releases">All releases</a></p>
 </section>
 
 <footer>
   <img class="sleepy" src="img/pakkun/sleep.png" alt="Pakkun napping">
   <p>Made with 🐾 for the Meta Global AI Developer Hackathon 2026 · <a href="https://github.com/BbekShr/pixypup">github.com/BbekShr/pixypup</a></p>
+  <p style="font-size:14px">Mochi and Kuma were made by PixyPup from CC BY-SA 4.0 Wikimedia photos. <a href="https://github.com/BbekShr/pixypup/blob/main/assets/pets/CREDITS.md">Photo credits</a></p>
 </footer>
 
+<script src="js/puppet.js"></script>
 <script>
 document.documentElement.classList.add("js");
 (() => {
   const P = 'img/pakkun/';
+  const PETS = [{ d: P, poses: ['sit', 'bark', 'roll'] }, { d: 'img/mochi/', poses: ['sit', 'bark'] }, { d: 'img/kuma/', poses: ['sit', 'bark'] }];
+  PETS.slice(1).forEach(q => ['sit', 'bark', 'side_0', 'side_1', 'side_2', 'side_3'].forEach(n => { new Image().src = q.d + n + '.png'; }));
   const F = { idle: 'idle_0', blink: 'idle_blink', sit: 'sit', bark: 'bark', roll: 'roll', sleep: 'sleep', walk: ['side_0', 'side_1', 'side_2', 'side_3'] };
   const all = ['idle_0', 'idle_blink', 'sit', 'bark', 'roll', 'sleep', ...F.walk];
   all.forEach(n => { new Image().src = P + n + '.png'; });
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // the app's own baked walk rig (js/puppet.js, built from src/overlay/puppet.ts); the side_* flip-book is the fallback, as in the app
+  const K = window.PixyPuppet;
+  const SPECIES = { 'img/pakkun/': 'dog', 'img/mochi/': 'cat', 'img/kuma/': 'dog' };
+  const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+  const bake = async d => {
+    try {
+      const gait = K.GAITS[K.puppetSpecies(SPECIES[d])], im = await loadImg(d + 'idle_0.png'), w = im.naturalWidth, h = im.naturalHeight;
+      const a = K.alphaPlane(im), band = a && K.legBand(a, w, h, 4);
+      if (!band) return null;
+      const b = await K.bakeWalk(im, band, gait, a);
+      return { srcs: b.srcs, step: b.cycleNat / gait.frames, nw: w, nh: h };
+    } catch (e) { console.warn('Walk rig unavailable, using the flip-book', d, e && e.target ? e.target.src : e); return null; }
+  };
+  const rigs = {};
+  ['img/pakkun/', 'img/mochi/', 'img/kuma/'].forEach(d => bake(d).then(rg => { rigs[d] = rg; }));
+  // one frame per stride of distance walked, so the feet only move when the body does
+  const rigSrc = (rg, walked, w, h) => rg.srcs[K.walkFrame(walked, rg.srcs.length, rg.step * Math.min(w / rg.nw, h / rg.nh))];
 
   // pose marquee
   const track = document.getElementById('track');
@@ -391,10 +478,10 @@ document.documentElement.classList.add("js");
   // the pet
   const desk = document.getElementById('desk'), pet = document.getElementById('pet'), img = document.getElementById('petImg'), bubble = document.getElementById('bubble');
   const term = document.getElementById('term'), termText = document.getElementById('termText'), badge = document.getElementById('badge');
-  let x = 60, dir = 1, target = 400, mode = 'walk', until = 0, frame = 0, lastStep = 0, speed = 70, trick = 'sit', bubbleTimer;
+  let x = 60, dir = 1, target = 400, mode = 'walk', until = 0, frame = 0, lastStep = 0, walked = 0, speed = 70, trick = 'sit', bubbleTimer;
   const TRICKS = { sit: 'bark', bark: 'roll', roll: 'sit' };
   const LINES = { sit: 'Sitting pretty!', bark: 'Woof woof!', roll: 'Belly rubs?' };
-  const set = n => { const s = P + n + '.png'; if (!img.src.endsWith(s)) img.src = s; };
+  const set = n => { const s = n.startsWith('blob:') ? n : P + n + '.png'; if (n.startsWith('blob:') ? img.src !== s : !img.src.endsWith(s)) img.src = s; };
   const say = (t, ms = 1800) => { bubble.textContent = t; bubble.classList.add('show'); clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => bubble.classList.remove('show'), ms); };
   const W = () => desk.clientWidth - pet.clientWidth;
   const pick = () => { target = 20 + Math.random() * (W() - 40); };
@@ -412,8 +499,10 @@ document.documentElement.classList.add("js");
         else if (Math.random() < .5) hold('idle', 1400 + Math.random() * 1800); else pick();
       } else {
         dir = Math.sign(d);
-        x += dir * Math.min(Math.abs(d), speed * dt / 1000);
-        if (now - lastStep > 125) { frame = (frame + 1) % 4; lastStep = now; set(F.walk[frame]); }
+        const mv = Math.min(Math.abs(d), speed * dt / 1000);
+        x += dir * mv; walked += mv;
+        if (rigs[P]) set(rigSrc(rigs[P], walked, pet.clientWidth, pet.clientHeight));
+        else if (now - lastStep > 125) { frame = (frame + 1) % 4; lastStep = now; set(F.walk[frame]); }
       }
     } else if (now > until) {
       if (mode === 'sleep') { say('*stretch* ~'); }
@@ -494,7 +583,7 @@ document.documentElement.classList.add("js");
     for (let i = 0; i < N; i++) {
       const im = new Image(); const h = 70 + Math.random() * 110;
       im.style.height = h + 'px'; im.style.width = (h * 1.03) + 'px';
-      const p = { im, x: Math.random() * vw, dir: Math.random() < .5 ? -1 : 1, v: 40 + Math.random() * 120, y: innerHeight + Math.random() * 300, vy: 0, f: Math.floor(Math.random() * 4), pose: null, delay: i * 90 };
+      const p = { im, x: Math.random() * vw, dir: Math.random() < .5 ? -1 : 1, v: 40 + Math.random() * 120, y: innerHeight + Math.random() * 300, vy: 0, f: Math.floor(Math.random() * 4), pose: null, delay: i * 90, pet: PETS[i % 3], walked: 0, h };
       rain.append(im); pups.push(p);
     }
     const start = performance.now(); let last = start;
@@ -505,17 +594,62 @@ document.documentElement.classList.add("js");
         p.vy -= 2400 * dt; p.y += p.vy * dt;
         if (p.y <= 0) { p.y = 0; p.vy = p.bounced ? 0 : 520; p.bounced = true; }
         if (p.y === 0 && p.bounced && !p.pose && Math.random() < .006) p.vy = 380;
-        if (Math.random() < .004 && !p.pose) { p.pose = ['sit', 'bark', 'roll'][Math.floor(Math.random() * 3)]; p.poseEnd = t + 900; }
+        if (Math.random() < .004 && !p.pose) { p.pose = p.pet.poses[Math.floor(Math.random() * p.pet.poses.length)]; p.poseEnd = t + 900; }
         if (p.pose && t > p.poseEnd) p.pose = null;
-        if (!p.pose) { p.x += p.dir * p.v * dt; if (p.x < -60 || p.x > vw - 60) p.dir *= -1; }
+        if (!p.pose) { p.x += p.dir * p.v * dt; p.walked += p.v * dt; if (p.x < -60 || p.x > vw - 60) p.dir *= -1; }
         p.f = (p.f + dt * 9) % 4;
-        p.im.src = P + (p.pose || F.walk[Math.floor(p.f)]) + '.png';
+        const rg = rigs[p.pet.d];
+        p.im.src = p.pose ? p.pet.d + p.pose + '.png' : rg ? rigSrc(rg, p.walked, p.h * 1.03, p.h) : p.pet.d + F.walk[Math.floor(p.f)] + '.png';
         p.im.style.opacity = t > 6200 ? Math.max(0, 1 - (t - 6200) / 800) : 1;
         p.im.style.transform = `translate(${p.x}px, ${-p.y}px) scaleX(${p.pose ? 1 : p.dir})`;
       });
       if (t < 7000) requestAnimationFrame(run); else { rain.remove(); running = false; btn.textContent = '🐾 Again! Again!'; }
     })(start);
   });
+
+  // talk demo: scripted and offline, no network
+  const clog = document.getElementById('chatLog'), ctext = document.getElementById('chatText'), cpet = document.getElementById('chatPet');
+  const REPLIES = [
+    [/tired|sleep|nap|exhaust|bed/i, { woof: 'Awoo~', cap: 'rests his head on your knee', pose: 'sleep' }],
+    [/passed|finally|\bwon\b|\bwin\b|yay|great|did it|happy|promot|shipped|fixed/i, { woof: 'Woof woof woof!', cap: 'zoomies of joy', pose: 'zoom' }],
+    [/rough|\bbad\b|sad|ugh|stress|awful|hard|work|bug|fail|angry/i, { woof: 'Woof... woof.', cap: 'leans against you', pose: 'sit' }],
+    [/play|bored|ball|fetch|walk/i, { woof: 'Arf arf!', cap: 'brings you a very slobbery ball', pose: 'bark' }],
+  ];
+  const WHAT = { woof: 'Woof?', cap: 'tilts his head, listening', pose: 'idle_0' };
+  let chatBusy = false, zoomId = 0, backT;
+  const chatAct = pose => {
+    const id = ++zoomId; clearTimeout(backT);
+    if (pose === 'zoom' && !reduce) {
+      let walked = 0, last = performance.now(); const t0 = last;
+      (function loop(now) {
+        if (id !== zoomId) return;
+        walked += 240 * Math.min(50, now - last) / 1000; last = now;
+        const rg = rigs[P];
+        cpet.src = rg ? rigSrc(rg, walked, 120, 120) : P + F.walk[Math.floor(walked / 20) % 4] + '.png';
+        cpet.style.transform = `translateY(${-Math.abs(Math.sin((now - t0) / 120)) * 10}px)`;
+        if (now - t0 < 1800) requestAnimationFrame(loop); else { cpet.style.transform = ''; cpet.src = P + 'sit.png'; }
+      })(t0);
+      return;
+    }
+    cpet.style.transform = ''; cpet.src = P + (pose === 'zoom' ? 'bark' : pose) + '.png';
+    backT = setTimeout(() => { cpet.src = P + 'sit.png'; }, 3500);
+  };
+  const talk = text => {
+    text = text.trim();
+    if (!text || chatBusy) return; chatBusy = true;
+    clog.querySelector('.hello')?.remove();
+    const me = document.createElement('div'); me.className = 'msg me'; me.textContent = text;
+    const pup = document.createElement('div'); pup.className = 'msg pup'; pup.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+    clog.append(me, pup); clog.scrollTop = clog.scrollHeight;
+    setTimeout(() => {
+      const rep = (REPLIES.find(([re]) => re.test(text)) || [0, WHAT])[1];
+      const w = document.createElement('span'); w.className = 'woof'; w.textContent = rep.woof;
+      const e = document.createElement('em'); e.textContent = '*' + rep.cap + '*';
+      pup.replaceChildren(w, e); chatAct(rep.pose); clog.scrollTop = clog.scrollHeight; chatBusy = false;
+    }, reduce ? 200 : 1000);
+  };
+  document.getElementById('chatForm').addEventListener('submit', e => { e.preventDefault(); const t = ctext.value; ctext.value = ''; talk(t); });
+  document.querySelectorAll('[data-say]').forEach(b => b.addEventListener('click', () => talk(b.dataset.say)));
 
   // reveal on scroll
   const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0, rootMargin: "0px 0px -8% 0px" });

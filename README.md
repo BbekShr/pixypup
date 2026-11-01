@@ -9,10 +9,10 @@
 **One photo of your dog or cat becomes a 3D companion who trots along your desktop,<br>does tricks when you click, and sniffs out your failing tests.**
 
 [![Meta Global AI Developer Hackathon 2026](https://img.shields.io/badge/Meta_Global_AI_Hackathon-2026-F4A6A0?style=for-the-badge)](https://bbekshr.github.io/pixypup/)
-[![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-3B2F2A?style=for-the-badge&logo=apple)](https://github.com/BbekShr/pixypup/releases)
+[![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-3B2F2A?style=for-the-badge&logo=apple)](https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg)
 [![Privacy](https://img.shields.io/badge/screen_%26_voice-off_by_default-CDEBD3?style=for-the-badge)](#privacy)
 
-### [🌐 See PixyPup in action](https://bbekshr.github.io/pixypup/) · [⬇️ Download](https://github.com/BbekShr/pixypup/releases) · [🛠️ Build it](#build)
+### [🌐 See PixyPup in action](https://bbekshr.github.io/pixypup/) · [⬇️ Download](https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg) · [🛠️ Build it](#build)
 
 <img src="docs/pack-sheet.png" alt="Ten 3D poses of Pakkun, drawn from one photo: standing, blinking, walking, sitting, sleeping, barking, rolling" width="100%">
 
@@ -42,9 +42,21 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute late
 | 🙈 **Hides on calls** | Zoom or Meet open? He tiptoes to the screen edge until your call ends. |
 | 🎙️ **Voice tricks** | Hold <kbd>⌥</kbd> <kbd>Space</kbd> and say *"Pakkun, sit"*, *"roll over"*, *"go to bed"*, *"come here"* or *"bark"*. Powered by **Meta Voice Transcribe**. |
 | 🫂 **Talk to Pakkun** | A desk buddy for rough days. Right-click him, choose *Talk to Pakkun…*, and tell him how your day is going. He answers in woofs and acts it out beside the chat. Nothing leaves your Mac until you press Send. |
-| 🤲 **Little moments** | He turns to look at you, wiggles with hearts when you pet him, blinks, yawns before naps and stretches when he wakes. |
-| 🌪️ **PixyPup Overload!** | One menu item drops every pet you've ever made, up to 24, across your screen for 25 seconds of pure chaos. |
+| 🤲 **Little moments** | He turns to look at you, wiggles with hearts when you pet him, blinks, yawns before naps and stretches when he wakes. Dogs wag their tails as they trot; cats sway theirs, very smugly. |
+| 🐾 **Meet the pack** | Pakkun comes with two friends: **Mochi** the cat and **Kuma** the red Shiba. Open **Pet library** in the right-click or menu bar menu to add one; they stay after a restart. |
+| 🌪️ **PixyPup Overload!** | One menu item drops every pet you've got, up to 24, across your screen for 25 seconds of pure chaos. |
 | 😴 **Calm and in control** | Snooze, size, energy, launch at login, hide from screen shares. He never steals a click or your focus. |
+
+## 🐾 Meet the pack
+
+<div align="center">
+<img src="assets/pets/Pakkun/sit.png" width="120" alt="Pakkun the golden retriever, sitting proudly">
+<img src="assets/pets/Mochi/sit.png" width="120" alt="Mochi the cat, sitting with perfect posture">
+<img src="assets/pets/Kuma/sit.png" width="120" alt="Kuma the red Shiba Inu, sitting and smiling">
+<br><sub><b>Pakkun</b> (good boy) · <b>Mochi</b> (unbothered) · <b>Kuma</b> (full of opinions)</sub>
+</div>
+
+Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia photos. Credits: [assets/pets/CREDITS.md](assets/pets/CREDITS.md).
 
 <div align="center">
 <img src="docs/sniff.png" alt="Pakkun finds a failing test in the terminal and says Found a bug!" width="70%">
@@ -80,7 +92,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute late
 
 ## 🏠 Bring him home
 
-1. Download `PixyPup-0.1.0-arm64.dmg` from [Releases](https://github.com/BbekShr/pixypup/releases) and open it.
+1. [Download `PixyPup-0.1.0-arm64.dmg`](https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg) (all builds are on [Releases](https://github.com/BbekShr/pixypup/releases)) and open it. Or [build it yourself](#build): `npm run dist` writes it to `release/`.
 2. Drag Pakkun onto the Applications folder ("Drag me home").
 3. **First open only:** right-click PixyPup in Applications, choose **Open**, then **Open** again. It's an indie app signed ad hoc, not notarised by Apple yet, so a plain double-click is refused once. After that it opens normally.
 
@@ -106,6 +118,7 @@ npm run pose-test       # try the pose pipeline
 npm run build-native    # compile native/pixyhelper.swift
 npm run dist            # mac dmg (ad-hoc signed), written to release/
 npm run make-art        # regenerate the app icon and DMG background
+npm run site-js         # rebuild docs/js/puppet.js (the site's walk rig)
 ```
 
 <details>
@@ -115,10 +128,10 @@ npm run make-art        # regenerate the app icon and DMG background
 On first launch a small welcome window offers to turn a photo of your dog or cat into a pet (right-click the pet, "Make a new pet…", any time). While the pet is drawn the photo melts into the cutout and poses pop in; at the end the window shrinks to the floor, the old pet trots off, and the new one drops in and says hi. Rehearse without a key: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` (dev builds only).
 
 ### Little moments
-Dogs and cats walk on a leg rig baked from the standing pose (24 frames at load), falling back to the AI walk if that fails. Hover over your pet and it turns to look at you. Move the cursor back and forth over it to pet it: a happy wiggle and a few hearts. It yawns before a nap and stretches when it wakes. All of this is off when macOS "Reduce motion" is on.
+Dogs and cats walk on a leg rig baked from the standing pose (24 frames at load), falling back to the AI walk if that fails. While they walk the tail moves too: dogs wag twice per step cycle, cats do one slow S-sway. Hover over your pet and it turns to look at you. Move the cursor back and forth over it to pet it: a happy wiggle and a few hearts. It yawns before a nap and stretches when it wakes. All of this is off when macOS "Reduce motion" is on.
 
 ### Calm and control
-Right-click the pet (or use the menu bar icon) to Snooze it (1 hour, or until 8:00 tomorrow), change its Size (110/140/180 px) and Energy (sleepy/normal/playful), keep it in place, hide it from screen sharing (off by default), or open it at login (off by default). Choices persist in settings.json; a snoozed pet does no animation work at all. "PixyPup Overload!" (pet menu or menu bar icon) drops every saved pet, duplicated up to 24, over the screen for 25 seconds of cute chaos: it never takes a click, ends by itself, and "End the overload" in the menu bar stops it early.
+Right-click the pet (or use the menu bar icon) to Snooze it (1 hour, or until 8:00 tomorrow), change its Size (110/140/180 px) and Energy (sleepy/normal/playful), keep it in place, hide it from screen sharing (off by default), or open it at login (off by default). Choices persist in settings.json; a snoozed pet does no animation work at all. "Pet library" (pet menu or menu bar icon) lists the bundled pets not already on screen (Mochi, Kuma); picking one adds it and it persists across restarts. "PixyPup Overload!" (pet menu or menu bar icon) drops every saved and bundled pet, duplicated up to 24, over the screen for 25 seconds of cute chaos: it never takes a click, ends by itself, and "End the overload" in the menu bar stops it early.
 
 ### Notice my screen
 Off by default; turn it on from the pet's right-click menu ("Notice my screen"), after a short explainer. Then he can notice a failing test in your front Terminal (he runs to it, sniffs and barks a line; click him within 2 minutes for a short Muse Spark hint about why it failed; rerun until it's green and he rolls over and cheers), a new notification badge in your Dock, from Mail, Messages, Slack or any app (he perks up), or a Zoom/Meet window (he hides at the screen edge until the call ends). He reads only the front Terminal's text and the list of open windows; nothing is saved, and the one failing line is sent to Meta's model only to word his speech bubble (no key means he uses his own lines). A hint is sent only when you click him for one: up to 16 lines of that failure (1,200 characters), once, held in memory for 5 minutes and never saved. macOS asks once to let PixyPup control Terminal. Turn it off by unchecking the menu item; it also pauses while snoozed, and an organisation's admin file can lock it off. Staging the video: `docs/DEMO.md`. Rehearse without any permission: `PIXY_FAKE_SCREEN=1 npm run dev`, then `__pixyDebug.pref('screen:yes')` in the overlay's devtools (dev builds only); `__pixyDebug.pref('screen:fake:pass')` turns the scripted terminal green and `screen:fake:fail` back.
