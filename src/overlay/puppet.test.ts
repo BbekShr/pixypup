@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { GAITS, cycleStrideNat, legBand, legSides, liftAt, puppetSpecies, shearAt, stripRuns } from './puppet';
+import { GAITS, cycleStrideNat, legBand, legSides, liftAt, tailColumns, tailOffset, puppetSpecies, shearAt, stripRuns } from './puppet';
 
 const W = 120;
 const H = 100;
@@ -104,5 +104,38 @@ describe('legSides and stripRuns', () => {
     a[3] = 255;
     expect(legSides(a, 30, 1, { bellyY: 0, splitX: 15, bottom: 0 }, true).every((v) => v === 0)).toBe(true);
     expect(stripRuns([0, 2, 2, 1, 1, 0])).toEqual([{ x0: 1, x1: 3, front: false }, { x0: 3, x1: 5, front: true }]);
+  });
+});
+
+describe('tail', () => {
+  const sides = (a: Uint8Array, band: { bellyY: number; splitX: number; bottom: number }): Uint8Array => legSides(a, W, 1, band, true);
+  const withTail = (rows: number): Uint8Array => {
+    const a = dog();
+    for (let y = 20; y < 60; y++) for (let x = 25; x < 30; x++) a[y * W + x] = 0; // body starts at the hind leg
+    for (let y = 22; y < 22 + rows; y++) for (let x = 5; x < 23; x++) a[y * W + x] = 255;
+    return a;
+  };
+  it('finds the columns behind the hind leg', () => {
+    const a = withTail(10);
+    const band = legBand(a, W, H, 1)!;
+    const t = tailColumns(a, W, H, 1, sides(a, band), band, true)!;
+    expect(t.x0).toBe(0);
+    expect(t.x1).toBe(28);
+    expect(t.len).toBe(t.root - 5);
+  });
+  it('skips a region that is tiny', () => {
+    const a = withTail(1);
+    const band = legBand(a, W, H, 1)!;
+    expect(tailColumns(a, W, H, 1, sides(a, band), band, true)).toBeNull();
+  });
+  it('wags from a fixed root, bounded, looping, differently for dog and cat', () => {
+    const len = 20;
+    for (const g of [GAITS.dog, GAITS.cat]) {
+      expect(tailOffset(7, 24, 0, g, len)).toBeCloseTo(0, 9);
+      for (let k = 0; k < 24; k++) expect(Math.abs(tailOffset(k, 24, 1, g, len))).toBeLessThanOrEqual(g.tail.amp * len + 1e-9);
+      expect(tailOffset(24, 24, 0.7, g, len)).toBeCloseTo(tailOffset(0, 24, 0.7, g, len), 9);
+      expect(Number.isInteger(g.tail.f)).toBe(true);
+    }
+    expect(tailOffset(3, 24, 1, GAITS.dog, len)).not.toBeCloseTo(tailOffset(3, 24, 1, GAITS.cat, len), 3);
   });
 });
