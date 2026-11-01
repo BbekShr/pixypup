@@ -58,7 +58,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
     return r.canceled || !r.filePaths[0] ? { ok: false, code: 'cancelled' } : photoResult(r.filePaths[0]);
   });
   ipcMain.handle(IPC.obDropPhoto, (e, path: unknown) => (ours(e) ? photoResult(path) : { ok: false, code: 'missing' }));
-  if (!app.isPackaged) ipcMain.handle(IPC.obDevPhoto, (e) => (ours(e) ? photoResult(join(app.getAppPath(), 'assets/pets/Pakkun/sit.png')) : { ok: false, code: 'missing' }));
+  if (!app.isPackaged) ipcMain.handle(IPC.obDevPhoto, (e) => (ours(e) ? photoResult(process.env['PIXY_DEV_PHOTO'] ?? join(app.getAppPath(), 'assets/pets/Pakkun/sit.png')) : { ok: false, code: 'missing' }));
   ipcMain.handle(IPC.obSaveKey, (e, key: unknown) => {
     if (!ours(e) || !checkKey(key)) return false;
     pendingKey = key;
