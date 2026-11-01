@@ -2,9 +2,9 @@
 
 <img src="assets/pets/Pakkun/sit.png" width="140" alt="Pakkun sitting">
 
-# Pakkun 🐾
+# PixyPup 🐾
 
-### Your pet, living on your Mac.
+### Your pet, living on your Mac. Meet Pakkun! 🐶
 
 **One photo of your dog or cat becomes a 3D companion who trots along your desktop,<br>does tricks when you click, and sniffs out your failing tests.**
 
@@ -12,7 +12,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-3B2F2A?style=for-the-badge&logo=apple)](https://github.com/BbekShr/pixypup/releases)
 [![Privacy](https://img.shields.io/badge/screen_%26_voice-off_by_default-CDEBD3?style=for-the-badge)](#privacy)
 
-### [🌐 Meet him on the website](https://bbekshr.github.io/pixypup/) · [⬇️ Download](https://github.com/BbekShr/pixypup/releases) · [🛠️ Build it](#build)
+### [🌐 See PixyPup in action](https://bbekshr.github.io/pixypup/) · [⬇️ Download](https://github.com/BbekShr/pixypup/releases) · [🛠️ Build it](#build)
 
 <img src="docs/pack-sheet.png" alt="Ten 3D poses of Pakkun, drawn from one photo: standing, blinking, walking, sitting, sleeping, barking, rolling" width="100%">
 
@@ -24,7 +24,7 @@
 
 ## 💕 What is this?
 
-Pakkun is a tiny, very good pup who lives along the bottom of your screen. He walks on a transparent, click-through layer, so he never gets in the way of your work. Pet him and he wiggles. Click him and he sits, barks, and rolls over. Leave him alone and he yawns, curls up, and naps.
+PixyPup puts a tiny, very good pup on your Mac. Meet **Pakkun**: he lives along the bottom of your screen. He walks on a transparent, click-through layer, so he never gets in the way of your work. Pet him and he wiggles. Click him and he sits, barks, and rolls over. Leave him alone and he yawns, curls up, and naps.
 
 Then the magic part: **give him a photo of _your_ pet**, and about a minute later your own dog or cat is the one trotting across your Mac.
 
@@ -42,7 +42,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute late
 | 🙈 **Hides on calls** | Zoom or Meet open? He tiptoes to the screen edge until your call ends. |
 | 🎙️ **Voice tricks** | Hold <kbd>⌥</kbd> <kbd>Space</kbd> and say *"Pakkun, sit"*, *"roll over"*, *"go to bed"*, *"come here"* or *"bark"*. Powered by **Meta Voice Transcribe**. |
 | 🤲 **Little moments** | He turns to look at you, wiggles with hearts when you pet him, blinks, yawns before naps and stretches when he wakes. |
-| 🌪️ **Pakkun Overload!** | One menu item drops every pet you've ever made, up to 24, across your screen for 25 seconds of pure chaos. |
+| 🌪️ **PixyPup Overload!** | One menu item drops every pet you've ever made, up to 24, across your screen for 25 seconds of pure chaos. |
 | 😴 **Calm and in control** | Snooze, size, energy, launch at login, hide from screen shares. He never steals a click or your focus. |
 
 <div align="center">
@@ -52,7 +52,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute late
 
 ## 🦙 Four Meta models, one good boy
 
-| Model | What it does for Pakkun |
+| Model | What it does for your pet |
 |---|---|
 | 🎯 **SAM 3.1** (`sam-3.1`) | Cuts your pet cleanly out of the photo and tidies every pose. |
 | 🎨 **Muse Image** (`muse-image-1.0`) | Draws a consistent set of 3D poses and walk frames from one photo. |
