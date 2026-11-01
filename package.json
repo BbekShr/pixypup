@@ -21,7 +21,8 @@
     "productName": "PixyPup",
     "files": [
       "dist/**/*",
-      "assets/**/*",
+      "assets/pets/**/*",
+      "assets/placeholder/**/*",
       "package.json"
     ],
     "mac": {

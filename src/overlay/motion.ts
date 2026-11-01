@@ -71,3 +71,8 @@ export function fall(lift: number, vy: number, dt: number): { lift: number; vy: 
   if (v > BOUNCE_MIN_V) return { lift: 0, vy: -Math.sqrt(2 * GRAVITY * BOUNCE_PX), impact: true, settled: false };
   return { lift: 0, vy: 0, impact: false, settled: true };
 }
+
+export const BLINK_MS = 120;
+
+/** Gap before the next idle blink: 3-6 s for r in [0, 1). */
+export const blinkDelay = (r: number): number => 3000 + r * 3000;

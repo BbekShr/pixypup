@@ -3,7 +3,7 @@ import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC } from './ipc';
 import { petMenuTemplate } from './menu';
-import { isPlainName, loadPack } from './pack';
+import { isPlainName, loadPack, pickPackDir } from './pack';
 import { loadSettings } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -54,11 +54,13 @@ app.dock?.hide();
 
 void app.whenReady().then(() => {
   const settings = loadSettings(); // TODO(F1): feed settings to feature gates
-  ipcMain.handle(IPC.getPack, () => {
+  ipcMain.handle(IPC.getPack, async () => {
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
-    if (!isPlainName(settings.petName)) return null;
-    return loadPack(join(app.getPath('userData'), 'pets', settings.petName));
+    const candidates = [join(app.getAppPath(), 'assets/pets/Pakkun')];
+    if (isPlainName(settings.petName)) candidates.unshift(join(app.getPath('userData'), 'pets', settings.petName));
+    const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
+    return dir && loadPack(dir);
   });
   ipcMain.handle(IPC.getStay, () => stay);
   ipcMain.on(IPC.setClickThrough, (_e, on: boolean) => {

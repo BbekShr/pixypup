@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { MAX_FRAME_BYTES, loadPack } from './pack';
+import { MAX_FRAME_BYTES, loadPack, pickPackDir } from './pack';
 
 const manifest = (frame: string) =>
   JSON.stringify({ pet: 'P', species: 'dog', poses: { idle: { frames: [frame], fps: 2, footY: 0.99 } } });
@@ -50,5 +50,17 @@ describe('loadPack', () => {
     expect(await loadPack(await mk(many))).toBeNull();
     expect(await loadPack(await mk(pose({}), { 'a.png': 'x'.repeat(MAX_FRAME_BYTES + 1) }))).toBeNull();
     expect(await loadPack(await mk(pose({}), { 'a.png': 'x'.repeat(MAX_FRAME_BYTES) }))).not.toBeNull();
+  });
+});
+
+describe('pickPackDir', () => {
+  it('takes the first valid candidate, skipping missing/invalid ones, else null', async () => {
+    const ok = async (d: string) => d !== 'user';
+    expect(await pickPackDir(['user', 'builtin'], ok)).toBe('builtin');
+    expect(await pickPackDir(['a', 'builtin'], ok)).toBe('a');
+    expect(await pickPackDir(['user'], ok)).toBeNull();
+  });
+  it('the shipped Pakkun pack is valid', async () => {
+    expect(await loadPack(join(process.cwd(), 'assets/pets/Pakkun'))).not.toBeNull();
   });
 });
