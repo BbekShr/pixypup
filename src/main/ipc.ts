@@ -7,6 +7,8 @@ export const IPC = {
   getPrefs: 'pixy:get-prefs',
   prefs: 'pixy:prefs',
   devCmd: 'pixy:dev-cmd',
+  behavior: 'pixy:behavior',
+  screenAnswer: 'pixy:screen-answer',
   packChanged: 'pixy:pack-changed',
   createPet: 'pixy:create-pet',
   obState: 'pixy:ob-state',

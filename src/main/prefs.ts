@@ -56,6 +56,8 @@ export function commandToPatch(cmd: string, now: Date): Record<string, unknown> 
     case 'size': return isSize(v) ? { size: v } : null;
     case 'energy': return isEnergy(v) ? { energy: v } : null;
     case 'hide': return v === 'on' || v === 'off' ? { hideInShares: v === 'on' } : null;
+    // 'yes' is the explainer's answer; the menu only ever sends on (which asks first) or off.
+    case 'screen': return v === 'yes' || v === 'off' ? { screenAware: v === 'yes' } : null;
     case 'login': return v === 'on' || v === 'off' ? { openAtLogin: v === 'on' } : null;
     default: return null;
   }
