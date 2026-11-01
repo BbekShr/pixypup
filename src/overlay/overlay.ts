@@ -7,6 +7,7 @@ import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chat
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
+import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } from './call';
 import { cleanFrame } from './frames';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
@@ -69,6 +70,7 @@ let footY = 1;
 let reg = new Map<string, number>(); // src -> natural px its head sits right of idle's
 let wagOk = false;
 let widths = new Map<string, number>(); // src -> natural width; the profile walk is drawn wider than idle
+let comeBubble = 'Here!'; // what the pet says on arriving when called
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
 let sayAt = Infinity;
 let speakingUntil = 0;
@@ -79,7 +81,7 @@ let woofShown = -1; // the last burst that got one
 const query = new URLSearchParams(location.search);
 const chatty = import.meta.env.DEV && query.get('chatty') === '1';
 
-interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
+interface Prepared { name: string; comeBubble: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
 const STATIC_WALK_OVERLAP = 0.98;
@@ -167,7 +169,7 @@ async function readPack(): Promise<Prepared | null> {
   }
   if (staticWalk(poses['walk'], bitmaps)) delete poses['walk'];
   const { reg, wag } = register(poses, bitmaps, first);
-  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
+  return { name: pack.manifest.pet, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
 }
 
 function applyPack(p: Prepared): void {
@@ -180,6 +182,7 @@ function applyPack(p: Prepared): void {
   wagOk = p.wag;
   widths = p.widths;
   lines = p.lines;
+  comeBubble = p.comeBubble;
   sayAt = nextSayAt(performance.now(), Math.random(), chatty);
   sizeImg();
 }
@@ -261,6 +264,8 @@ let samples: Sample[] = [];
 let petAt = -1e9;
 let clickTimer: ReturnType<typeof setTimeout> | undefined;
 let last = stateAt;
+let calling = false; // trotting to the pointer after "come here"
+let frontUntil = 0; // greeting the caller: the front view, if the pack has one
 let stay = false; // menu toggle: no wander targets, idle/sit/sleep only
 let menuCalls = 0;
 let greet: string | null = null; // new pet's name: barked as a greeting on landing
@@ -287,6 +292,7 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
   const now = performance.now();
   const prev = state;
   yawn = false;
+  calling = false;
   state = forced ?? resolveWalk(next(state, ev), stay, o.target !== undefined);
   stateAt = now;
   lifeUntil = 0;
@@ -401,13 +407,14 @@ function frame(now: number): void {
     } else if (rem < 1 && act) {
       actArrive(now);
     } else if (rem < 1) {
-      timeout('walk', now);
+      if (calling) greetCaller(now);
+      else timeout('walk', now);
     } else if (want !== dir) {
       dir = want;
       turnUntil = now + (calm ? 0 : TURN_MS);
       stopWalk(); // speeds up again from the end of the turn, no lurch
     } else {
-      const vMax = MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size) * (handoff === 'trotOff' || (act?.kind === 'hide' && act.phase === 'go') ? TROT_SPEEDUP : 1);
+      const vMax = MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size) * (handoff === 'trotOff' || calling || (act?.kind === 'hide' && act.phase === 'go') ? TROT_SPEEDUP : 1);
       const v0 = walkV;
       walkV = walkStep(v0, rem, vMax, dt);
       walkAcc = (walkV - v0) / dt / (WALK_ACCEL * vMax / MAX_SPEED);
@@ -472,7 +479,8 @@ function frame(now: number): void {
   const wagging = life && lifeKind === 'wag' && !calm && Math.floor((now - lifeStart) / WAG_FRAME_MS) % 2 === 1;
   const pose = poses[wagging ? 'bark' : name] ?? poses['idle']!;
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
-  const src = pose.srcs[i]!;
+  const front = state === 'sit' && now < frontUntil ? poses['turn']?.srcs[0] : undefined;
+  const src = front ?? pose.srcs[i]!;
   if (src !== shownSrc) { img.src = src; shownSrc = src; }
   const fw = shownW(src);
   if (img.style.width !== `${fw}px`) img.style.width = `${fw}px`; // a wider frame (the profile walk) stays centred on the pet
@@ -695,17 +703,29 @@ img.addEventListener('pointerup', finish);
 img.addEventListener('pointercancel', finish);
 img.addEventListener('lostpointercapture', finish);
 
+function come(pointerX: number | null): void {
+  if (alreadyHere(x, W, pointerX, window.innerWidth)) return greetCaller(performance.now());
+  setState('walk', { target: comeTarget(pointerX, W, window.innerWidth) });
+  calling = true;
+}
+// Arrived: face the caller, sit, a happy wiggle, a heart and a hello.
+function greetCaller(now: number): void {
+  setState('sit', { ms: GREET_MS });
+  frontUntil = now + GREET_MS;
+  if (!calm) { wg = { at: now, dur: CLICK_WIGGLE_MS, cycles: 2 }; heart(); }
+  say(comeBubble, GREET_MS);
+}
 function command(raw: string): void {
   const r = routeCommand(handoff, raw, queuedCmd);
   queuedCmd = r.queued;
   if (!r.now) return;
   const cmd = r.now;
   if (act?.kind === 'hide') return;
-  if (act?.kind === 'sniff') { queuedCmd = cmd; return; } // a voice command waits for the sniff to finish
+  if (act?.kind === 'sniff' || commandMustWait({ falling, dragging, turning: state === 'walk' && performance.now() < turnUntil })) { queuedCmd = cmd; return; } // waits for the sniff, the fall, the hand or the hop-turn to finish
   lastInteraction = performance.now();
   if (cmd === 'sit' || cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');
-  else if (cmd === 'come') setState('walk', { target: (window.innerWidth - W) / 2 });
+  else if (isCome(cmd)) come(comeX(cmd));
   else if (cmd === 'stay') {
     stay = true;
     if (state === 'walk') setState('idle');

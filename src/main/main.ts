@@ -17,6 +17,7 @@ import { shouldRegister, syncShortcut } from '../voice/listen';
 import { IPC } from './ipc';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
+import { comeCommand } from '../overlay/call';
 import { headCrop } from './head-crop';
 import { addPet, MAX_PETS, petList, pickWindow, removePet, routeReaction } from './pets';
 import { setupOnboarding } from './onboarding';
@@ -227,7 +228,11 @@ function run(cmd: string, from?: BrowserWindow): void {
     }
     sync();
   } else if (cmd === 'stay' || cmd === 'wander') for (const w of allWins()) w.webContents.send(IPC.command, cmd);
-  else (from && !from.isDestroyed() ? from : primary())?.webContents.send(IPC.command, cmd);
+  else {
+    const dest = from && !from.isDestroyed() ? from : primary();
+    // "Come here" goes to the pointer, in the coordinates of the window that owns the pet.
+    dest?.webContents.send(IPC.command, cmd === 'come' && dest ? comeCommand(screen.getCursorScreenPoint().x, dest.getBounds().x) : cmd);
+  }
 }
 
 /** A pet made in add mode: it joins the list and drops in. */
@@ -316,7 +321,7 @@ function startVoice(): void {
     open: (key, opts) => (fakeTranscript !== undefined ? fakeVoice(fakeTranscript, opts.onTranscript) : openVoice(loadSettings(), key, { ...opts, keywords: [displayName()] })),
     mic: micWin,
     ui: tell,
-    command: (c) => primary()?.webContents.send(IPC.command, c),
+    command: (c) => run(c),
     heard: (text) => { if (debugOn) primary()?.webContents.send(IPC.debug, { on: true, name: displayName(), heard: text }); },
   });
 }
