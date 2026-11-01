@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { panelRows, parseDebug, type DebugInfo } from './debug-panel';
 
-const info: DebugInfo = { ts: 1, gate: 'on', terminal: { found: true, text: 'FAIL a.test.ts' }, slack: null, call: false, decision: { action: 'sniff', reason: 'r', bubble: 'Found a bug!', source: 'spark+rule' }, sparkMs: 1234 };
+const info: DebugInfo = { ts: 1, gate: 'on', terminal: { found: true, text: 'FAIL a.test.ts' }, badge: null, call: false, decision: { action: 'sniff', reason: 'r', bubble: 'Found a bug!', source: 'spark+rule' }, sparkMs: 1234 };
 
 describe('parseDebug', () => {
   it('rejects junk and unknown gates, keeps valid messages', () => {

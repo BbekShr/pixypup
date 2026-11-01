@@ -53,7 +53,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
     inFlight = true;
     try {
       if (!allowed()) {
-        if (d.debug?.on()) d.debug.send({ ts: Date.now(), gate: gate(), terminal: { found: false }, slack: null, call: false, decision: null });
+        if (d.debug?.on()) d.debug.send({ ts: Date.now(), gate: gate(), terminal: { found: false }, badge: null, call: false, decision: null });
         return setHide(false, 'paused');
       }
       const { observation, debug } = await d.reader.tick();
@@ -94,7 +94,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
           ts: Date.now(),
           gate: 'on',
           terminal: { found: !!observation.terminalError, ...(box && bounds ? { box: { ...toOverlayPoint(box, bounds), w: box.w, h: box.h } } : {}), ...(observation.terminalError ? { text: observation.terminalError.text.slice(0, 80) } : {}) },
-          slack: badge?.label ?? null,
+          badge: badge?.label ?? null,
           call: decision?.action === 'hide',
           decision: decision ? { action: decision.action, reason: decision.reason, ...(bubble ? { bubble } : {}), source: keep?.source ?? source } : null,
           ...(sparkMs !== undefined ? { sparkMs } : {}),

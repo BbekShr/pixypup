@@ -18,7 +18,7 @@ if (new URLSearchParams(location.search).get('kind') === 'voice') {
   $('mac').textContent = 'macOS will ask once for the microphone.';
 } else {
   $('title').textContent = `Let ${name} notice things?`;
-  $('what').textContent = `${name} can notice a failing test, a Slack badge or a video call.`;
+  $('what').textContent = `${name} can notice a failing test, a new notification badge in your Dock or a video call.`;
   $('reads').textContent = `${name} reads only your front Terminal's text and the list of open windows. Nothing is saved; the error line is sent to Meta's model only to write the speech bubble.`;
 }
 $('yes').addEventListener('click', () => window.pixyScreen.answer(true));

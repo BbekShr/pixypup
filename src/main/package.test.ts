@@ -6,6 +6,7 @@ describe('electron-builder files', () => {
     const files: string[] = JSON.parse(readFileSync('package.json', 'utf8')).build.files;
     expect(files).toEqual(['dist/**/*', 'assets/pets/**/*', 'assets/placeholder/**/*', 'package.json']);
     for (const f of files) expect(f.startsWith('!') || !f.includes('photos')).toBe(true);
+    expect(files.some((f) => f.includes('demo'))).toBe(false);
     expect(files.some((f) => f === 'assets/**/*' || f === 'assets/**' || f === 'assets/photos' || f === '**/*')).toBe(false);
   });
   it('explains the microphone prompt', () => {
