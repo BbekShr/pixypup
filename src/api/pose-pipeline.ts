@@ -18,6 +18,7 @@ import { breedFacts, meetPet } from './personality.js';
 import { posesFor, styleFor } from './pose-prompts.js';
 import { defaultProfile } from './profile-defaults.js';
 import { largest, maskAt, segment } from './sam.js';
+import { sliceComponents } from './slice-components.js';
 import { isStaticSheet } from './static-sheet.js';
 
 export { validateManifest };
@@ -305,9 +306,13 @@ export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0:
   return runs.every((r) => Math.abs(r.x1 - r.x0 + 1 - median) <= 0.35 * median) ? runs : null;
 }
 
-/** Cut a keyed walk sheet into its n (default 4) frames, each trimmed to its own alpha rows. Throws on a bad sheet. */
+/** Cut a keyed sheet into its n (default 4) frames. By connected components, else by columns when bodies are merged. Throws on a bad sheet. */
 export async function sheetFrames(k: Keyed, n = WALK_FRAMES.length): Promise<KeyedFrame[]> {
   const { data, info } = await sharp(k.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const raw = (c: { data: Buffer; width: number; height: number }) =>
+    sharp(c.data, { raw: { width: c.width, height: c.height, channels: 4 } }).png().toBuffer();
+  const crops = sliceComponents(data, info.width, info.height, n);
+  if (crops) return Promise.all(crops.map(async (c) => ({ png: await raw(c) })));
   const runs = sliceSheet(data, info.width, info.height, n);
   if (!runs) throw new BadOutputError('bad sheet');
   return Promise.all(

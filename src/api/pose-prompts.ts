@@ -81,7 +81,8 @@ function turnSheet(p: MotionProfile): string {
     `View 1: front, facing the camera${wings}. View 2: front three-quarter view, facing right${wings}. ` +
     `View 3: right side profile, facing right${wings}. View 4: back three-quarter view${wings}. View 5: back view, facing away from the camera${wings}. ` +
     `Identical character in every view: same ${p.styleHints}, same markings, colours and proportions${quad ? ', same ears and collar' : ''}. ` +
-    'Evenly spaced in 5 equal columns with wide magenta gaps between the views.'
+    'Evenly spaced in 5 equal columns, each view filling at most 65% of its column: every part of the view (head, limbs, tail, wings) stays well inside the column, ' +
+    'with a wide empty magenta gutter between neighbouring views and no part of one view touching another.'
   );
 }
 
