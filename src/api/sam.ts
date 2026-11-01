@@ -70,8 +70,8 @@ export async function matchesFromEvents(events: AsyncIterable<StreamEvent>): Pro
 }
 
 /** Segment every instance of `prompt` (a short noun phrase) in an image URL or data URL. */
-export async function segment(client: MetaClient, prompt: string, imageUrl: string): Promise<SamMatch[]> {
-  return matchesFromEvents(client.postStream('/responses', samRequestBody(prompt, imageUrl)));
+export async function segment(client: MetaClient, prompt: string, imageUrl: string, signal?: AbortSignal): Promise<SamMatch[]> {
+  return matchesFromEvents(client.postStream('/responses', samRequestBody(prompt, imageUrl), signal));
 }
 
 /** Largest match by box area, or null. Good enough for "the dog in this photo". */

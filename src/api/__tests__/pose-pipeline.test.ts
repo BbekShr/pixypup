@@ -582,6 +582,17 @@ describe('generateSpritePack', () => {
     expect(await readFile(join(out, 'sit.png'))).toEqual(await readFile(join(out, 'idle_0.png')));
   });
 
+  it('rejects instead of hanging when SAM never answers', async () => {
+    const { client } = fakeClient();
+    (client as unknown as { postStream: unknown }).postStream = async function* (_p: string, _b: unknown, signal?: AbortSignal) {
+      await new Promise((_, rej) => signal?.addEventListener('abort', () => rej(new Error('aborted'))));
+      yield {};
+    };
+    await expect(
+      generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, timing: { timeoutMs: 50, backoffMs: 1 } }),
+    ).rejects.toThrow();
+  }, 3000);
+
   it('throws NoPetFoundError when SAM finds nothing', async () => {
     const { p } = await run({ sam: '' });
     await expect(p).rejects.toBeInstanceOf(NoPetFoundError);

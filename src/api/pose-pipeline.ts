@@ -95,8 +95,8 @@ export function normalizePhoto(photo: Buffer): Promise<Buffer> {
 }
 
 /** SAM-segment the pet, return a tight transparent PNG cutout. */
-export async function samCutout(client: MetaClient, png: Buffer, prompt: string): Promise<Buffer | null> {
-  const matches = await segment(client, prompt, dataUrl(png));
+export async function samCutout(client: MetaClient, png: Buffer, prompt: string, signal?: AbortSignal): Promise<Buffer | null> {
+  const matches = await segment(client, prompt, dataUrl(png), signal);
   const m = largest(matches);
   if (!m) return null;
   const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -424,7 +424,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const timeoutMs = o.timing?.timeoutMs ?? 60_000;
   const backoffMs = o.timing?.backoffMs ?? 1000;
   const photo = await normalizePhoto(o.photo);
-  const cutout = await samCutout(o.client, photo, o.species);
+  const cutout = await samCutout(o.client, photo, o.species, AbortSignal.timeout(timeoutMs));
   if (!cutout) throw new NoPetFoundError(o.species);
   emit({ stage: 'cutout', png: cutout });
 
