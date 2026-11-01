@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,13 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
   let runs: Runs = noRuns;
   // A typed key lives in memory until the first Meta call succeeds; only then is it stored. A bad key is never stored.
   let pendingKey: string | undefined;
+  // Set when a pet was just made: the overlay hand-off waits until the window has shrunk away, so the old pet leaves as this one lands.
+  let handoff: { x?: number } | null = null;
+  const sendHandoff = (): void => {
+    if (!handoff) return;
+    o.getOverlay()?.webContents.send(IPC.packChanged, handoff);
+    handoff = null;
+  };
 
   const ours = (e: IpcMainEvent | IpcMainInvokeEvent): boolean => !!win && !win.isDestroyed() && e.sender === win.webContents;
   const toWin = (channel: string, payload: unknown): void => {
@@ -80,6 +87,25 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
   ipcMain.on(IPC.obClose, (e) => {
     if (ours(e)) win?.close();
   });
+  // The reveal's exit: the window slides to the floor while the page scales and fades the card, then closes.
+  ipcMain.on(IPC.obShrink, (e, calm: unknown) => {
+    if (!ours(e) || !win) return;
+    const w = win;
+    const b = w.getBounds();
+    const floor = screen.getDisplayMatching(b).workArea;
+    const dy = floor.y + floor.height - (b.y + b.height);
+    const ms = calm === true ? 0 : 600;
+    const t0 = Date.now();
+    const tick = setInterval(() => {
+      const u = ms === 0 ? 1 : Math.min(1, (Date.now() - t0) / ms);
+      if (w.isDestroyed()) return clearInterval(tick);
+      w.setBounds({ ...b, y: Math.round(b.y + dy * u * u) });
+      if (u >= 1) {
+        clearInterval(tick);
+        w.close();
+      }
+    }, 16);
+  });
 
   ipcMain.handle(IPC.createPet, async (e, args: unknown): Promise<{ ok: true; name: string } | { ok: false; code: ErrorCode | 'busy' }> => {
     const a = checkCreateArgs(args);
@@ -95,6 +121,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
     const id = started.id;
     const photo = photoBuf;
     const settled: Promise<void>[] = [];
+    let idle: string | undefined; // the generated 3D idle frame, for the reveal
     const emit = (ev: PipelineEvent): void => {
       if (ev.stage !== 'cutout' && ev.stage !== 'pose') return;
       if (ev.stage === 'cutout' && !fake && pendingKey === key) {
@@ -106,13 +133,14 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
           console.warn('PixyPup: could not store the API key');
         }
       }
+      if (ev.stage === 'pose' && ev.name === 'idle_0') settled.push(thumb(ev.png, 260).then((u) => { idle = u; }));
       settled.push(thumb(ev.png, ev.stage === 'cutout' ? 220 : 112).then((url) => {
         const p: Progress = { kind: ev.stage as 'cutout' | 'pose', name: ev.stage === 'pose' ? ev.name : 'cutout', url };
         runs = record(runs, id, p);
         toWin(IPC.obProgress, p);
       }));
     };
-    let result: { ok: true; name: string } | { ok: false; code: ErrorCode };
+    let result: { ok: true; name: string; idle?: string } | { ok: false; code: ErrorCode };
     try {
       const slug = await pickSlug(slugify(a.name), o.getPetName(), (s) => stat(join(app.getPath('userData'), 'pets', s)).then(() => true, () => false));
       const outDir = join(app.getPath('userData'), 'pets', slug);
@@ -127,8 +155,9 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
       } catch {
         console.warn('PixyPup: pet created but settings could not be saved');
       }
-      o.getOverlay()?.webContents.send(IPC.packChanged);
-      result = { ok: true, name: a.name };
+      handoff = {};
+      if (!win || win.isDestroyed()) sendHandoff();
+      result = { ok: true, name: a.name, ...(idle ? { idle } : {}) };
     } catch (err) {
       if (errorCode(err) === 'bad-key') pendingKey = undefined;
       result = { ok: false, code: errorCode(err) };
@@ -159,8 +188,15 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
         webPreferences: { preload: join(here, '../preload/onboarding-preload.mjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
       });
       win.setAlwaysOnTop(true, 'floating');
+      win.on('close', () => {
+        if (handoff && win) {
+          const b = win.getBounds();
+          handoff.x = b.x + b.width / 2 - (o.getOverlay()?.getBounds().x ?? 0);
+        }
+      });
       win.on('closed', () => {
         win = null;
+        sendHandoff();
       });
       win.once('ready-to-show', () => win?.show());
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

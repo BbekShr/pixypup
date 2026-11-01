@@ -7,8 +7,8 @@ contextBridge.exposeInMainWorld('pixy', {
   showMenu: (): void => ipcRenderer.send(CH.showMenu),
   getStay: (): Promise<boolean> => ipcRenderer.invoke(CH.getStay),
   getPack: (): Promise<unknown> => ipcRenderer.invoke(CH.getPack),
-  onPackChanged: (cb: () => void): void => {
-    ipcRenderer.on(CH.packChanged, () => cb());
+  onPackChanged: (cb: (h: { x?: number }) => void): void => {
+    ipcRenderer.on(CH.packChanged, (_e, h: { x?: number }) => cb(h ?? {}));
   },
   onCommand: (cb: (cmd: string) => void): void => {
     ipcRenderer.on(CH.command, (_e, cmd: string) => cb(cmd));

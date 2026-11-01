@@ -1,5 +1,6 @@
 import '../ui/tokens.css';
 import './onboarding.css';
+import { copyFor, copyLines, ribbonFraction } from './birth';
 import sitUrl from '../../assets/pets/Pakkun/sit.png';
 import type { CreateResult, PhotoResult, Progress } from '../main/onboarding-preload';
 import type { Run } from '../main/run-state';
@@ -19,6 +20,7 @@ declare global {
       onProgress(cb: (p: Progress) => void): void;
       keep(): void;
       close(): void;
+      shrink(calm: boolean): void;
     };
   }
 }
@@ -41,7 +43,11 @@ const SAY: Record<Code | 'type' | 'size' | 'missing' | 'unreadable', string> = {
 let flow: Flow = initialFlow(false, new URLSearchParams(location.search).get('from') === 'menu');
 let species: 'dog' | 'cat' = 'dog';
 let petName = '';
-let cutoutUrl = '';
+let idleUrl = '';
+let hasCutout = false;
+let walkTimer = 0;
+const walk = new Map<string, string>(); // the stepping tile cycles whatever walk frames have arrived
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let photoMsg = '';
 let copyTimer = 0;
 let typedKey = ''; // renderer-side only until a bad key needs it back in the field
@@ -63,9 +69,7 @@ function render(): void {
   if (flow.step === 'key') $('key-msg').textContent = flow.error ? SAY[flow.error] : '';
   if (flow.step === 'failed') $('fail-msg').textContent = SAY[flow.error ?? 'generation-failed'];
   if (flow.step === 'done') {
-    $('done-title').textContent = `Say hi to ${petName}!`;
-    ($('done-img') as HTMLImageElement).src = cutoutUrl || sitUrl;
-    setTimeout(() => window.pixyOb.close(), 2600);
+    reveal();
   }
   // wait for the settle transition before moving focus so the browser doesn't scroll the stage
   setTimeout(() => document.querySelector<HTMLElement>(`[data-step="${flow.step}"] input, [data-step="${flow.step}"] .btn.primary`)?.focus({ preventScroll: true }), 60);
@@ -83,26 +87,68 @@ function usePhoto(r: PhotoResult): void {
   go({ t: 'photo' });
 }
 
+const birth = (): HTMLElement => $('birth');
+const poseTiles = (): number => document.querySelectorAll('.tile.full').length;
+function fill(): void {
+  $('ribbon-fill').style.width = `${ribbonFraction(hasCutout, poseTiles()) * 100}%`;
+}
+
 function setupMaking(): void {
-  cutoutUrl = '';
-  $('cutout').innerHTML = '<svg class="ico big"><use href="#paw" /></svg>';
+  hasCutout = false;
+  idleUrl = '';
+  clearInterval(walkTimer);
+  walkTimer = 0;
+  walk.clear();
+  document.body.classList.remove('leaving');
+  birth().className = 'birth';
+  for (const id of ['b-photo', 'b-cut', 'b-gen']) $(id).removeAttribute('src');
+  const photo = $('thumb').getAttribute('src'); // absent when the window was reopened mid-run
+  if (photo) { $('b-photo').setAttribute('src', photo); birth().classList.add('has'); }
   $('tiles').innerHTML = TILES.map(([k, label]) => `<div class="tile" data-tile="${k}"><div class="box"><svg class="ico"><use href="#paw" /></svg></div>${label}</div>`).join('');
   $('making-title').textContent = `Meeting ${petName}…`;
-  const lines = ['Learning {n}\'s ears…', 'Teaching {n} to sit…', 'Fluffing the fur…', 'Practising the tail wag…', 'Nearly ready to say hi…'].map((l) => l.replace('{n}', petName));
-  let i = 0;
+  fill();
+  const lines = copyLines(petName);
+  let tick = 0;
   const copy = $('copy');
   copy.textContent = lines[0]!;
   clearInterval(copyTimer);
   copyTimer = window.setInterval(() => {
+    const line = copyFor(lines, ++tick, ribbonFraction(hasCutout, poseTiles()));
+    if (line === copy.textContent) return;
     copy.classList.add('swap');
-    setTimeout(() => { copy.textContent = lines[++i % lines.length]!; copy.classList.remove('swap'); }, 180);
-  }, 4200);
+    setTimeout(() => { copy.textContent = line; copy.classList.remove('swap'); }, 260);
+  }, 4000);
+}
+
+// The cutout melts into the generated 3D idle, stars and hearts burst, then the window shrinks toward the floor where the pet lands.
+function reveal(): void {
+  clearInterval(walkTimer);
+  walkTimer = 0;
+  $('making-title').textContent = `Say hi to ${petName}!`;
+  $('copy').textContent = 'Right-click your pet any time.';
+  if (idleUrl) {
+    $('b-gen').setAttribute('src', idleUrl);
+    setTimeout(() => birth().classList.add('gen-on'), 350);
+  }
+  if (!calm) {
+    const glyphs = ['✦', '♥', '✧', '♥'];
+    $('sparks').innerHTML = Array.from({ length: 12 }, (_, i) => {
+      const a = (i / 12) * 2 * Math.PI + Math.random() * 0.4;
+      const d = 70 + Math.random() * 50;
+      return `<span style="--dx:${Math.round(Math.cos(a) * d)}px;--dy:${Math.round(Math.sin(a) * d * 0.8 - 20)}px;--rot:${Math.round(Math.random() * 120 - 60)}deg;color:${i % 2 ? 'var(--blush)' : 'var(--honey)'};animation-delay:${450 + i * 40}ms">${glyphs[i % 4]}</span>`;
+    }).join('');
+  }
+  setTimeout(() => {
+    document.body.classList.add('leaving');
+    window.pixyOb.shrink(calm);
+  }, calm ? 2200 : 3200);
 }
 
 function finished(r: CreateResult): void {
   const code = r.ok ? null : r.code;
   if (code === 'busy' || flow.step !== 'making') return; // busy: a run is already going, not a failure
   clearInterval(copyTimer);
+  if (r.ok && r.idle) idleUrl = r.idle;
   if (code !== 'bad-key') typedKey = '';
   else keyEl.value = typedKey; // a bad key comes back in the field so a typo is one edit away
   go(code === null ? { t: 'success' } : { t: 'fail', code });
@@ -119,19 +165,33 @@ async function make(): Promise<void> {
 
 function applyProgress(p: Progress): void {
   if (p.kind === 'cutout') {
-    cutoutUrl = p.url;
-    $('cutout').innerHTML = `<img alt="" src="${p.url}" />`;
+    hasCutout = true;
+    $('b-cut').setAttribute('src', p.url);
+    birth().classList.add('has', 'cut-on');
+    fill();
     return;
   }
-  const tile = document.querySelector(`[data-tile="${tileOf(p.name)}"]`);
-  if (!tile || tile.classList.contains('full')) return;
-  tile.classList.add('full');
+  const k = tileOf(p.name);
+  const tile = document.querySelector(`[data-tile="${k}"]`);
+  if (!tile) return;
+  if (p.name === 'idle_0') idleUrl = p.url;
+  if (k === 'walk') walk.set(p.name, p.url);
+  else if (tile.classList.contains('full')) return;
   const box = tile.querySelector('.box')!;
-  box.innerHTML = '';
-  const img = document.createElement('img');
-  img.alt = '';
-  img.src = p.url;
-  box.append(img);
+  let img = box.querySelector('img');
+  if (!img) {
+    img = document.createElement('img');
+    img.alt = '';
+    box.innerHTML = '';
+    box.append(img);
+    tile.classList.add('full');
+  }
+  img.src = k === 'walk' ? [...walk].sort()[0]![1] : p.url;
+  if (k === 'walk' && walk.size > 1 && !walkTimer && !calm) {
+    let f = 0;
+    walkTimer = window.setInterval(() => { img!.src = [...walk].sort()[++f % walk.size]![1]; }, 160);
+  }
+  fill();
 }
 window.pixyOb.onProgress(applyProgress);
 window.pixyOb.onFinished(finished);
