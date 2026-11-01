@@ -66,6 +66,9 @@ report the correction as a `FACT:` line.
 - Main process debugging: add `--inspect 9229` to the dev command and attach.
 - NOT available: `screencapture` of the real desktop (Screen Recording permission not granted to the agent's terminal); real OS click-through checks without computer use.
 
+- Animation changes: green gates say nothing about looks. Collect the distinct `#pup` srcs while `__pixyDebug.state === 'walk'`, composite 8 into a strip PNG in the page (canvas.toDataURL) and look at it; for motion, record ~120 frames of the pup (src + computed transform) at 30 fps and `ffmpeg` them into a GIF. `__pixyDebug.rig` exposes the dog/cat walk rig (kind, bellyY, centroids).
+- Real J1 runs from an isolated profile: the key is exported in the maintainer's login shell, so launch through `zsh -lic "PIXY_DEV_PHOTO=<photo> npx electron-vite dev --remoteDebuggingPort 9333 -- --user-data-dir=<scratch>/ud"` (no settings.json → onboarding), then on `/onboarding/` evaluate `await __ob.devPhoto(); await pixyOb.createPet('<name>','<species>')`. The pack lands in `<scratch>/ud/pets/<name>`; load it later with `PIXY_PACK_DIR`. Only with the maintainer's go-ahead to spend credits (2026-11-01: yes).
+
 A performance claim needs a measurement (a trace, a profile, timings over N runs), not a code read.
 A memory claim needs a snapshot diff. A visual claim needs a screenshot at every required viewport.
 
