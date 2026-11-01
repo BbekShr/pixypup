@@ -51,4 +51,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F21): overlay physics = `airStep` (ballistic, floor e=0.35, walls/ceiling e=0.5, slide 1200 px/s²), `releaseVelocity` (80 ms window), `dangle` (pendulum, soft limit past 14°, 2 substeps), `pivotShift`, `landSquash` in `src/overlay/motion.ts`; a 300 px drop bounces twice (~34 px, ~3 px) and rests in ~1.0-1.3 s; dangle peaks ~21° on a fast drag. Second overlay instance for verify: `npx electron-vite dev --remoteDebuggingPort 9333 -- --user-data-dir=<dir>` (vite falls back to 5174). Tests 453.
 
+- 2026-11-01 (F22): walk speed is integrated state `walkV` via `walkStep` (accel 350, decel 300 px/s², both × vMax/MAX_SPEED; reset by `stopWalk()` on walk start, turn, drag, landing); turns use `turnScale` over TURN_MS 380 (floor 0.12, sign in `flip`, magnitude in sx); cruise = MAX_SPEED × pet energy (Pakkun playful 1.4 → 126 px/s) × size. Tests 459.
+
 ## Clean audits (so discovery skips these grounds)

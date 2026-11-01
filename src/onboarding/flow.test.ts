@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, initialFlow, type FlowEvent } from './flow';
+import { advance, initialFlow, speciesIssue, type FlowEvent } from './flow';
 
 const run = (needsKey: boolean, evs: FlowEvent[], fromMenu = false) => evs.reduce(advance, initialFlow(needsKey, fromMenu));
 
@@ -34,5 +34,12 @@ describe('onboarding flow', () => {
     expect(run(true, [{ t: 'start' }, { t: 'photo' }, { t: 'named' }, { t: 'back' }, { t: 'back' }]).step).toBe('photo');
     expect(advance(initialFlow(false, false), { t: 'success' }).step).toBe('welcome');
     expect(advance(initialFlow(false, false), { t: 'fail', code: 'network' }).step).toBe('welcome');
+  });
+});
+
+describe('speciesIssue', () => {
+  it('accepts free text and explains the rest kindly', () => {
+    for (const ok of ['dog', ' husky ', 'monarch butterfly']) expect(speciesIssue(ok)).toBeNull();
+    for (const bad of ['', '   ', '<script>', 'x'.repeat(31)]) expect(speciesIssue(bad)).toMatch(/\S/);
   });
 });

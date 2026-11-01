@@ -33,3 +33,4 @@ Level: **L1** (target L1) since 2026-10-31.
 | 2026-11-01 | F10 | #20 | landed-clean | no | 1 CONFIRMED (asar bloat, found by editor) | no | 1 sonnet editor run; CEO review of art + evidence |
 | 2026-11-01 | F11 | #21 | landed-clean | no | 0 | no | 2 sonnet editor runs (2 roles); CEO review |
 | 2026-11-01 | F21 | (pending) | open | — | 3 CONFIRMED (CEO review: mirror-pivot jump, no ceiling, walk target from release x) + 1 runtime (dangle clamp); all fixed | no | 3 sonnet editor runs (1 role), 2 haiku release runs |
+| 2026-11-01 | F22 | (pending) | open | — | 1 CONFIRMED (CEO: double-signed mirror) fixed by CEO one-liner; 1 PLAUSIBLE runtime (interrupted look snaps) → F23 | no | 1 sonnet editor run, 1 haiku release run |

@@ -1,16 +1,19 @@
 import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
-import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
+import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx, type Handoff } from './handoff';
 import { behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, type Behavior } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
+import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } from './call';
+import { alphaPlane as alpha, cleanFrame } from './frames';
+import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkSpeed } from './motion';
-import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL } from './motion';
+import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
 
 declare global {
   interface Window {
@@ -46,11 +49,13 @@ const CELEBRATE_MS = 2600;
 const HINT_SHOW_MS = 11000;
 const MARK_MS = 2600;
 
-const TURN_MS = 120;
+const WAIT_FIDGET_MS = 10_000; // a held sit perks an ear this often
+const TURN_MS = 300; // a hop-turn: crouch, hop, land
+const TURN_HOP = 0.07; // of H
 type Fidget = 'look' | 'tilt' | 'sniff' | 'wag';
 const LIFE_MS: Record<Fidget, number> = { look: 1000, tilt: 1400, sniff: 1200, wag: 1000 };
 const WAG_FRAME_MS = 110;
-const STRIDE = 0.22; // of displayed (idle) width per walk frame: ~5-6 frames/s at walking speed
+const STRIDE = FALLBACK_STRIDE; // of displayed (idle) width per walk frame when the art can't be measured
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const img = document.getElementById('pup') as HTMLImageElement;
 const fx = document.getElementById('fx') as HTMLDivElement;
@@ -67,6 +72,9 @@ let footY = 1;
 let reg = new Map<string, number>(); // src -> natural px its head sits right of idle's
 let wagOk = false;
 let widths = new Map<string, number>(); // src -> natural width; the profile walk is drawn wider than idle
+let strideFrac = STRIDE; // of the idle width the body advances per walk frame, measured from the pack's art
+let bodyScale = { bounce: 1, pitch: 1 }; // the pack's own profile, scaling the body motion
+let comeBubble = 'Here!'; // what the pet says on arriving when called
 let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
 let sayAt = Infinity;
 let speakingUntil = 0;
@@ -74,11 +82,13 @@ let lastLine: string | null = null;
 let lineOnBark = false;
 let woofs = false; // this bark shows "Woof!" bubbles
 let woofShown = -1; // the last burst that got one
-const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('chatty') === '1';
+const query = new URLSearchParams(location.search);
+const chatty = import.meta.env.DEV && query.get('chatty') === '1';
 
-interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
+interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
+const STATIC_WALK_OVERLAP = 0.98;
 const WAG_OVERLAP = 0.85; // bark this close to idle (same stance, tail up) doubles as a tail wag
 
 /**
@@ -87,14 +97,21 @@ const WAG_OVERLAP = 0.85; // bark this close to idle (same stance, tail up) doub
  * drawn on its own canvas size (the profile walk) that pose's first frame, so its body stays centred.
  * Also whether the bark frame is close enough to idle to flick between them as a wag.
  */
+
+/** Belt and braces for packs main could not tell apart byte for byte: a walk that is the same silhouette throughout. */
+function staticWalk(walk: PoseSet | undefined, bitmaps: HTMLImageElement[]): boolean {
+  const frames = walk?.srcs.map((s) => bitmaps.find((b) => b.src === s));
+  const first = frames?.[0];
+  const a0 = first && alpha(first);
+  if (!frames || !first || !a0) return false;
+  return frames.every((f) => {
+    const a = f && f.naturalWidth === first.naturalWidth && f.naturalHeight === first.naturalHeight ? alpha(f) : null;
+    return !!a && overlap(a0, a, 4) >= STATIC_WALK_OVERLAP;
+  });
+}
+
 function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], idle: HTMLImageElement): { reg: Map<string, number>; wag: boolean } {
   const reg = new Map<string, number>();
-  const alpha = (i: HTMLImageElement): Uint8ClampedArray | null => {
-    const c = new OffscreenCanvas(i.naturalWidth, i.naturalHeight).getContext('2d', { willReadFrequently: true });
-    if (!c) return null;
-    c.drawImage(i, 0, 0);
-    return c.getImageData(0, 0, i.naturalWidth, i.naturalHeight).data.subarray(3);
-  };
   const head = (i: HTMLImageElement): number | null => {
     const a = alpha(i);
     const h = a && headX(a, i.naturalWidth, i.naturalHeight, 4);
@@ -105,7 +122,16 @@ function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], i
   const h0 = head(idle);
   if (h0 === null) return { reg, wag: false };
   for (const [name, p] of Object.entries(poses)) {
-    if (LYING.has(name)) continue;
+    if (name === 'turn') {
+      // Front-on frames: the head glides from the side view's place (idle's) to the centre, so it never pops across the swap.
+      p.srcs.slice(0, 2).forEach((src, k) => {
+        const b = bitmap(src);
+        const h = b && head(b);
+        if (b && h !== null && h !== undefined) reg.set(src, Math.max(-0.15 * b.naturalWidth, Math.min(0.15 * b.naturalWidth, h - (k === 0 ? 0 : 0.5) * h0)));
+      });
+      continue;
+    }
+    if (LYING.has(name)) continue; // lying poses are not lined up by their head
     const first = bitmap(p.srcs[0]);
     const ref = !first || sameSize(first) ? h0 : head(first);
     for (const src of p.srcs) {
@@ -119,6 +145,16 @@ function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], i
   const a0 = alpha(idle);
   const ab = bark && sameSize(bark) ? alpha(bark) : null;
   return { reg, wag: !!a0 && !!ab && overlap(a0, ab, 4) >= WAG_OVERLAP };
+}
+
+/** Walk-frame advance, as a share of the idle width, measured from the art so the feet don't slide; STRIDE when it can't be read. */
+function walkStride(walk: PoseSet | undefined, bitmaps: HTMLImageElement[], idle: HTMLImageElement): number {
+  const frames = walk?.srcs.map((s) => bitmaps.find((b) => b.src === s));
+  const f0 = frames?.[0];
+  if (!frames || !f0 || frames.some((f) => !f || f.naturalWidth !== f0.naturalWidth || f.naturalHeight !== f0.naturalHeight)) return STRIDE;
+  const alphas = frames.map((f) => alpha(f!));
+  if (alphas.some((a) => !a)) return STRIDE;
+  return strideFromFrames(alphas as Uint8ClampedArray[], f0.naturalWidth, f0.naturalHeight, 4, idle.naturalWidth) / idle.naturalWidth;
 }
 
 // Decodes everything before anything is swapped, so the old pet keeps its own poses until it has left.
@@ -138,20 +174,38 @@ async function readPack(): Promise<Prepared | null> {
   }));
   const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
+  for (const name of ['walk', 'turn']) { // old packs: a sliver of a neighbouring frame's tail on the edge
+    const p = poses[name];
+    if (!p) continue;
+    const cleaned = new Map<string, string>(); // one pass per distinct frame: a pose may repeat a src
+    await Promise.all([...new Set(p.srcs)].map(async (s) => {
+      const b = bitmaps.find((q) => q.src === s);
+      const c = b && (await cleanFrame(b).catch(() => null));
+      if (!b || !c) return;
+      bitmaps[bitmaps.indexOf(b)] = c;
+      cleaned.set(s, c.src);
+    }));
+    p.srcs = p.srcs.map((s) => cleaned.get(s) ?? s);
+  }
+  if (staticWalk(poses['walk'], bitmaps)) delete poses['walk'];
   const { reg, wag } = register(poses, bitmaps, first);
-  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
+  return { name: pack.manifest.pet, strideFrac: walkStride(poses['walk'], bitmaps, first), bodyScale: profileScale(pack.manifest.profile?.gait), comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
 }
 
 function applyPack(p: Prepared): void {
   nat = { w: p.nw, h: p.nh };
   layout();
   footY = p.footY;
+  for (const b of keep) if (b.src.startsWith('blob:')) URL.revokeObjectURL(b.src); // the cleaned frames of the pack being replaced
   keep.splice(0, keep.length, ...p.bitmaps); // the old pack's bitmaps are released only once the new poses are live
   poses = p.poses;
   reg = p.reg;
   wagOk = p.wag;
   widths = p.widths;
   lines = p.lines;
+  comeBubble = p.comeBubble;
+  strideFrac = p.strideFrac;
+  bodyScale = p.bodyScale;
   sayAt = nextSayAt(performance.now(), Math.random(), chatty);
   sizeImg();
 }
@@ -173,12 +227,21 @@ function sizeImg(): void {
 img.src = pupUrl;
 sizeImg();
 img.addEventListener('load', () => { if (!nat) { layout(); sizeImg(); } }, { once: true });
-void readPack().then((p) => p && applyPack(p)).catch(() => undefined);
+const enterDrop = query.get('enter') === 'drop' && !calm; // a pet just added: it falls in like the hand-off's new pet
+if (enterDrop) img.style.display = 'none'; // no placeholder landing: the drop waits for the pack
+const shown = (): void => { img.style.display = ''; };
+void readPack().then((p) => {
+  shown();
+  if (!p) return;
+  if (!enterDrop) return applyPack(p);
+  incoming = { pack: p, cx: undefined };
+  dropIn();
+}).catch(shown);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
 const floorY = (): number => window.innerHeight - footOffset(H, footY);
 let state: PetState = 'walk';
-let x = 100;
+let x = 100 + ([...(query.get('pet') ?? '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 600, 0)); // pets sharing the screen don't start on top of each other
 let lift = 0; // offset from the floor line (negative = above); only non-zero while dragged or falling
 let vy = 0;
 let vx = 0; // px/s, only while thrown or sliding
@@ -193,10 +256,16 @@ let y = floorY();
 let home = x;
 let target = x;
 let dir = 1; // where it is heading
-let facing = 1; // what is drawn (lags dir by the turn squash)
+let facing = 1; // the side drawn this frame (follows dir through a turn)
+let mir: Mirror = { from: -1, to: 1, at: -Infinity };
+let turnDir = 1; // dir when the last turn started: a look turn leaves it unchanged
+let turnH = 0; // hop height of the turn running
 let turnUntil = 0;
 let stateAt = performance.now();
-let walkAt = stateAt;
+let walkV = 0; // px/s
+let walkAcc = 0; // a / WALK_ACCEL
+let walkFrac = 0; // v / vMax
+const stopWalk = (): void => { walkV = 0; walkAcc = 0; walkFrac = 0; };
 let deadline: number | null = null;
 let lastInteraction = stateAt;
 let lifeAt = stateAt + 3000;
@@ -220,6 +289,10 @@ let samples: Sample[] = [];
 let petAt = -1e9;
 let clickTimer: ReturnType<typeof setTimeout> | undefined;
 let last = stateAt;
+let heldSit = false; // a commanded sit (menu or voice) is holding; any other state change releases it
+let waitAt = 0; // next "waiting" ear perk while held
+let calling = false; // trotting to the pointer after "come here"
+let frontUntil = 0; // greeting the caller: the front view, if the pack has one
 let stay = false; // menu toggle: no wander targets, idle/sit/sleep only
 let menuCalls = 0;
 let greet: string | null = null; // new pet's name: barked as a greeting on landing
@@ -246,6 +319,8 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
   const now = performance.now();
   const prev = state;
   yawn = false;
+  calling = false;
+  heldSit = false;
   state = forced ?? resolveWalk(next(state, ev), stay, o.target !== undefined);
   stateAt = now;
   lifeUntil = 0;
@@ -253,7 +328,7 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
   const dwell = o.ms ?? dwellMs(state, Math.random(), en());
   deadline = dwell === null ? null : now + dwell;
   if (state === 'walk') {
-    walkAt = now;
+    stopWalk();
     target = o.target ?? pickTarget(x, window.innerWidth - W, home, Math.random(), Math.random());
   }
   if (state !== prev) enter(prev);
@@ -261,9 +336,13 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
 
 // The energy model's pick; a nap starts with a yawn.
 function timeout(from: PetState, now: number): void {
+  const wasHeld = heldSit;
   const ev = onTimeout(from, Math.random(), now - lastInteraction, en());
   if (ev === 'sleep' && !calm) startYawn();
-  else setState(ev, ev === 'sit' ? { ms: 4000 } : {});
+  else {
+    setState(ev, ev === 'sit' ? { ms: 4000 } : {});
+    if (wasHeld && !calm) stretchAt = now; // gets up with a stretch, then wanders
+  }
 }
 
 function startYawn(): void {
@@ -326,7 +405,6 @@ function frame(now: number): void {
   last = now;
   const age = now - stateAt;
 
-  if (now >= turnUntil) facing = dir;
   if (queuedBehavior && !busyNow() && (!act || queuedBehavior.action === 'hide')) { const q = queuedBehavior; queuedBehavior = null; start(q); }
   if (queuedCmd && !act && !handoffBusy(handoff) && handoff !== 'greet') { const q = queuedCmd; queuedCmd = null; command(q); }
   if (act && act.until && now >= act.until) actTimeout(now);
@@ -338,7 +416,7 @@ function frame(now: number): void {
       falling = false;
       home = x;
       if (state === 'walk' && !act && !handoff) target = pickTarget(x, window.innerWidth - W, home, Math.random(), Math.random()); // not back toward the release side
-      walkAt = now;
+      stopWalk();
       if (greet) {
         const g = greet;
         greet = null;
@@ -361,13 +439,19 @@ function frame(now: number): void {
     } else if (rem < 1 && act) {
       actArrive(now);
     } else if (rem < 1) {
-      timeout('walk', now);
+      if (calling) greetCaller(now);
+      else timeout('walk', now);
     } else if (want !== dir) {
       dir = want;
-      turnUntil = now + TURN_MS;
-      walkAt = turnUntil; // speed ramps up from the end of the turn, no lurch
+      turnUntil = now + (calm ? 0 : TURN_MS);
+      stopWalk(); // speeds up again from the end of the turn, no lurch
     } else {
-      const step = Math.min(walkSpeed(now - walkAt, rem, MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size)) * (handoff === 'trotOff' || (act?.kind === 'hide' && act.phase === 'go') ? TROT_SPEEDUP : 1) * dt, rem);
+      const vMax = MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size) * gaitParams(gaitKind()).speed;
+      const v0 = walkV;
+      walkV = walkStep(v0, rem, vMax, dt);
+      walkAcc = (walkV - v0) / dt / (WALK_ACCEL * vMax / MAX_SPEED);
+      walkFrac = walkV / vMax;
+      const step = Math.min(walkV * dt, rem);
       x += dir * step;
       walked += step;
     }
@@ -380,8 +464,12 @@ function frame(now: number): void {
 
   // idle life every 3-6 s: look the other way, tilt the head, sniff the floor or wag (sitting: tilt only)
   const upright = state === 'idle' || state === 'sit';
+  if (heldSit && state === 'sit' && !act && now >= waitAt) {
+    waitAt = now + WAIT_FIDGET_MS + Math.random() * 2000;
+    if (!calm) perkAt = now;
+  }
   if (upright && !act && !yawn && now >= lifeAt) {
-    const kinds: Fidget[] = state === 'sit' ? ['tilt'] : ['look', 'tilt', 'sniff', ...(wagOk ? ['wag' as const] : [])];
+    const kinds: Fidget[] = state === 'sit' ? (heldSit ? ['tilt', 'look'] : ['tilt']) : ['look', 'tilt', 'sniff', ...(wagOk ? ['wag' as const] : [])];
     lifeKind = kinds[Math.floor(Math.random() * kinds.length)]!;
     lifeTilt = Math.random() < 0.5 ? -4 : 4;
     lifeStart = now;
@@ -395,6 +483,14 @@ function frame(now: number): void {
   }
   const life = upright && !act && now < lifeUntil;
   const turning = state === 'walk' && now < turnUntil;
+  const turnMs = calm ? 0 : TURN_MS;
+  const prev = mir;
+  const turnSrcs = calm ? null : usableTurn(poses['turn']?.srcs);
+  const lookAway = life && lifeKind === 'look' && !turnSrcs; // with a turnaround the look shows the front instead of mirroring away
+  mir = steer(mir, dir * (lookAway ? -1 : 1) as 1 | -1, now, turnMs); // look: the head turns away and back, any interruption turns too
+  if (mir !== prev && now - prev.at >= turnMs) { turnH = dir === turnDir || falling || dragging ? 0 : TURN_HOP * H; turnDir = dir; } // a reversal keeps its hop; a look crouches on the spot; no hop off thin air
+  let flip = Math.sign(mirrorScale(mir, now, turnMs));
+  facing = flip;
   y = floorY() + lift;
   if (dragging && !calm) {
     const d = Math.max(dt, 0.001);
@@ -409,7 +505,8 @@ function frame(now: number): void {
 
   const px = nat ? W / nat.w : 1; // display px per natural px
   const shownW = (src: string | undefined): number => (src && nat ? (widths.get(src) ?? nat.w) * px : W);
-  const stride = STRIDE * W;
+  const gp = gaitParams(gaitKind());
+  const stride = strideFrac * W * gp.reach;
   const walking = state === 'walk' && !turning && !falling;
   const blinking = state === 'idle' && !yawn && blinkShut(now - blinkAt0, BLINK_MS, blinkDouble) && !!poses['blink'];
   const name = blinking ? 'blink' : walking ? 'walk' : state === 'drag' || state === 'walk' || falling ? 'idle' : state;
@@ -421,7 +518,19 @@ function frame(now: number): void {
   const wagging = life && lifeKind === 'wag' && !calm && Math.floor((now - lifeStart) / WAG_FRAME_MS) % 2 === 1;
   const pose = poses[wagging ? 'bark' : name] ?? poses['idle']!;
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
-  const src = pose.srcs[i]!;
+  const front = state === 'sit' && now < frontUntil ? poses['turn']?.srcs[0] : undefined;
+  let src = front ?? pose.srcs[i]!;
+  if (turnSrcs && !front && (state === 'walk' || upright)) {
+    const u = mirrorProgress(mir, now, turnMs);
+    if (u < 1) { // turn through the front view; the mirror flips once, while the symmetric front is drawn
+      const tf = turnFrame(u);
+      if (tf.idx !== 2) src = turnSrcs[tf.idx]!;
+      flip = tf.mirrorFromFacing ? mir.from : mir.to;
+    } else if (life && lifeKind === 'look') {
+      const e = envelope(now - lifeStart, lifeUntil - lifeStart);
+      if (e > 0.15) src = turnSrcs[e > 0.85 ? TURN_FRONT : TURN_FRONT34]!; // the head turns to the viewer, then back
+    }
+  }
   if (src !== shownSrc) { img.src = src; shownSrc = src; }
   const fw = shownW(src);
   if (img.style.width !== `${fw}px`) img.style.width = `${fw}px`; // a wider frame (the profile walk) stays centred on the pet
@@ -433,11 +542,16 @@ function frame(now: number): void {
   let rot = 0;
   if (walking) {
     if (!calm) {
-      const g = gait(walked, stride, shownW(poses['walk']?.srcs[0]) !== W); // a wider walk frame is the drawn profile cycle
-      dy = g.dy;
-      sx = g.sx;
-      sy = g.sy;
-      rot = lean(dir) + g.rot * dir;
+      const drawn = !!poses['walk']; // a walk that survived the static-frame test is a drawn cycle, whatever its canvas width
+      if (drawn) {
+        const b = walkBody(walked / (stride * pose.srcs.length), H, gp, bodyScale);
+        dy = b.dy; sx = b.sx; sy = b.sy;
+        rot = lean(dir, walkFrac, walkAcc) - b.rot * dir;
+      } else {
+        const g = boundGait(walked, stride, H);
+        dy = g.dy; sx = g.sx; sy = g.sy;
+        rot = lean(dir, walkFrac, walkAcc) + g.rot * dir;
+      }
     }
   } else if (upright) {
     const b = breathe(now, 0.3, 0.02);
@@ -451,7 +565,6 @@ function frame(now: number): void {
         if (lifeKind === 'tilt') rot += lifeTilt * e;
         else if (lifeKind === 'sniff') { rot += 5 * e * facing; dy = -1.5 * e * Math.abs(Math.sin(t / 70)); }
         else if (lifeKind === 'wag') rot += 1.2 * e * Math.sin((Math.PI * t) / WAG_FRAME_MS);
-        else if (t < TURN_MS || lifeUntil - now < TURN_MS) { sx *= 1.06; sy *= 0.92; } // look: squash through each turn
       }
     }
     if (act?.kind === 'sniff' && act.phase === 'sniff' && !calm) {
@@ -477,7 +590,11 @@ function frame(now: number): void {
   } else if (state === 'roll' && !calm) {
     rot = rollAngle(age);
   }
-  if (turning) { sx = 1.06; sy = 0.92; }
+  if (turning) { sx = 1; sy = 1; }
+  const hp = hopTurn(mirrorProgress(mir, now, turnMs), turnH);
+  dy += hp.dy;
+  sx *= hp.sx;
+  sy *= hp.sy;
   if (!calm) {
     const ok = hovering && microOk();
     tilt += ((ok ? HOVER_TILT_DEG * hoverSide : 0) - tilt) * Math.min(1, dt * 12);
@@ -491,7 +608,6 @@ function frame(now: number): void {
   if (now - landAt < LAND_SQUASH_MS) { const k = landSquash(now - landAt, landV); sy *= k; sx *= 1 + (1 - k) / 2; }
   const swing = dang.angle ? -dang.angle : 0;
   if (dang.angle) { rot += swing; sy *= 1.03; }
-  const flip = facing * (life && lifeKind === 'look' ? -1 : 1);
   dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
@@ -570,6 +686,7 @@ img.addEventListener('contextmenu', (e) => {
 img.addEventListener('pointerdown', (e) => {
   if (dragging || handoffBusy(handoff) || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
   dragging = true;
+  stopWalk();
   hovering = false;
   if (act && !(act.kind === 'hide' && (act.phase === 'go' || act.phase === 'away'))) act = null; // hiding survives a poke; anything else yields
   falling = false;
@@ -640,21 +757,43 @@ img.addEventListener('pointerup', finish);
 img.addEventListener('pointercancel', finish);
 img.addEventListener('lostpointercapture', finish);
 
+/** Which way of moving the pet's context calls for: a sneak up on a sniff, a trot when called or leaving. */
+const gaitKind = (): GaitKind => (act?.kind === 'sniff' && act.phase === 'run' ? 'sniff' : handoff === 'trotOff' || calling || (act?.kind === 'hide' && act.phase === 'go') ? 'trot' : 'walk');
+
+function come(pointerX: number | null): void {
+  if (alreadyHere(x, W, pointerX, window.innerWidth)) return greetCaller(performance.now());
+  setState('walk', { target: comeTarget(pointerX, W, window.innerWidth) });
+  calling = true;
+}
+// Arrived: face the caller, sit, a happy wiggle, a heart and a hello.
+function greetCaller(now: number): void {
+  setState('sit', { ms: GREET_MS });
+  frontUntil = now + GREET_MS;
+  if (!calm) { wg = { at: now, dur: CLICK_WIGGLE_MS, cycles: 2 }; heart(); }
+  say(comeBubble, GREET_MS);
+}
 function command(raw: string): void {
   const r = routeCommand(handoff, raw, queuedCmd);
   queuedCmd = r.queued;
   if (!r.now) return;
   const cmd = r.now;
   if (act?.kind === 'hide') return;
-  if (act?.kind === 'sniff') { queuedCmd = cmd; return; } // a voice command waits for the sniff to finish
+  if (act?.kind === 'sniff' || commandMustWait({ falling, dragging, turning: state === 'walk' && performance.now() < turnUntil })) { queuedCmd = cmd; return; } // waits for the sniff, the fall, the hand or the hop-turn to finish
   lastInteraction = performance.now();
-  if (cmd === 'sit' || cmd === 'roll' || cmd === 'bark') setState(cmd);
+  if (cmd === 'sit') {
+    setState('sit', { ms: sitHoldMs(en(), stay) });
+    heldSit = true;
+    waitAt = performance.now() + WAIT_FIDGET_MS;
+  } else if (cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');
-  else if (cmd === 'come') setState('walk', { target: (window.innerWidth - W) / 2 });
+  else if (isCome(cmd)) come(comeX(cmd));
   else if (cmd === 'stay') {
     stay = true;
     if (state === 'walk') setState('idle');
-  } else if (cmd === 'wander') stay = false;
+  } else if (cmd === 'wander') {
+    stay = false;
+    if (heldSit) setState('idle'); // the hold had no timeout; this releases it
+  }
 }
 window.pixy.onCommand(command);
 
@@ -725,7 +864,7 @@ function onBehavior(raw: unknown): void {
 }
 
 function face(toward: number): void {
-  dir = facing = toward >= 0 ? 1 : -1;
+  dir = toward >= 0 ? 1 : -1;
   turnUntil = 0;
 }
 

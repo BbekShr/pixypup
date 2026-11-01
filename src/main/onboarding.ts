@@ -9,7 +9,8 @@ import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
 import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, slugify, type ErrorCode } from './pet-input';
 import { loadPack } from './pack';
-import { factViews, finishRun, noRuns, record, recordInfo, sourceFor, startRun, type Progress, type Runs } from './run-state';
+import { takenSlug } from './pets';
+import { factViews, finishRun, noRuns, record, recordFailed, recordInfo, sourceFor, startRun, walkFailed, type Progress, type Runs } from './run-state';
 import { getApiKey, setApiKey } from './secrets';
 import { loadSettings, saveSettings } from './settings';
 
@@ -20,7 +21,7 @@ const fast = process.env['PIXY_FAKE_FAST'] === '1';
 
 const thumb = async (png: Buffer, h: number): Promise<string> => dataUrl(await sharp(png).resize({ height: h, withoutEnlargement: true }).png().toBuffer());
 
-export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onSettingsChanged: () => void; getPetName: () => string; getHideInShares: () => boolean; beforeReveal: () => void }): { open(fromMenu: boolean): void; applyProtection(): void } {
+export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; addPet: (slug: string) => void; getPets: () => string[]; onSettingsChanged: () => void; getPetName: () => string; getHideInShares: () => boolean; beforeReveal: () => void }): { open(fromMenu: boolean, add?: boolean): void; applyProtection(): void } {
   let win: BrowserWindow | null = null;
   let photoBuf: Buffer | null = null; // read once at pick time; the page never names a path for create-pet
   let runs: Runs = noRuns;
@@ -29,6 +30,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
   // Set when a pet was just made: the overlay hand-off waits until the window has shrunk away, so the old pet leaves as this one lands.
   let handoff: { x?: number } | null = null;
   let handoffTimer: NodeJS.Timeout | undefined;
+  let adding = false; // opened to add a pet next to the others, not to replace the first
+  let pendingAdd: string | null = null;
   const centreX = (): number | undefined => {
     if (!win || win.isDestroyed()) return undefined;
     const b = win.getBounds();
@@ -38,7 +41,10 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
     clearTimeout(handoffTimer);
     if (!handoff) return;
     o.beforeReveal(); // a snoozed pet would hide the new one
-    o.getOverlay()?.webContents.send(IPC.packChanged, handoff);
+    if (pendingAdd) {
+      o.addPet(pendingAdd);
+      pendingAdd = null;
+    } else o.getOverlay()?.webContents.send(IPC.packChanged, handoff);
     handoff = null;
   };
 
@@ -69,7 +75,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
   ipcMain.handle(IPC.obState, (e) => {
     if (!ours(e)) return false;
     const c = runs.current;
-    return { needsKey: apiKey() === undefined, running: c && { ...c, facts: c.facts && factViews(c.facts) } };
+    return { needsKey: apiKey() === undefined, running: c && { ...c, facts: c.facts && factViews(c.facts), walkFailed: walkFailed(c) } };
   });
   ipcMain.on(IPC.obOpenSource, (e, index: unknown) => {
     const url = ours(e) ? sourceFor(runs, index) : null;
@@ -146,6 +152,11 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
         runs = recordInfo(runs, id, { facts: ev.facts });
         if (runs.current?.id === id) toWin(IPC.obFacts, factViews(runs.current.facts ?? []));
       }
+      if (ev.stage === 'pose-failed') {
+        const had = walkFailed(runs.current);
+        runs = recordFailed(runs, id, ev.name);
+        if (!had && walkFailed(runs.current) && runs.current?.id === id) toWin(IPC.obStepsFailed, null);
+      }
       if (ev.stage !== 'cutout' && ev.stage !== 'pose') return;
       if (ev.stage === 'cutout' && !fake && pendingKey === key) {
         // The first Meta call worked, so the key is real: now it may be stored.
@@ -165,7 +176,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
     };
     let result: { ok: true; name: string; idle?: string } | { ok: false; code: ErrorCode };
     try {
-      const slug = await pickSlug(slugify(a.name), o.getPetName(), (s) => stat(join(app.getPath('userData'), 'pets', s)).then(() => true, () => false));
+      const slug = await pickSlug(slugify(a.name), adding ? '' : o.getPetName(), // adding never overwrites a pet that is already here
+         (s) => takenSlug(o.getPets(), s) ? Promise.resolve(true) : stat(join(app.getPath('userData'), 'pets', s)).then(() => true, () => false));
       const outDir = join(app.getPath('userData'), 'pets', slug);
       if (fake) await fakeCreate({ srcDir: join(app.getAppPath(), 'assets/pets/Pakkun'), outDir, name: a.name, species: a.species, fast, emit });
       else await generateSpritePack({ client: openClient('create-pet', loadSettings(), key), photo, petName: a.name, species: a.species, outDir, onProgress: emit });
@@ -173,7 +185,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
       if (!(await loadPack(outDir))) throw new Error('written pack does not load');
       // The pack exists: from here the outcome is ok, whatever settings or the overlay do (a "failure" would invite a paid retry).
       try {
-        saveSettings({ petName: slug, onboarded: true });
+        if (adding) pendingAdd = slug;
+        saveSettings(adding ? { onboarded: true } : { petName: slug, onboarded: true });
         o.onSettingsChanged();
       } catch {
         console.warn('PixyPup: pet created but settings could not be saved');
@@ -198,12 +211,13 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
   });
 
   return {
-    open(fromMenu) {
+    open(fromMenu, add = false) {
       if (win && !win.isDestroyed()) {
         win.show();
         return;
       }
       if (!runs.current) photoBuf = null;
+      adding = add;
       win = new BrowserWindow({
         width: 480,
         height: 560,
@@ -229,7 +243,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; onS
       win.once('ready-to-show', () => win?.show());
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       win.webContents.on('will-navigate', (ev) => ev.preventDefault());
-      const q = fromMenu ? '?from=menu' : '';
+      const q = fromMenu ? `?from=menu${add ? '&mode=add' : ''}` : '';
       const devUrl = process.env['ELECTRON_RENDERER_URL'];
       if (devUrl) void win.loadURL(`${devUrl}/onboarding/index.html${q}`);
       else void win.loadFile(join(here, '../renderer/onboarding/index.html'), { search: q });
