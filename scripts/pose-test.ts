@@ -14,6 +14,7 @@ import sharp from 'sharp';
 import { clientFromEnv } from '../src/api/meta-client.js';
 import { editImage } from '../src/api/muse-image.js';
 import { chromaKey, dataUrl, MAGENTA, normalizePhoto, POSES, readPhoto, samCutout, STYLE } from '../src/api/pose-pipeline.js';
+import { breedFacts, meetPet } from '../src/api/personality.js';
 import { segment } from '../src/api/sam.js';
 
 const OUT = 'out/pose-test';
@@ -73,6 +74,13 @@ async function main(): Promise<void> {
     } catch (err) {
       log(`- ${name}: FAILED ${(err as Error).message}`);
     }
+  }
+
+  const meet = await meetPet(client, cutout, 'Pet', (values.species ?? 'dog') as 'dog' | 'cat');
+  log(`- Meet your pet: ${meet ? JSON.stringify(meet) : 'FAILED (null)'}`);
+  if (meet) {
+    const facts = await breedFacts(client, meet.breed, (values.species ?? 'dog') as 'dog' | 'cat');
+    log(`- Breed facts: ${facts ? JSON.stringify(facts) : 'FAILED (null)'}`);
   }
 
   if (values.terminal) {

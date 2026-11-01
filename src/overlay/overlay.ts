@@ -2,6 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
+import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { DISPLAY_H, displayWidth, footOffset } from './layout';
 import { BLINK_MS, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
@@ -34,8 +35,15 @@ let poses: Record<string, PoseSet> = { idle: { srcs: [pupUrl], fps: 1 } };
 let W = 120;
 let H = 120;
 let footY = 1;
+// TODO(F16): personality.energy is stored but unused; the Energy setting should default from it.
+let lines: string[] = []; // the pet's own catchphrases (model text: textContent only)
+let sayAt = Infinity;
+let speakingUntil = 0;
+let lastLine: string | null = null;
+let lineOnBark = false;
+const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('chatty') === '1';
 
-interface Prepared { name: string; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; w: number; h: number; footY: number }
+interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; w: number; h: number; footY: number }
 
 // Decodes everything before anything is swapped, so the old pet keeps its own poses until it has left.
 async function readPack(): Promise<Prepared | null> {
@@ -54,7 +62,7 @@ async function readPack(): Promise<Prepared | null> {
   }));
   const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
-  return { name: pack.manifest.pet, poses, bitmaps, w: displayWidth(first.naturalWidth, first.naturalHeight), h: DISPLAY_H, footY: pack.manifest.poses['idle']?.footY ?? 1 };
+  return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, w: displayWidth(first.naturalWidth, first.naturalHeight), h: DISPLAY_H, footY: pack.manifest.poses['idle']?.footY ?? 1 };
 }
 
 function applyPack(p: Prepared): void {
@@ -63,6 +71,8 @@ function applyPack(p: Prepared): void {
   footY = p.footY;
   keep.splice(0, keep.length, ...p.bitmaps); // the old pack's bitmaps are released only once the new poses are live
   poses = p.poses;
+  lines = p.lines;
+  sayAt = nextSayAt(performance.now(), Math.random(), chatty);
   sizeImg();
 }
 
@@ -151,7 +161,8 @@ function enter(prev: PetState): void {
       );
     }
   }
-  if (state === 'bark' && !greet) {
+  if (state === 'bark' && !greet && quiet(performance.now(), speakingUntil)) {
+    if (lineOnBark && speakLine()) return;
     const b = document.createElement('div');
     b.textContent = 'Woof!';
     b.style.cssText = 'position:absolute;left:0;top:0;font:700 14px sans-serif;background:#fff;color:#222;padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none';
@@ -206,6 +217,8 @@ function frame(now: number): void {
     const ev = onTimeout(state, Math.random(), now - lastInteraction);
     setState(ev, ev === 'sit' ? { ms: 4000 } : {});
   }
+
+  if (now >= sayAt && canSpeak(state, (handoff !== null && handoff !== 'wander') ||dragging || falling || now < speakingUntil || greet !== null) && speakLine()) sayAt = nextSayAt(now, Math.random(), chatty);
 
   // idle life: look around or tilt the head every 3-6 s
   if (state === 'idle' && now >= lifeAt) {
@@ -303,7 +316,9 @@ function finish(e: PointerEvent): void {
   if (img.hasPointerCapture(e.pointerId)) img.releasePointerCapture(e.pointerId);
   const click = e.type === 'pointerup' && isClick(Math.hypot(e.clientX - downX, e.clientY - downY), performance.now() - downAt);
   home = x;
+  lineOnBark = click && clickSays(lines.length > 0, Math.random());
   setState(click ? 'click' : 'dragEnd', {}, release(preDrag, click, stay));
+  lineOnBark = false;
   if (lift < 0) { falling = true; vy = 0; }
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
   if (!img.matches(':hover')) window.pixy.setClickThrough(true);
@@ -373,14 +388,23 @@ function land(name: string): void {
     if (r.now) command(r.now);
   }, 3600);
 }
-function sayHi(name: string): void {
+function speakLine(): boolean {
+  const l = pickLine(lines, lastLine, Math.random());
+  if (!l) return false;
+  lastLine = l;
+  say(l, LINE_MS);
+  return true;
+}
+const sayHi = (name: string): void => say(`Hi, I'm ${name}!`, 3600);
+function say(text: string, ms: number): void {
   const b = document.createElement('div');
   b.className = 'hi';
-  b.textContent = `Hi, I'm ${name}!`;
+  b.textContent = text;
+  speakingUntil = performance.now() + ms;
   fx.append(b);
   b.animate(
     [{ opacity: 0, transform: 'translate(-50%,-100%) scale(.6)' }, { opacity: 1, transform: 'translate(-50%,-100%) scale(1)', offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-8px)' }],
-    { duration: 3600, fill: 'backwards', easing: 'cubic-bezier(.34,1.56,.64,1)' },
+    { duration: ms, fill: 'backwards', easing: 'cubic-bezier(.34,1.56,.64,1)' },
   ).onfinish = () => b.remove();
 }
 window.pixy.onPackChanged((h) => {

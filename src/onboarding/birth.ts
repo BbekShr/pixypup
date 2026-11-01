@@ -12,3 +12,17 @@ export function copyFor(lines: string[], tick: number, fraction: number): string
   const last = lines[lines.length - 1]!;
   return fraction >= 0.75 ? last : lines[tick % (lines.length - 1)]!;
 }
+
+export interface Copy { text: string; fact?: number }
+
+/**
+ * With facts in hand the rotation alternates the pet's own voice with "Did you know?" cards;
+ * the final "almost ready" line still waits for the ribbon. `fact` is the index the source link refers to.
+ */
+export function nextCopy(lines: string[], voice: string[], facts: { text: string }[], tick: number, fraction: number): Copy {
+  if (fraction >= 0.75 || facts.length === 0) return { text: copyFor([...lines.slice(0, -1), ...voice, lines[lines.length - 1]!], tick, fraction) };
+  const k = Math.floor(tick / 2);
+  if (tick % 2 === 1) return { text: `Did you know? ${facts[k % facts.length]!.text}`, fact: k % facts.length };
+  const pool = [...lines.slice(0, -1), ...voice];
+  return { text: pool[k % pool.length]! };
+}

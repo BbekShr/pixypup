@@ -9,10 +9,11 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
-import type { SpriteManifest } from '../../contracts/types.js';
+import type { PetFact, Personality, SpriteManifest } from '../../contracts/types.js';
 import { validateManifest } from './manifest.js';
 import { editImage } from './muse-image.js';
 import { MetaApiError, type MetaClient } from './meta-client.js';
+import { breedFacts, meetPet } from './personality.js';
 import { largest, maskAt, segment } from './sam.js';
 
 export { validateManifest };
@@ -64,6 +65,8 @@ export type PipelineEvent =
   | { stage: 'cutout'; png: Buffer }
   | { stage: 'pose'; name: string; png: Buffer; index: number; total: number; fallback?: boolean }
   | { stage: 'pose-failed'; name: string; error: string }
+  | { stage: 'personality'; personality: Personality }
+  | { stage: 'facts'; facts: PetFact[] }
   | { stage: 'done'; manifest: SpriteManifest; dir: string };
 
 export interface PackOptions {
@@ -74,7 +77,7 @@ export interface PackOptions {
   outDir: string;
   onProgress?: (e: PipelineEvent) => void;
   /** Per-pose request timeout and retry back-off (x3 after HTTP 429); tests shrink these. */
-  timing?: { timeoutMs?: number; backoffMs?: number };
+  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number };
 }
 
 export class NoPetFoundError extends Error {
@@ -361,6 +364,24 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   if (!cutout) throw new NoPetFoundError(o.species);
   emit({ stage: 'cutout', png: cutout });
 
+  // "Meet your pet" runs beside the poses and never fails the pack: whatever arrived by the end goes in the manifest.
+  const sparkMs = o.timing?.sparkMs ?? 30_000;
+  let personality: Personality | undefined;
+  let facts: PetFact[] | undefined;
+  const spark = new AbortController();
+  const signal = () => AbortSignal.any([spark.signal, AbortSignal.timeout(sparkMs)]);
+  const meeting = (async () => {
+    const p = await meetPet(o.client, cutout, o.petName, o.species, signal());
+    if (!p || spark.signal.aborted) return;
+    personality = p;
+    emit({ stage: 'personality', personality: p });
+    const f = await breedFacts(o.client, p.breed, o.species, signal());
+    if (!f || spark.signal.aborted) return;
+    facts = f;
+    emit({ stage: 'facts', facts: f });
+  })().catch(() => undefined);
+
+  const keyed = await (async () => {
   const cutoutOnMagenta = dataUrl(await sharp(cutout).flatten({ background: MAGENTA }).png().toBuffer());
 
   const attempt = async <T>(prompt: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>) => {
@@ -458,7 +479,15 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       }),
     ]),
   ]);
+  return keyed;
+  })().catch((err) => {
+    spark.abort(); // a failed pack must not leave Spark running and billing
+    throw err;
+  });
 
+  // Spark gets a short grace after the poses; whatever arrived by then goes in the manifest.
+  await Promise.race([meeting, new Promise((r) => setTimeout(r, o.timing?.sparkGraceMs ?? 2000).unref())]);
+  spark.abort();
   const { frames, footY } = await layoutFrames(keyed, 'idle_0');
   const pose = (frames: string[], fps: number) => ({ frames, fps, footY });
   const manifest: SpriteManifest = {
@@ -473,6 +502,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       roll: pose(['roll.png'], 2),
       blink: pose(['idle_blink.png'], 1),
     },
+    ...(personality ? { personality: { ...personality, ...(facts ? { facts } : {}) } } : {}),
   };
   validateManifest(manifest);
   const files: Record<string, Buffer | string> = { 'sprite-manifest.json': JSON.stringify(manifest, null, 2) };

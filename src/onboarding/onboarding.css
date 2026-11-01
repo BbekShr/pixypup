@@ -101,7 +101,18 @@ img.layer:not([src]) { display: none; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(var(--rot)); }
 }
 
-.copy { min-height: 22px; transition: opacity 260ms var(--settle), transform 260ms var(--settle); }
+.meet { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; max-width: 360px; box-sizing: border-box; height: 76px; padding: 8px 12px; justify-content: center; border-radius: 16px; background: rgba(255, 255, 255, .55); box-shadow: 0 0 0 1.5px rgba(246, 199, 107, .6) inset; opacity: 0; transform: translateY(6px) scale(.97); transition: opacity 600ms var(--settle), transform 600ms var(--pop); flex: none; }
+.meet.on { opacity: 1; transform: none; }
+.meet > * { flex: none; }
+.meet-hi { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.meet-breed { font-size: 14px; font-weight: 800; line-height: 1.2; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.traits { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; max-height: 42px; overflow: hidden; }
+.traits span { font-size: 12px; font-weight: 700; padding: 1px 10px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: var(--pill); background: var(--blush); }
+.traits span:nth-child(2) { background: var(--honey); }
+.traits span:nth-child(3) { background: var(--sky); }
+.copy { min-height: 40px; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; column-gap: 6px; transition: opacity 260ms var(--settle), transform 260ms var(--settle); }
+.copy .src { font-size: 11px; opacity: .85; }
+.copy .src[hidden] { display: none; }
 .copy.swap { opacity: 0; transform: translateY(4px); }
 body[data-step="done"] .copy { transition: none; }
 
@@ -125,5 +136,6 @@ body.leaving .card { transform: scale(.14); transform-origin: 50% 100%; opacity:
 
 @media (prefers-reduced-motion: reduce) {
   .nest, .pet, .tile .box, .bob, .birth .paw { animation: none !important; }
+  .meet { transition-duration: 1ms !important; transform: none; }
   .ribbon i, .layer { transition-duration: 1ms !important; }
 }

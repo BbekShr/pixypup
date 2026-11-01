@@ -1,15 +1,15 @@
 import '../ui/tokens.css';
 import './onboarding.css';
-import { copyFor, copyLines, ribbonFraction } from './birth';
+import { copyLines, nextCopy, ribbonFraction } from './birth';
 import sitUrl from '../../assets/pets/Pakkun/sit.png';
-import type { CreateResult, PhotoResult, Progress } from '../main/onboarding-preload';
+import type { CreateResult, FactView, Personality, PhotoResult, Progress } from '../main/onboarding-preload';
 import type { Run } from '../main/run-state';
 import { advance, initialFlow, type Code, type Flow, type FlowEvent } from './flow';
 
 declare global {
   interface Window {
     pixyOb: {
-      state(): Promise<{ needsKey: boolean; running: Run | null }>;
+      state(): Promise<{ needsKey: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[] }) | null }>;
       onFinished(cb: (r: CreateResult) => void): void;
       pickPhoto(): Promise<PhotoResult>;
       dropPhoto(file: File): Promise<PhotoResult>;
@@ -18,6 +18,9 @@ declare global {
       openKeyPage(): void;
       createPet(name: string, species: 'dog' | 'cat'): Promise<CreateResult>;
       onProgress(cb: (p: Progress) => void): void;
+      onPersonality(cb: (p: Personality) => void): void;
+      onFacts(cb: (f: FactView[]) => void): void;
+      openSource(index: number): void;
       keep(): void;
       close(): void;
       shrink(calm: boolean): void;
@@ -50,6 +53,10 @@ const walk = new Map<string, string>(); // the stepping tile cycles whatever wal
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let photoMsg = '';
 let copyTimer = 0;
+let swapTimer = 0; // a queued swap must not overwrite the reveal subtitle
+let personality: Personality | null = null;
+let facts: FactView[] = [];
+let tick = 0;
 let typedKey = ''; // renderer-side only until a bad key needs it back in the field
 
 const nameEl = $<HTMLInputElement>('name');
@@ -107,25 +114,45 @@ function setupMaking(): void {
   $('tiles').innerHTML = TILES.map(([k, label]) => `<div class="tile" data-tile="${k}"><div class="box"><svg class="ico"><use href="#paw" /></svg></div>${label}</div>`).join('');
   $('making-title').textContent = `Meeting ${petName}…`;
   fill();
-  const lines = copyLines(petName);
-  let tick = 0;
-  const copy = $('copy');
-  copy.textContent = lines[0]!;
+  personality = null;
+  facts = [];
+  tick = 0;
+  $('meet').classList.remove('on');
+  showCopy({ text: copyLines(petName)[0]! });
   clearInterval(copyTimer);
   copyTimer = window.setInterval(() => {
-    const line = copyFor(lines, ++tick, ribbonFraction(hasCutout, poseTiles()));
-    if (line === copy.textContent) return;
-    copy.classList.add('swap');
-    setTimeout(() => { copy.textContent = line; copy.classList.remove('swap'); }, 260);
+    const c = nextCopy(copyLines(petName), personality?.lines ?? [], facts, ++tick, ribbonFraction(hasCutout, poseTiles()));
+    if (c.text === $('copy-t').textContent) return;
+    $('copy').classList.add('swap');
+    swapTimer = window.setTimeout(() => { showCopy(c); $('copy').classList.remove('swap'); }, 260);
   }, 4000);
+}
+
+// Model text: textContent only. The page names a fact by index; main holds the URL.
+function showCopy(c: { text: string; fact?: number }): void {
+  $('copy-t').textContent = c.text;
+  const src = $('copy-src');
+  const idx = c.fact !== undefined && facts[c.fact]?.hasSource ? c.fact : -1;
+  src.hidden = idx < 0;
+  src.onclick = idx < 0 ? null : () => window.pixyOb.openSource(idx);
+}
+
+function showPersonality(p: Personality): void {
+  personality = p;
+  $('meet-hi').textContent = `Meet ${petName}`;
+  $('meet-breed').textContent = p.breed;
+  $('traits').replaceChildren(...p.traits.map((t) => Object.assign(document.createElement('span'), { textContent: t })));
+  $('meet').classList.add('on');
 }
 
 // The cutout melts into the generated 3D idle, stars and hearts burst, then the window shrinks toward the floor where the pet lands.
 function reveal(): void {
+  clearTimeout(swapTimer);
+  $('copy').classList.remove('swap');
   clearInterval(walkTimer);
   walkTimer = 0;
   $('making-title').textContent = `Say hi to ${petName}!`;
-  $('copy').textContent = 'Right-click your pet any time.';
+  showCopy({ text: personality?.lines[0] ?? 'Right-click your pet any time.' });
   if (idleUrl) {
     $('b-gen').setAttribute('src', idleUrl);
     setTimeout(() => birth().classList.add('gen-on'), 350);
@@ -195,6 +222,8 @@ function applyProgress(p: Progress): void {
 }
 window.pixyOb.onProgress(applyProgress);
 window.pixyOb.onFinished(finished);
+window.pixyOb.onPersonality((p) => { if (flow.step === 'making') showPersonality(p); });
+window.pixyOb.onFacts((f) => { facts = f; });
 
 $('hero').setAttribute('src', sitUrl);
 // Closing the welcome is the same as "Keep Pakkun for now": the app never nags.
@@ -252,6 +281,8 @@ void window.pixyOb.state().then((s) => {
     flow = { ...flow, step: 'making' };
     setupMaking();
     s.running.progress.forEach(applyProgress);
+    if (s.running.personality) showPersonality(s.running.personality);
+    facts = s.running.facts ?? [];
   }
   render();
 });

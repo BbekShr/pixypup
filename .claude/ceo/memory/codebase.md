@@ -31,4 +31,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-10-31 (F5a): onboarding = `src/main/onboarding.ts` + `src/onboarding/*`; dev hooks: `PIXY_FAKE_PIPELINE=1 [PIXY_FAKE_FAST=1]` rehearsal, `PIXY_DEV_PHOTO=<abs path>` + `window.__ob.devPhoto()`, `kill -USR2 <main pid>` opens the window; real CDP driver at out/_drive.mjs. Tests 171 in 17 files.
 
+- 2026-11-01 (F18): `src/api/muse-spark.ts` (sparkJson, extractJson, citedUrls), `src/api/personality.ts` (meetPet, breedFacts); manifest.personality optional; overlay chatter `src/overlay/chatter.ts` every 3-6 min, idle/sit only; `PIXY_CHATTY=1` dev. Tests 223 in 20 files.
+
 ## Clean audits (so discovery skips these grounds)

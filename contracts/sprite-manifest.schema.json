@@ -8,6 +8,31 @@
   "properties": {
     "pet": { "type": "string" },
     "species": { "enum": ["dog", "cat"] },
+    "personality": {
+      "type": "object",
+      "required": ["breed", "coat", "traits", "energy", "lines"],
+      "additionalProperties": false,
+      "properties": {
+        "breed": { "type": "string", "maxLength": 60 },
+        "coat": { "type": "string", "maxLength": 80 },
+        "traits": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "string", "maxLength": 30 } },
+        "energy": { "enum": ["sleepy", "normal", "playful"] },
+        "lines": { "type": "array", "minItems": 3, "maxItems": 6, "items": { "type": "string", "maxLength": 40 } },
+        "facts": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["text"],
+            "additionalProperties": false,
+            "properties": {
+              "text": { "type": "string", "maxLength": 90 },
+              "source": { "type": "string", "maxLength": 300 }
+            }
+          }
+        }
+      }
+    },
     "poses": {
       "type": "object",
       "additionalProperties": {
