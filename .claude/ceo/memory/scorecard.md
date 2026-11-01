@@ -34,3 +34,4 @@ Level: **L1** (target L1) since 2026-10-31.
 | 2026-11-01 | F11 | #21 | landed-clean | no | 0 | no | 2 sonnet editor runs (2 roles); CEO review |
 | 2026-11-01 | F21 | (pending) | open | — | 3 CONFIRMED (CEO review: mirror-pivot jump, no ceiling, walk target from release x) + 1 runtime (dangle clamp); all fixed | no | 3 sonnet editor runs (1 role), 2 haiku release runs |
 | 2026-11-01 | F22 | (pending) | open | — | 1 CONFIRMED (CEO: double-signed mirror) fixed by CEO one-liner; 1 PLAUSIBLE runtime (interrupted look snaps) → F23 | no | 1 sonnet editor run, 1 haiku release run |
+| 2026-11-01 | F31 | (pending) | open | — | security: 1 HIGH (crisis via history) + 1 MEDIUM (voice→talk consent) CONFIRMED, fixed; 2 LOW fixed; RM: 1 timing CONFIRMED fixed (trot), 1 LOW fixed (crisis preempts talk); CEO: crisis barked, fixed | no | Plan at fable; 4 sonnet editor runs (2 roles); 3 haiku release runs; 1 sonnet security run; 1 real-key call |

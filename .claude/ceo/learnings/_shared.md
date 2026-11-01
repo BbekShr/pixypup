@@ -1,6 +1,11 @@
 # Shared lessons (every agent)
 
 ## Active
+- A "never sent" promise covers every later-turn buffer (history, retries), not just the first request: F31 crisis text leaked via chat history on the next turn (`src/main/talk-history.ts`).
+- A route that forwards voice transcripts to a second model widens consent: prefill the UI and let the human press Send instead (F31 `prefill`).
+- Never `git commit --amend` on a branch another agent shares: it rewrites whatever HEAD is now. Make a new fixup commit (F31).
+- Prove a reply came from the model by comparing it with the fixed local fallback, not by sampling sockets (sub-second calls slip past lsof) (F31).
+- Before a runtime check, look for another worktree's dev instance on 5173/9333; vite falls through to 5174 by itself, so pick a free CDP port such as 9444 (F31).
 - Resolve every `.claude/...` path against the repo root in your brief, never against your home directory.
 - Never `git stash`, `checkout`, `switch`, `reset` or `rebase`: other agents share this tree.
 - Every finding needs a failure scenario (input/state → wrong outcome) with file:line.
