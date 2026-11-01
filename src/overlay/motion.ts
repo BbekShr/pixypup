@@ -1,15 +1,28 @@
 // Pure animation math; overlay.ts feeds it clock values and applies the results as CSS transforms.
 export const MAX_SPEED = 90; // px/s
-const RAMP_MS = 300;
 const HOP_MS = 250;
 const HOP_PX = 14;
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
-/** Eases in over RAMP_MS and out over the last ~RAMP_MS of travel; never 0 so it always arrives. */
-export function walkSpeed(sinceStartMs: number, remainingPx: number, max = MAX_SPEED): number {
-  const decelPx = (max * RAMP_MS) / 2000;
-  return Math.max(8, max * Math.min(1, sinceStartMs / RAMP_MS, remainingPx / decelPx));
+export const WALK_ACCEL = 350; // px/s^2 at MAX_SPEED; scales with vMax so trot and size keep the same feel
+const WALK_DECEL = 300; // px/s^2 at MAX_SPEED
+const WALK_MIN_V = 8; // px/s; never stalls short of the target
+
+/** One step of the walk speed v (px/s): speeds up at WALK_ACCEL, never above vMax or the speed from which it could still stop in remainingPx. */
+export function walkStep(v: number, remainingPx: number, vMax: number, dt: number): number {
+  const k = vMax / MAX_SPEED;
+  const stop = Math.sqrt(2 * WALK_DECEL * k * Math.max(0, remainingPx));
+  return Math.max(WALK_MIN_V, Math.min(v + WALK_ACCEL * k * dt, vMax, stop));
+}
+
+export const TURN_FLOOR = 0.12; // never a 0-width sliver
+
+/** Horizontal scale of a turnaround: +1 -> -1 over durMs through a foreshortened head-on moment (sign flips at the midpoint). */
+export function turnScale(tMs: number, durMs: number): number {
+  const u = clamp01(tMs / durMs);
+  const c = Math.cos(Math.PI * u);
+  return u < 0.5 ? Math.max(c, TURN_FLOOR) : Math.min(c, -TURN_FLOOR);
 }
 
 /** Wander 120-400 px from x, heading back toward home when it has strayed, always inside [0, maxX]. */
@@ -31,8 +44,9 @@ export function bob(distancePx: number, stridePx: number): number {
   return -4 * Math.sin(Math.PI * ((distancePx / stridePx) % 1));
 }
 
-/** Screen-space lean toward the direction of travel (rotate is applied outside the mirror). */
-export const lean = (dir: number): number => LEAN_DEG * dir;
+/** Screen-space pitch (deg) in the direction of travel (rotate is applied outside the mirror): LEAN_DEG at steady speed, forward when speeding up, back when braking. speedFrac is v/vMax, accelFrac is a/WALK_ACCEL. */
+export const lean = (dir: number, speedFrac = 1, accelFrac = 0): number =>
+  dir * Math.max(-4, Math.min(4, LEAN_DEG * speedFrac + 2 * accelFrac));
 
 export const petTransform = (x: number, y: number, rotDeg: number, flip: number, sx: number, sy: number): string =>
   `translate(${x}px, ${y}px) rotate(${rotDeg}deg) scale(${sx * flip}, ${sy})`;

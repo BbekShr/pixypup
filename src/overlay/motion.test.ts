@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -10,13 +10,6 @@ describe('layout', () => {
 });
 
 describe('motion', () => {
-  it('eases in, cruises at max, eases out, never stalls', () => {
-    expect(walkSpeed(0, 500)).toBe(8);
-    expect(walkSpeed(150, 500)).toBeCloseTo(MAX_SPEED / 2);
-    expect(walkSpeed(2000, 500)).toBe(MAX_SPEED);
-    expect(walkSpeed(2000, 5)).toBeLessThan(MAX_SPEED / 2);
-    expect(walkSpeed(2000, 0)).toBeGreaterThan(0);
-  });
   it('wander targets are 120-400 px away and inside the window', () => {
     for (const [x, r1, r2] of [[500, 0, 0], [500, 1, 1], [10, 0, 0.5], [900, 1, 0.5], [0, 0.9, 0]] as const) {
       const t = pickTarget(x, 1000, 500, r1, r2);
@@ -219,13 +212,75 @@ describe('blink', () => {
   });
 });
 
-describe('walkSpeed cap', () => {
-  it('a custom max is reached and never exceeded, and still arrives', () => {
-    expect(walkSpeed(2000, 500, 126)).toBe(126);
-    expect(walkSpeed(2000, 500, 54)).toBe(54);
-    expect(walkSpeed(2000, 0.1, 54)).toBeGreaterThanOrEqual(8);
+describe('walkStep', () => {
+  const walk = (px: number, vMax = MAX_SPEED) => {
+    let v = 0, x = 0, t = 0, top = 0;
+    while (px - x >= 1 && t < 60) {
+      v = walkStep(v, px - x, vMax, 1 / 60);
+      x += Math.min(v / 60, px - x);
+      t += 1 / 60;
+      top = Math.max(top, v);
+    }
+    return { t, v, x, top };
+  };
+  it('accelerates from rest to vMax in about vMax/A seconds, never jumping or exceeding it', () => {
+    let v = 0;
+    let t = 0;
+    for (; v < MAX_SPEED && t < 5; t += 1 / 60) {
+      const n = walkStep(v, 10000, MAX_SPEED, 1 / 60);
+      expect(n - v).toBeLessThanOrEqual((WALK_ACCEL * MAX_SPEED) / MAX_SPEED / 60 + 8 + 1e-9);
+      expect(n).toBeLessThanOrEqual(MAX_SPEED);
+      v = n;
+    }
+    expect(t).toBeGreaterThan((MAX_SPEED / WALK_ACCEL) * 0.8);
+    expect(t).toBeLessThan((MAX_SPEED / WALK_ACCEL) * 1.3);
   });
-  it('display width follows the chosen height', () => {
+  it.each([50, 200, 600])('a %d px walk arrives in bounded time, without overshoot, slowly', (px) => {
+    for (const vMax of [54, MAX_SPEED, 126]) {
+      const r = walk(px, vMax);
+      expect(r.x).toBeLessThanOrEqual(px);
+      expect(px - r.x).toBeLessThan(1); // the overlay arrives within 1 px
+      expect(r.t).toBeLessThan(px / vMax + 3);
+      expect(r.v).toBeLessThan(30 * Math.max(1, vMax / MAX_SPEED)); // within a pixel of the target: a third of cruise or less
+    }
+  });
+  it('a short walk never reaches vMax', () => {
+    expect(walk(20).top).toBeLessThan(MAX_SPEED);
+    expect(walk(600).top).toBe(MAX_SPEED);
+  });
+  it('still moves when almost there', () => {
+    expect(walkStep(0, 0, MAX_SPEED, 1 / 60)).toBeGreaterThan(0);
+  });
+});
+
+describe('turnScale', () => {
+  it('goes from +1 to -1 monotonically, crossing the sign once and never a zero-width sliver', () => {
+    const v = Array.from({ length: 101 }, (_, i) => turnScale(i * 3.8, 380));
+    expect(v[0]).toBe(1);
+    expect(v[100]).toBe(-1);
+    v.forEach((a, i) => {
+      expect(Math.abs(a)).toBeGreaterThanOrEqual(TURN_FLOOR);
+      if (i) expect(a).toBeLessThanOrEqual(v[i - 1]!);
+    });
+    expect(v.filter((a, i) => i && Math.sign(a) !== Math.sign(v[i - 1]!)).length).toBe(1);
+  });
+});
+
+describe('lean', () => {
+  it('is LEAN_DEG at steady speed, more when speeding up, less or negative when braking, and clamped', () => {
+    expect(lean(1, 1, 0)).toBe(LEAN_DEG);
+    expect(lean(1, 0.3, 1)).toBeGreaterThan(0);
+    expect(lean(1, 1, 1)).toBeGreaterThan(lean(1, 1, 0));
+    expect(lean(1, 1, -0.86)).toBeLessThan(lean(1, 1, 0));
+    expect(lean(1, 0.2, -0.86)).toBeLessThan(0);
+    expect(lean(1, 1, 50)).toBe(4);
+    expect(lean(-1, 1, 50)).toBe(-4);
+    expect(lean(-1, 1, 0)).toBe(-LEAN_DEG);
+  });
+});
+
+describe('display width', () => {
+  it('follows the chosen height', () => {
     expect(displayWidth(200, 100, 180)).toBe(360);
     expect(displayWidth(200, 100, 110)).toBe(220);
   });

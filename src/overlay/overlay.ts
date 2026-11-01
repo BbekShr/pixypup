@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkSpeed } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, turnScale, WALK_ACCEL } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -46,7 +46,7 @@ const CELEBRATE_MS = 2600;
 const HINT_SHOW_MS = 11000;
 const MARK_MS = 2600;
 
-const TURN_MS = 120;
+const TURN_MS = 380; // a dog turning round, not a flip
 type Fidget = 'look' | 'tilt' | 'sniff' | 'wag';
 const LIFE_MS: Record<Fidget, number> = { look: 1000, tilt: 1400, sniff: 1200, wag: 1000 };
 const WAG_FRAME_MS = 110;
@@ -193,10 +193,13 @@ let y = floorY();
 let home = x;
 let target = x;
 let dir = 1; // where it is heading
-let facing = 1; // what is drawn (lags dir by the turn squash)
+let facing = 1; // what is drawn (lags dir until the turn ends)
 let turnUntil = 0;
 let stateAt = performance.now();
-let walkAt = stateAt;
+let walkV = 0; // px/s
+let walkAcc = 0; // a / WALK_ACCEL
+let walkFrac = 0; // v / vMax
+const stopWalk = (): void => { walkV = 0; walkAcc = 0; walkFrac = 0; };
 let deadline: number | null = null;
 let lastInteraction = stateAt;
 let lifeAt = stateAt + 3000;
@@ -253,7 +256,7 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
   const dwell = o.ms ?? dwellMs(state, Math.random(), en());
   deadline = dwell === null ? null : now + dwell;
   if (state === 'walk') {
-    walkAt = now;
+    stopWalk();
     target = o.target ?? pickTarget(x, window.innerWidth - W, home, Math.random(), Math.random());
   }
   if (state !== prev) enter(prev);
@@ -338,7 +341,7 @@ function frame(now: number): void {
       falling = false;
       home = x;
       if (state === 'walk' && !act && !handoff) target = pickTarget(x, window.innerWidth - W, home, Math.random(), Math.random()); // not back toward the release side
-      walkAt = now;
+      stopWalk();
       if (greet) {
         const g = greet;
         greet = null;
@@ -364,10 +367,15 @@ function frame(now: number): void {
       timeout('walk', now);
     } else if (want !== dir) {
       dir = want;
-      turnUntil = now + TURN_MS;
-      walkAt = turnUntil; // speed ramps up from the end of the turn, no lurch
+      turnUntil = now + (calm ? 0 : TURN_MS);
+      stopWalk(); // speeds up again from the end of the turn, no lurch
     } else {
-      const step = Math.min(walkSpeed(now - walkAt, rem, MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size)) * (handoff === 'trotOff' || (act?.kind === 'hide' && act.phase === 'go') ? TROT_SPEEDUP : 1) * dt, rem);
+      const vMax = MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size) * (handoff === 'trotOff' || (act?.kind === 'hide' && act.phase === 'go') ? TROT_SPEEDUP : 1);
+      const v0 = walkV;
+      walkV = walkStep(v0, rem, vMax, dt);
+      walkAcc = (walkV - v0) / dt / (WALK_ACCEL * vMax / MAX_SPEED);
+      walkFrac = walkV / vMax;
+      const step = Math.min(walkV * dt, rem);
       x += dir * step;
       walked += step;
     }
@@ -431,13 +439,15 @@ function frame(now: number): void {
   let sx = 1;
   let sy = 1;
   let rot = 0;
+  let turnS = 1; // signed horizontal turn scale
+  let turnE = 0; // dip while turning
   if (walking) {
     if (!calm) {
       const g = gait(walked, stride, shownW(poses['walk']?.srcs[0]) !== W); // a wider walk frame is the drawn profile cycle
       dy = g.dy;
       sx = g.sx;
       sy = g.sy;
-      rot = lean(dir) + g.rot * dir;
+      rot = lean(dir, walkFrac, walkAcc) + g.rot * dir;
     }
   } else if (upright) {
     const b = breathe(now, 0.3, 0.02);
@@ -451,7 +461,9 @@ function frame(now: number): void {
         if (lifeKind === 'tilt') rot += lifeTilt * e;
         else if (lifeKind === 'sniff') { rot += 5 * e * facing; dy = -1.5 * e * Math.abs(Math.sin(t / 70)); }
         else if (lifeKind === 'wag') rot += 1.2 * e * Math.sin((Math.PI * t) / WAG_FRAME_MS);
-        else if (t < TURN_MS || lifeUntil - now < TURN_MS) { sx *= 1.06; sy *= 0.92; } // look: squash through each turn
+        else if (t < TURN_MS) { turnS = turnScale(t, TURN_MS); turnE = envelope(t, TURN_MS); } // look: turns away and back like the walk turn
+        else if (lifeUntil - now < TURN_MS) { turnS = -turnScale(TURN_MS - (lifeUntil - now), TURN_MS); turnE = envelope(TURN_MS - (lifeUntil - now), TURN_MS); }
+        else if (lifeKind === 'look') turnS = -1;
       }
     }
     if (act?.kind === 'sniff' && act.phase === 'sniff' && !calm) {
@@ -477,7 +489,9 @@ function frame(now: number): void {
   } else if (state === 'roll' && !calm) {
     rot = rollAngle(age);
   }
-  if (turning) { sx = 1.06; sy = 0.92; }
+  if (turning) { sx = 1; sy = 1; turnS = turnScale(now - (turnUntil - TURN_MS), TURN_MS); turnE = envelope(now - (turnUntil - TURN_MS), TURN_MS); }
+  sx *= Math.abs(turnS); // the sign lives in flip, so the head registration mirrors with it
+  sy *= 1 - 0.04 * turnE;
   if (!calm) {
     const ok = hovering && microOk();
     tilt += ((ok ? HOVER_TILT_DEG * hoverSide : 0) - tilt) * Math.min(1, dt * 12);
@@ -491,7 +505,7 @@ function frame(now: number): void {
   if (now - landAt < LAND_SQUASH_MS) { const k = landSquash(now - landAt, landV); sy *= k; sx *= 1 + (1 - k) / 2; }
   const swing = dang.angle ? -dang.angle : 0;
   if (dang.angle) { rot += swing; sy *= 1.03; }
-  const flip = facing * (life && lifeKind === 'look' ? -1 : 1);
+  const flip = facing * Math.sign(turnS);
   dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
@@ -570,6 +584,7 @@ img.addEventListener('contextmenu', (e) => {
 img.addEventListener('pointerdown', (e) => {
   if (dragging || handoffBusy(handoff) || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
   dragging = true;
+  stopWalk();
   hovering = false;
   if (act && !(act.kind === 'hide' && (act.phase === 'go' || act.phase === 'away'))) act = null; // hiding survives a poke; anything else yields
   falling = false;
