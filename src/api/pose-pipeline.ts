@@ -20,6 +20,7 @@ import { defaultProfile } from './profile-defaults.js';
 import { largest, maskAt, segment } from './sam.js';
 import { sliceComponents } from './slice-components.js';
 import { isStaticSheet } from './static-sheet.js';
+import { JUDGE_MODEL, pickWalk } from './walk-judge.js';
 
 export { validateManifest };
 
@@ -35,6 +36,7 @@ export const POSES = posesFor(defaultProfile('dog'));
 // 8 on the full 2x4 phase sheet (side_0 is the right-front contact, then down, pass, up, then the left side), 4 on the fallback.
 export const SIDE_FRAMES = Array.from({ length: 8 }, (_, i) => `side_${i}`);
 const WALK_ROWS = 2;
+const WALK_SHEETS = 3; // drawn at once; the judge picks one
 // Front, front 3/4, side, back 3/4, back: the identity turnaround, sliced from one sheet.
 export const TURN_FRAMES = ['turn_front', 'turn_front34', 'turn_side', 'turn_back34', 'turn_back'];
 // Side and turn frames each share one scale and one wider canvas; every other pose is sized on its own.
@@ -61,7 +63,7 @@ export interface PackOptions {
   outDir: string;
   onProgress?: (e: PipelineEvent) => void;
   /** Per-pose request timeout and retry back-off (x3 after HTTP 429); tests shrink these. */
-  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number; profileMs?: number };
+  timing?: { timeoutMs?: number; backoffMs?: number; sparkMs?: number; sparkGraceMs?: number; profileMs?: number; judgeMs?: number };
 }
 
 export class NoPetFoundError extends Error {
@@ -95,8 +97,8 @@ export function normalizePhoto(photo: Buffer): Promise<Buffer> {
 }
 
 /** SAM-segment the pet, return a tight transparent PNG cutout. */
-export async function samCutout(client: MetaClient, png: Buffer, prompt: string): Promise<Buffer | null> {
-  const matches = await segment(client, prompt, dataUrl(png));
+export async function samCutout(client: MetaClient, png: Buffer, prompt: string, signal?: AbortSignal): Promise<Buffer | null> {
+  const matches = await segment(client, prompt, dataUrl(png), signal);
   const m = largest(matches);
   if (!m) return null;
   const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -424,13 +426,14 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   const timeoutMs = o.timing?.timeoutMs ?? 60_000;
   const backoffMs = o.timing?.backoffMs ?? 1000;
   const photo = await normalizePhoto(o.photo);
-  const cutout = await samCutout(o.client, photo, o.species);
+  const cutout = await samCutout(o.client, photo, o.species, AbortSignal.timeout(timeoutMs));
   if (!cutout) throw new NoPetFoundError(o.species);
   emit({ stage: 'cutout', png: cutout });
 
   // "Meet your pet" runs beside the poses and never fails the pack: whatever arrived by the end goes in the manifest.
   const sparkMs = o.timing?.sparkMs ?? 30_000;
   let personality: Personality | undefined;
+  let walkJudge: string | undefined; // set when the judge model picked the walk sheet
   let facts: PetFact[] | undefined;
   const spark = new AbortController();
   const signal = () => AbortSignal.any([spark.signal, AbortSignal.timeout(sparkMs)]);
@@ -470,6 +473,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     }, timeoutMs);
     try {
       const [img] = await editImage(o.client, prompt, refs, 1, { signal: ctl.signal });
+      clearTimeout(timer); // the timeout bounds the request; local keying after it must not abort a good reply
       const keyed = await chromaKey(img!.buffer);
       if (keyed.opaque < 0.02 || keyed.opaque > 0.9 || keyed.edge > 0.01) throw new BadOutputError('degenerate pose');
       return await finish(img!, keyed);
@@ -545,13 +549,22 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     const [a, b] = await sheetFrames(k, 2);
     return [a as KeyedFrame, idle, b as KeyedFrame, idle];
   };
-  // Walk: the 8-phase grid (2 tries), then the old 4-frame sheet (1 try), then two contact poses (1 try), then no walk.
-  // Other cycle kinds: their 4-frame sheet (2 tries), then the pair. Worst case 4 walk calls.
+  // Walk: WALK_SHEETS 8-phase grids at once and the judge model picks the most consistent (one usable grid is taken
+  // unjudged), then the old 4-frame sheet (1 try), then two contact poses (1 try), then no walk.
+  // Other cycle kinds: their 4-frame sheet (2 tries), then the pair. Worst case WALK_SHEETS + 2 walk calls and one judge call.
   const walk = async () => {
+    if (profile.cycle.kind === 'walk') {
+      const grids = (await Promise.allSettled(Array.from({ length: WALK_SHEETS }, () =>
+        draw('walk_sheet8', refs, async (img, k) => ({ frames: await sheet(8, WALK_ROWS)(img, k), raw: dataUrl(img.buffer, img.mime) }), false),
+      ))).flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+      if (grids.length) {
+        const pick = grids.length > 1 ? await pickWalk(o.client, idleRaw, grids.map((g) => g.raw), AbortSignal.any([spark.signal, AbortSignal.timeout(o.timing?.judgeMs ?? 30_000)])) : null;
+        if (pick !== null) walkJudge = JUDGE_MODEL;
+        return grids[pick ?? 0]!.frames;
+      }
+    }
     const tries: (() => Promise<KeyedFrame[]>)[] =
-      profile.cycle.kind === 'walk'
-        ? [() => draw('walk_sheet8', refs, sheet(8, WALK_ROWS)), () => draw('walk_sheet', refs, sheet(4, 1), false)]
-        : [() => draw('walk_sheet', refs, sheet(4, 1))];
+      profile.cycle.kind === 'walk' ? [() => draw('walk_sheet', refs, sheet(4, 1), false)] : [() => draw('walk_sheet', refs, sheet(4, 1))];
     tries.push(() => draw('walk_pair', refs, pair, false));
     let first: unknown;
     for (const t of tries) {
@@ -591,7 +604,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     poses: {
       idle: pose(['idle_0.png'], 2),
       // side_0 is a contact pose (a front leg fully forward); on the 8-frame sheet it is the right-front contact, then down, pass, up, then the left side.
-      ...(keyed['side_0'] ? { walk: pose(SIDE_FRAMES.filter((f) => keyed[f]).map((f) => `${f}.png`), 8) } : {}),
+      ...(keyed['side_0'] ? { walk: { ...pose(SIDE_FRAMES.filter((f) => keyed[f]).map((f) => `${f}.png`), 8), ...(walkJudge ? { judge: walkJudge } : {}) } } : {}),
       ...(keyed['turn_front'] ? { turn: pose(TURN_FRAMES.map((f) => `${f}.png`), 1) } : {}),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),

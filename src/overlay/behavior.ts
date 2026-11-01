@@ -93,3 +93,6 @@ export function talkPlan(mood: TalkAction, crisis: boolean): TalkPlan {
     case 'listen': return { walk: true, pose: 'sit', hearts: false };
   }
 }
+
+/** A user command replaces a talk act (its walk/pose); every other act is handled by its own rules. */
+export const actAfterCommand = <A extends { kind: string }>(act: A | null): A | null => (act?.kind === 'talk' ? null : act);

@@ -15,7 +15,7 @@ export class NetworkBlockedError extends Error {
 type GateSettings = Pick<Settings, 'screenAware' | 'voice' | 'adminDisableScreenAware' | 'offline'>;
 
 // create-pet is always allowed: the user explicitly starts it and onboarding says it talks to Meta.
-// offline (default true) means "no background network": it blocks screen, voice and talk (talk is user-initiated per message but still network).
+// offline (default false; admin-set) means "no background network": it blocks screen, voice and talk (talk is user-initiated per message but still network).
 export function openClient(purpose: Purpose, s: GateSettings, apiKey: string, opts: Omit<MetaClientOptions, 'apiKey'> = {}): MetaClient {
   const allowed =
     purpose === 'create-pet' ||

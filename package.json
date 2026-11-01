@@ -14,6 +14,7 @@
     "test": "vitest run",
     "pose-test": "tsx scripts/pose-test.ts",
     "side-walk": "tsx scripts/side-walk.ts",
+    "walk-sheet": "tsx scripts/walk-sheet.ts",
     "build-native": "bash scripts/build-native.sh",
     "dist": "npm run build-native && npm run build && electron-builder --mac dmg",
     "site-js": "esbuild scripts/site-puppet.ts --bundle --minify --banner:js=\"/* eslint-disable */\" --format=iife --target=es2022 --outfile=docs/js/puppet.js",

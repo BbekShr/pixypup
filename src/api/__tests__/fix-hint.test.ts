@@ -26,6 +26,11 @@ describe('fixHint', () => {
     expect(b.input).toBe(`<screen_data>${JSON.stringify(failure.replace(/[<>]/g, ''))}</screen_data>`);
     expect(b.input.match(/<\/screen_data>/g)).toHaveLength(1);
   });
+  it('redacts secrets before sending', async () => {
+    const calls: Body[] = [];
+    await fixHint(fake(reply('Check the auth test in src/a.test.ts line 6.'), calls), 'FAIL auth\nAuthorization: Bearer abc.def.ghi\nDB=postgres://u:pw123@host/db');
+    expect(calls[0].input).not.toMatch(/abc\.def|pw123/);
+  });
   it('caps what is sent', async () => {
     const calls: Body[] = [];
     await fixHint(fake(reply('ok'), calls), 'x'.repeat(5000));

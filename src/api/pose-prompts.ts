@@ -105,7 +105,7 @@ export function posesFor(p: MotionProfile): Record<string, string> {
   const hint = p.cycle.prompt === SHEET ? '' : ` Motion notes: ${p.cycle.prompt}`;
   return {
     idle_0: p.idlePrompt,
-    walk_sheet8: SHEET8 + hint,
+    walk_sheet8: SHEET8, // the profile's hint describes a 4-frame grid and would contradict this one
     walk_sheet: base + hint,
     walk_pair: PAIR[p.cycle.kind],
     turn_sheet: turnSheet(p),

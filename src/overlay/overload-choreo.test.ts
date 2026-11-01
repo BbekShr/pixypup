@@ -49,14 +49,15 @@ describe('choreography', () => {
   it('nobody leaves the screen before 20 s once in, and everybody is gone by 25 s', () => {
     for (const w of [1440, 2560]) {
       for (const seed of [1, 2, 3]) {
+        // Collect violations and assert once: ~500k expect() calls timed out under full-suite load.
+        const bad: string[] = [];
         const show = run(seed, 24, w, (t, s) => {
           if (t < 4500 || t >= T.exit) return;
           s.sprites.forEach((p, i) => {
-            expect(p.gone).toBe(false);
-            expect(p.x).toBeGreaterThanOrEqual(0);
-            expect(p.x).toBeLessThanOrEqual(w - s.plans[i]!.w + 1e-6);
+            if (p.gone || p.x < 0 || p.x > w - s.plans[i]!.w + 1e-6) bad.push(`w${w} seed${seed} t${Math.round(t)} #${i} x=${p.x} gone=${p.gone}`);
           });
         });
+        expect(bad.slice(0, 5)).toEqual([]);
         expect(show.done).toBe(true);
       }
     }

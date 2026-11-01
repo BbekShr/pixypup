@@ -13,9 +13,10 @@ export type Observation = {
 const TERMINALS = ['terminal', 'iterm', 'iterm2', 'warp', 'ghostty', 'alacritty', 'kitty'];
 
 export function ruleDecide(obs: Observation): BehaviorDecision | null {
+  // Any "Meet - …" title counts: named calendar meetings use the event name, and a missed hide mid-call is worse than a doc titled "Meet - …".
   const call = obs.windows.some(
     (w) =>
-      /zoom\.us|^zoom$/i.test(w.owner) || /^meet - |meet\.google\.com|zoom meeting/i.test(w.title),
+      /zoom\.us|^zoom$/i.test(w.owner) || /^Meet - |meet\.google\.com|^Zoom Meeting( - Zoom)?$/i.test(w.title),
   );
   if (call) return { action: 'hide', durationMs: 30000, reason: 'video call in progress' };
 
@@ -62,7 +63,7 @@ export function createDecider(deps: DeciderDeps = {}) {
     // The rules choose the action and target; Spark only words the bubble for a new failure.
     async decide(obs: Observation, key: string): Promise<Decided> {
       const decision = ruleDecide(obs);
-      if (!decision || !key) lastKey = null;
+      if (!key) lastKey = null;
       if (!decision) return { decision, source: 'none' };
       if (decision.action !== 'sniff' || key === lastKey) return { decision, source: 'rule' };
       const t = now();

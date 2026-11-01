@@ -59,6 +59,20 @@ describe('validateTalk', () => {
   });
 });
 
+describe('isCrisis curly apostrophes and ending things', () => {
+  it('catches typographic apostrophes and ending-it phrasing', () => {
+    for (const t of ['I don\u2019t want to be here', 'i can\u2019t go on', 'I don\u2019t want to live', 'thinking about ending things', 'I keep thinking of ending it']) expect(isCrisis(t)).toBe(true);
+    for (const t of ['ending things at work early', 'thinking about ending the meeting', 'I can\u2019t wait']) expect(isCrisis(t)).toBe(false);
+  });
+});
+
+describe('isCrisis Unicode tricks', () => {
+  it('sees through zero-width chars, soft hyphens, fullwidth letters and combining marks', () => {
+    for (const t of ['I want to kill my\u200bself', 'sui\u00adcidal', '\uff53\uff55\uff49\uff43\uff49\uff44\uff45', 'end my li\u0301fe', 'want\u200d to die']) expect(isCrisis(t)).toBe(true);
+    expect(isCrisis('rough\u200b day')).toBe(false);
+  });
+});
+
 describe('isCrisis / localReply', () => {
   it('is word-bounded', () => {
     for (const t of ['I want to kill myself', 'i dont want to live', "I'm feeling suicidal.", 'Self-harm thoughts', 'no reason to live', 'I want to end it all', 'i should kms', 'gonna unalive myself', "I don't want to be here anymore", "i can't go on", 'I want to take my own life']) expect(isCrisis(t)).toBe(true);

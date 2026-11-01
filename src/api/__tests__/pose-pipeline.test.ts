@@ -18,6 +18,7 @@ import {
   type PipelineEvent,
 } from '../pose-pipeline.js';
 import { validateManifest } from '../manifest.js';
+import { JUDGE_MODEL } from '../walk-judge.js';
 import { posesFor, styleFor } from '../pose-prompts.js';
 import { defaultProfile } from '../profile-defaults.js';
 
@@ -78,6 +79,8 @@ interface FakeOpts {
   sparkLog?: string[];
   /** prompts to recognise poses by; default the dog's */
   poses?: Record<string, string>;
+  /** answers the walk judge (POST /responses with the judge model); absent = the judge fails */
+  judge?: (body: Record<string, unknown>) => Promise<unknown>;
 }
 
 function fakeClient(o: FakeOpts = {}) {
@@ -88,6 +91,11 @@ function fakeClient(o: FakeOpts = {}) {
   const client = {
     postStream: () => samEvents(o.sam ?? SAM_OUTPUT),
     postJson: async (path: string, body: { prompt: string }, signal?: AbortSignal) => {
+      if (path === '/responses' && (body as unknown as { model?: string }).model === JUDGE_MODEL) {
+        requested.push('judge');
+        if (!o.judge) throw new Error('judge down');
+        return o.judge(body as unknown as Record<string, unknown>);
+      }
       if (path === '/responses') {
         o.sparkLog?.push(`spark:${requested.length}`);
         if (!o.spark) throw new Error('spark down');
@@ -400,7 +408,7 @@ describe('generateSpritePack', () => {
       species: 'dog',
       outDir: out,
       onProgress: (e) => events.push(e),
-      timing: { timeoutMs: o.hang ? 50 : 60_000, backoffMs: 1 },
+      timing: { timeoutMs: o.hang ? 200 : 60_000, backoffMs: 1 }, // 200 ms: a healthy attempt among 8 parallel ones must finish inside it
     });
     return { p, requested, stats };
   };
@@ -440,13 +448,14 @@ describe('generateSpritePack', () => {
     expect(await readdir(root)).toEqual(['pack']);
   });
 
-  it('draws idle, then the turnaround, then the walk sheet, sit, sleep, bark, roll and blink in parallel (8 requests)', async () => {
+  it('draws idle, then the turnaround, then 3 walk sheets, sit, sleep, bark, roll and blink in parallel, then asks the judge (10 requests)', async () => {
     const { p, requested, stats } = await run({ delayMs: 50 });
     await p;
     expect(requested[0]).toBe('idle_0');
     expect(requested[1]).toBe('turn_sheet');
-    expect(requested.slice(2).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet8']);
-    expect(stats.maxInflight).toBe(6); // idle alone, then the other 6 at once; serial would peak at 1
+    expect(requested.slice(2).sort()).toEqual(['bark', 'idle_blink', 'judge', 'roll', 'sit', 'sleep', 'walk_sheet8', 'walk_sheet8', 'walk_sheet8']);
+    expect(requested.indexOf('judge')).toBeGreaterThan(requested.lastIndexOf('walk_sheet8'));
+    expect(stats.maxInflight).toBe(8); // idle alone, then the other 8 image requests at once; serial would peak at 1
   });
 
   it('references: idle alone for blink, cutout+idle for the others', async () => {
@@ -454,6 +463,7 @@ describe('generateSpritePack', () => {
     const { client } = fakeClient();
     const post = client.postJson.bind(client) as (path: string, body: { prompt: string; images: unknown[] }, s?: AbortSignal) => Promise<unknown>;
     (client as unknown as { postJson: typeof post }).postJson = (path, body, sig) => {
+      if (path === '/responses') return post(path, body, sig); // the judge: no prompt, no image refs
       const name = Object.keys(POSES).find((k) => body.prompt.includes(POSES[k] as string)) as string;
       refCount[name] = body.images.length;
       if (name === 'idle_blink') expect(body.prompt).toBe(POSES.idle_blink);
@@ -468,13 +478,14 @@ describe('generateSpritePack', () => {
     ['3 blobs', () => sheetImg().then((b) => sharp(b).composite([{ input: { create: { width: 60, height: 100, channels: 3, background: '#ff00ff' } }, left: 310, top: 0 }]).png().toBuffer())],
     ['unequal widths', () => sheetImg([50, 50, 50, 20])],
     ['one blob', () => drawn(100, 100, 50, 50)],
-  ])('omits the walk instead of copying idle when the walk sheet is bad (%s): 2 grid tries, 1 four-frame try, 1 pair try', async (_n, make) => {
+  ])('omits the walk instead of copying idle when the walk sheet is bad (%s): 3 grids at once, 1 four-frame try, 1 pair try', async (_n, make) => {
     const events: PipelineEvent[] = [];
     const { p, requested } = await run({ image: async (n) => (n.startsWith('walk_sheet') ? make() : n === 'walk_pair' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
     const manifest = await p;
-    expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(2);
+    expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(3);
     expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(1);
     expect(requested.filter((n) => n === 'walk_pair')).toHaveLength(1);
+    expect(requested).not.toContain('judge'); // nothing usable to judge
     const failed = events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name);
     expect(failed).toEqual([...Array.from({ length: 8 }, (_, i) => `side_${i}`), 'walk']);
     expect(manifest.poses.walk).toBeUndefined();
@@ -512,12 +523,12 @@ describe('generateSpritePack', () => {
       expect(await isStaticSheet([same[0]!, wide])).toBe(false);
     });
 
-    it('rejects a sheet of identical slices and retries it', async () => {
+    it('rejects every grid of identical slices', async () => {
       const events: PipelineEvent[] = [];
       const [grid, sheetPng] = [await staticGrid(), await staticSheet()];
       const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet8' ? grid : n === 'walk_sheet' ? sheetPng : defaultImage(n)) }, events);
       await p;
-      expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(2);
+      expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(3);
       expect(events.find((e) => e.stage === 'pose-failed' && e.name === 'walk')).toMatchObject({ error: 'bad-output' });
     });
 
@@ -529,7 +540,7 @@ describe('generateSpritePack', () => {
         events,
       );
       const manifest = await p;
-      expect(requested.filter((n) => n.startsWith('walk_'))).toHaveLength(4); // grid x2, four-frame sheet, pair: the worst case
+      expect(requested.filter((n) => n.startsWith('walk_'))).toHaveLength(5); // grid x3, four-frame sheet, pair: the worst case
       expect(events.some((e) => e.stage === 'pose' && e.name === 'side_4')).toBe(false);
       expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']);
       expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
@@ -540,14 +551,60 @@ describe('generateSpritePack', () => {
     });
   });
 
-  it('falls back to the 4-frame sheet when the grid is bad, with 3 walk calls', async () => {
+  it('falls back to the 4-frame sheet when every grid is bad, with 4 walk calls', async () => {
     const events: PipelineEvent[] = [];
     const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet8' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
     const manifest = await p;
-    expect(requested.filter((n) => n.startsWith('walk_'))).toEqual(['walk_sheet8', 'walk_sheet8', 'walk_sheet']);
+    expect(requested.filter((n) => n.startsWith('walk_'))).toEqual(['walk_sheet8', 'walk_sheet8', 'walk_sheet8', 'walk_sheet']);
     expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']);
     expect(events.filter((e) => e.stage === 'pose')).toHaveLength(15);
     expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
+  });
+
+  describe('walk judge', () => {
+    // Three grids that differ in their first two frames' width ratio (1 : 1.16, 1 : 2, 1 : 0.5), so the shipped walk shows which one was picked.
+    const grids = [[50, 58, 50, 58, 54, 46, 54, 46], [40, 80, 50, 58, 54, 46, 54, 46], [60, 30, 50, 58, 54, 46, 54, 46]];
+    const bySheet = () => {
+      let n = 0;
+      return async (pose: string) => (pose === 'walk_sheet8' ? gridImg(grids[n++ % 3]) : defaultImage(pose));
+    };
+    const ratio = async () => {
+      const w = async (f: string) => {
+        const { data, info } = await sharp(await readFile(join(out, f))).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        let lo = info.width;
+        let hi = -1;
+        for (let i = 3; i < data.length; i += 4) if (data[i]! > 128) { const x = ((i - 3) / 4) % info.width; lo = Math.min(lo, x); hi = Math.max(hi, x); }
+        return hi - lo + 1;
+      };
+      return (await w('side_1.png')) / (await w('side_0.png'));
+    };
+    const pick = (best: number) => async () => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ sheets: [], best, reason: 'r' }) }] }] });
+
+    it('ships the sheet the judge picks and records the judge in the manifest', async () => {
+      const { p, requested } = await run({ image: bySheet(), judge: pick(1) });
+      const manifest = await p;
+      expect(requested.filter((n) => n === 'judge')).toHaveLength(1);
+      expect(manifest.poses.walk?.judge).toBe(JUDGE_MODEL);
+      expect(await ratio()).toBeCloseTo(2, 1);
+    });
+
+    it('takes the first sheet, unjudged, when the judge fails or answers out of range', async () => {
+      for (const judge of [undefined, pick(7)]) {
+        const manifest = await (await run({ image: bySheet(), judge })).p;
+        expect(manifest.poses.walk?.judge).toBeUndefined();
+        expect(await ratio()).toBeCloseTo(58 / 50, 1);
+      }
+    });
+
+    it('does not ask the judge about a single usable grid', async () => {
+      let n = 0;
+      const image = async (pose: string) => (pose === 'walk_sheet8' ? (n++ === 1 ? gridImg() : drawn(100, 100, 50, 50)) : defaultImage(pose));
+      const { p, requested } = await run({ image, judge: pick(0) });
+      const manifest = await p;
+      expect(requested).not.toContain('judge');
+      expect(manifest.poses.walk?.frames).toHaveLength(8);
+      expect(manifest.poses.walk?.judge).toBeUndefined();
+    });
   });
 
   it('slices a good sheet into 8 walk frames at idle height', async () => {
@@ -581,6 +638,17 @@ describe('generateSpritePack', () => {
     expect(events.find((e) => e.stage === 'pose-failed')).toMatchObject({ name: 'sit' });
     expect(await readFile(join(out, 'sit.png'))).toEqual(await readFile(join(out, 'idle_0.png')));
   });
+
+  it('rejects instead of hanging when SAM never answers', async () => {
+    const { client } = fakeClient();
+    (client as unknown as { postStream: unknown }).postStream = async function* (_p: string, _b: unknown, signal?: AbortSignal) {
+      await new Promise((_, rej) => signal?.addEventListener('abort', () => rej(new Error('aborted'))));
+      yield {};
+    };
+    await expect(
+      generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, timing: { timeoutMs: 50, backoffMs: 1 } }),
+    ).rejects.toThrow();
+  }, 3000);
 
   it('throws NoPetFoundError when SAM finds nothing', async () => {
     const { p } = await run({ sam: '' });
@@ -875,6 +943,13 @@ describe('profile-driven prompts', () => {
     expect(posesFor(defaultProfile('butterfly')).walk_sheet).toContain('exactly 4 frames');
   });
 
+  it('does not append a 4-frame motion hint to the 8-frame sheet', () => {
+    const d = defaultProfile('dog');
+    const w = posesFor({ ...d, cycle: { ...d.cycle, prompt: 'A sprite sheet of exactly 4 frames in 4 equal columns, trotting.' } }).walk_sheet8!;
+    expect(w).not.toMatch(/exactly 4 frames|Motion notes|trotting/);
+    expect(w).toContain('exactly 8 frames');
+  });
+
   it('asks a snake for body undulation', () => {
     const p = posesFor(defaultProfile('snake'));
     expect(p.walk_sheet).toMatch(/S curve/);
@@ -914,7 +989,7 @@ describe('profile-driven prompts', () => {
     expect(events.at(-1)?.stage).toBe('done');
   });
 
-  it('makes SAM 1, Spark 3 (profile, personality, facts) and Image 8 requests (7 + the turnaround)', async () => {
+  it('makes SAM 1, Spark 3 (profile, personality, facts), Image 10 requests (7 + 2 more walk sheets + the turnaround) and 1 judge request', async () => {
     const paths: string[] = [];
     const f = fakeClient({ spark: spark(defaultProfile('dog')) });
     const post = f.client.postJson.bind(f.client) as (p: string, b: unknown, s?: AbortSignal) => Promise<unknown>;
@@ -924,8 +999,8 @@ describe('profile-driven prompts', () => {
     (f.client as unknown as { postStream: typeof stream }).postStream = ((...a: Parameters<typeof stream>) => (streams++, stream(...a))) as typeof stream;
     await generateSpritePack({ client: f.client, photo: await photo(), petName: 'P', species: 'dog', outDir: join(root, 'pack'), timing: { backoffMs: 1, sparkGraceMs: 200 } });
     expect(streams).toBe(1);
-    expect(paths.filter((x) => x === '/responses')).toHaveLength(3);
-    expect(paths.filter((x) => x !== '/responses')).toHaveLength(8);
+    expect(paths.filter((x) => x === '/responses')).toHaveLength(4);
+    expect(paths.filter((x) => x !== '/responses')).toHaveLength(10);
   });
 });
 
@@ -974,7 +1049,7 @@ describe('turnaround sheet', () => {
   it('passes the turnaround sheet as an extra reference to every later pose', async () => {
     const { calls } = await go();
     const later = calls.slice(2);
-    expect(later.map((c) => c.pose).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet8']);
+    expect(later.map((c) => c.pose).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet8', 'walk_sheet8', 'walk_sheet8']);
     for (const c of later) expect(c.refs.length).toBe(c.pose === 'idle_blink' ? 2 : 3);
     expect(new Set(later.map((c) => c.refs.at(-1))).size).toBe(1);
   });

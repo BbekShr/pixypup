@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { GAITS, cycleStrideNat, legBand, legSides, liftAt, tailColumns, tailOffset, puppetSpecies, shearAt, stripRuns } from './puppet';
+import { GAITS, cycleStrideNat, legBand, legSides, liftAt, tailColumns, tailOffset, puppetSpecies, rigFor, shearAt, stripRuns } from './puppet';
 
 const W = 120;
 const H = 100;
@@ -61,6 +61,12 @@ describe('species and gaits', () => {
     expect(puppetSpecies('tabby cat')).toBe('cat');
     expect(puppetSpecies('shiba inu dog')).toBe('dog');
     expect(puppetSpecies(undefined)).toBeNull();
+  });
+  it('rigs a dog or cat walk unless a judge model picked the drawn one', () => {
+    expect(rigFor('dog', { judge: 'muse-wonder-1.0' })).toBeNull();
+    expect(rigFor('cat', {})).toBe('cat');
+    expect(rigFor('shiba inu dog', undefined)).toBe('dog');
+    expect(rigFor('butterfly', {})).toBeNull();
   });
   it('dog and cat gaits differ', () => {
     expect(GAITS.dog).not.toEqual(GAITS.cat);
