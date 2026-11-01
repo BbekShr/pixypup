@@ -14,10 +14,15 @@
         "side_0.png",
         "side_1.png",
         "side_2.png",
-        "side_3.png"
+        "side_3.png",
+        "side_4.png",
+        "side_5.png",
+        "side_6.png",
+        "side_7.png"
       ],
       "fps": 8,
-      "footY": 0.9922779922779923
+      "footY": 0.9922779922779923,
+      "judge": "muse-wonder-1.0"
     },
     "sit": {
       "frames": [

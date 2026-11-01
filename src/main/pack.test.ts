@@ -88,10 +88,11 @@ describe('dropStaticWalk', () => {
     expect(p?.manifest.poses['walk']).toBeUndefined();
     expect(Object.keys(p?.frames ?? {})).toEqual(['idle_0.png']);
   });
-  it('keeps a real four-frame walk (Pakkun)', async () => {
+  it('keeps the real judged eight-frame walk (Pakkun), judge and all', async () => {
     const p = await loadPack(pakkun);
-    expect(p?.manifest.poses['walk']?.frames).toHaveLength(4);
-    expect(p?.frames['side_3.png']).toBeDefined();
+    expect(p?.manifest.poses['walk']?.frames).toHaveLength(8);
+    expect(p?.manifest.poses['walk']?.judge).toBe('muse-wonder-1.0');
+    expect(p?.frames['side_7.png']).toBeDefined();
   });
   it('keeps a [c0, idle, c1, idle] cycle and drops one whose frames all equal idle', () => {
     const pose = { fps: 8, footY: 1 };

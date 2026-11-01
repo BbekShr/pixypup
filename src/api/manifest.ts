@@ -67,7 +67,8 @@ export function validateManifest(m: unknown): asserts m is SpriteManifest {
   for (const [name, p] of Object.entries(o.poses)) {
     const d = p as Record<string, unknown> | null;
     if (typeof d !== 'object' || d === null) return bad(`pose ${name}`);
-    if (Object.keys(d).some((k) => !['frames', 'fps', 'footY'].includes(k))) bad(`pose ${name} unknown key`);
+    if (Object.keys(d).some((k) => !['frames', 'fps', 'footY', 'judge'].includes(k))) bad(`pose ${name} unknown key`);
+    if (d.judge !== undefined && (typeof d.judge !== 'string' || !/^[a-z0-9.-]{1,64}$/.test(d.judge))) bad(`pose ${name} judge`);
     if (!Array.isArray(d.frames) || d.frames.length === 0 || d.frames.some((f) => typeof f !== 'string' || !FRAME.test(f))) bad(`pose ${name} frames`);
     if (typeof d.fps !== 'number' || !Number.isFinite(d.fps) || d.fps < 0) bad(`pose ${name} fps`);
     if (typeof d.footY !== 'number' || !(d.footY > 0 && d.footY <= 1)) bad(`pose ${name} footY`);
