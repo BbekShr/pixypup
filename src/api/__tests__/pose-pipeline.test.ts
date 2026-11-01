@@ -57,6 +57,9 @@ interface FakeOpts {
   /** honour the abort signal and never resolve for this pose on these attempts */
   hang?: (pose: string, attempt: number) => boolean;
   signals?: AbortSignal[];
+  /** answers POST /responses (Muse Spark); absent = Spark fails */
+  spark?: (body: Record<string, unknown>) => Promise<unknown>;
+  sparkLog?: string[];
 }
 
 function fakeClient(o: FakeOpts = {}) {
@@ -64,7 +67,12 @@ function fakeClient(o: FakeOpts = {}) {
   const seen: Record<string, number> = {};
   const client = {
     postStream: () => samEvents(o.sam ?? SAM_OUTPUT),
-    postJson: async (_path: string, body: { prompt: string }, signal?: AbortSignal) => {
+    postJson: async (path: string, body: { prompt: string }, signal?: AbortSignal) => {
+      if (path === '/responses') {
+        o.sparkLog?.push(`spark:${requested.length}`);
+        if (!o.spark) throw new Error('spark down');
+        return o.spark(body as unknown as Record<string, unknown>);
+      }
       const pose = Object.keys(POSES).find((k) => body.prompt.includes(POSES[k] as string)) as string;
       requested.push(pose);
       const attempt = (seen[pose] = (seen[pose] ?? 0) + 1);
@@ -303,6 +311,25 @@ describe('bboxIoU', () => {
   });
 });
 
+const PERSONA = {
+  breed: 'Shiba Inu',
+  coat: 'red',
+  traits: ['a', 'b', 'c'],
+  energy: 'normal',
+  lines: ['one', 'two', 'three', 'four', 'five', 'six'],
+};
+const sparkReply = (body: Record<string, unknown>) => {
+  const isFacts = body.tools !== undefined;
+  const t = isFacts ? { facts: [{ text: 'Old breed.', source: 'https://a.org' }] } : PERSONA;
+  return {
+    status: 'completed',
+    output: [
+      { type: 'web_search_call', results: [{ url: 'https://a.org' }] },
+      { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(t) }] },
+    ],
+  };
+};
+
 describe('generateSpritePack', () => {
   let root: string;
   let out: string;
@@ -538,5 +565,67 @@ describe('writePack', () => {
     }) as unknown as typeof import('node:fs/promises').rename;
     await expect(writePack(out, { 'a.txt': 'a' }, mv)).rejects.toThrow('perm');
     expect(await readdir(root)).toEqual(['pack']);
+  });
+});
+
+describe('meet your pet in the pipeline', () => {
+  let root: string;
+  let out: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'pixy-test-'));
+    out = join(root, 'pack');
+  });
+  afterEach(() => rm(root, { recursive: true, force: true }));
+
+  const run = async (o: FakeOpts, events: PipelineEvent[] = []) => {
+    const { client } = fakeClient(o);
+    const p = generateSpritePack({
+      client,
+      photo: await photo(),
+      petName: 'Pakkun',
+      species: 'dog',
+      outDir: out,
+      onProgress: (e) => events.push(e),
+      timing: { timeoutMs: 60_000, backoffMs: 1 },
+    });
+    return { p };
+  };
+
+  it('meets the pet beside the poses: events fire, personality and facts land in the manifest', async () => {
+    const events: PipelineEvent[] = [];
+    const sparkLog: string[] = [];
+    const { p } = await run({ spark: async (b) => sparkReply(b), sparkLog, delayMs: 20 }, events);
+    const manifest = await p;
+    const stages = events.map((e) => e.stage);
+    expect(stages).toContain('personality');
+    expect(stages.indexOf('facts')).toBeGreaterThan(stages.indexOf('personality'));
+    expect(stages.indexOf('personality')).toBeLessThan(stages.indexOf('done'));
+    expect(manifest.personality).toMatchObject({ breed: 'Shiba Inu', facts: [{ text: 'Old breed.', source: 'https://a.org' }] });
+    expect(JSON.parse(await readFile(join(out, 'sprite-manifest.json'), 'utf8')).personality.energy).toBe('normal');
+    // Spark starts right after the cutout, before idle (the first Muse Image request) completes.
+    expect(sparkLog[0]).toBe('spark:0');
+  });
+
+  it('still succeeds, with no personality, when Spark fails', async () => {
+    const events: PipelineEvent[] = [];
+    const { p } = await run({}, events);
+    const manifest = await p;
+    expect(manifest.personality).toBeUndefined();
+    expect(events.map((e) => e.stage)).not.toContain('personality');
+    expect(events.at(-1)?.stage).toBe('done');
+  });
+
+  it('a slow Spark that finishes within the poses adds no wall time', async () => {
+    // poses take >= 3 sequential rounds of 60 ms; Spark takes 2 x 80 ms in parallel.
+    const slow = async (b: Record<string, unknown>) => {
+      await new Promise((r) => setTimeout(r, 80));
+      return sparkReply(b);
+    };
+    const t0 = Date.now();
+    await (await run({ delayMs: 60 })).p;
+    const base = Date.now() - t0;
+    const t1 = Date.now();
+    await (await run({ delayMs: 60, spark: slow })).p;
+    expect(Date.now() - t1).toBeLessThan(base + 80);
   });
 });

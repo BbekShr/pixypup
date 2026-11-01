@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import { MetaClient } from '../meta-client.js';
+import { parseResponseText, sparkRequestBody } from '../muse-spark.js';
+import { breedFacts, meetPet, sanitizePersonality } from '../personality.js';
+import { validateManifest } from '../manifest.js';
+
+const GOOD = {
+  breed: 'Shiba Inu',
+  coat: 'red and cream',
+  traits: ['curious', 'brave', 'sneaky'],
+  energy: 'playful',
+  lines: ['Walk time?', 'I smell a snack.', 'Pet me, human.', 'Zoomies incoming!', 'Is it dinner yet?', 'I guard this desk.'],
+};
+type Body = { model: string; store: boolean; reasoning: unknown; text: { format: object }; tools?: unknown; include?: unknown; input: { content: unknown[] }[] };
+const text = (t: string, annotations: { type: string; url?: string }[] = []) => ({
+  status: 'completed',
+  output: [{ type: 'message', content: [{ type: 'output_text', text: t, annotations }] }],
+});
+
+function fake(res: unknown, calls: Body[] = []) {
+  const fetchImpl = (async (_u: string, init?: RequestInit) => {
+    calls.push(JSON.parse(init?.body as string));
+    return new Response(JSON.stringify(res), { status: 200 });
+  }) as unknown as typeof fetch;
+  return new MetaClient({ apiKey: 'k', fetchImpl });
+}
+
+describe('parseResponseText', () => {
+  it('joins output_text parts and ignores reasoning parts', () => {
+    const res = {
+      status: 'completed',
+      output: [
+        { type: 'reasoning', content: [{ type: 'reasoning_text', text: 'hmm' }] },
+        { type: 'message', content: [{ type: 'output_text', text: '{"a":' }, { type: 'output_text', text: '1}' }] },
+      ],
+    };
+    expect(parseResponseText(res)).toBe('{"a":1}');
+  });
+  it('fails on refusal, incomplete and empty', () => {
+    expect(() => parseResponseText({ status: 'completed', output: [{ content: [{ type: 'refusal', refusal: 'no' }] }] })).toThrow();
+    expect(() => parseResponseText({ ...text('{}'), status: 'incomplete' })).toThrow();
+    expect(() => parseResponseText({ status: 'completed', output: [] })).toThrow();
+  });
+});
+
+describe('request shapes', () => {
+  it('meetPet sends image data URL, json_schema text.format, low effort, store false, standard model', async () => {
+    const calls: Body[] = [];
+    const out = await meetPet(fake(text(JSON.stringify(GOOD)), calls), Buffer.from('png'), 'Pakkun', 'dog');
+    expect(out).toEqual(GOOD);
+    const b = calls[0]!;
+    expect(b.model).toBe('muse-spark-1.3');
+    expect(b.store).toBe(false);
+    expect(b.reasoning).toEqual({ effort: 'low' });
+    expect(b.text.format).toMatchObject({ type: 'json_schema', name: 'pet_personality' });
+    expect(b.tools).toBeUndefined();
+    const content = b.input[0]!.content;
+    expect(content[1]).toEqual({ type: 'input_image', image_url: `data:image/png;base64,${Buffer.from('png').toString('base64')}` });
+    expect(JSON.stringify(b)).not.toMatch(/contributor/);
+  });
+
+  it('breedFacts enables web_search and asks for the raw results', async () => {
+    const calls: Body[] = [];
+    await breedFacts(fake(text(JSON.stringify({ facts: [] })), calls), 'Shiba Inu', 'dog');
+    expect(calls[0]!.tools).toEqual([{ type: 'web_search' }]);
+    expect(calls[0]!.include).toEqual(['web_search_call.results']);
+    expect(JSON.stringify(calls[0])).not.toMatch(/image/);
+  });
+
+  it('never sends effort none', () => {
+    expect(sparkRequestBody({ instructions: '', input: '', schema: {}, name: 'x', effort: 'minimal' }).reasoning.effort).not.toBe('none');
+  });
+});
+
+describe('sanitizePersonality', () => {
+  it('trims and accepts a good personality; the manifest accepts it', () => {
+    const p = sanitizePersonality({ ...GOOD, breed: '  Shiba Inu ' });
+    expect(p.breed).toBe('Shiba Inu');
+    validateManifest({ pet: 'a', species: 'dog', poses: {}, personality: p });
+  });
+  it('drops long, URL, @ and emoji lines', () => {
+    const p = sanitizePersonality({ ...GOOD, lines: [...GOOD.lines.slice(0, 3), 'x'.repeat(41), 'see https://x.io', 'mail @me'] });
+    expect(p.lines).toEqual(GOOD.lines.slice(0, 3));
+    expect(sanitizePersonality({ ...GOOD, lines: [...GOOD.lines.slice(0, 3), 'woof \u{1F436}'] }).lines).toHaveLength(3);
+  });
+  it.each([
+    ['too few usable lines', { ...GOOD, lines: ['a', 'b'] }],
+    ['bad energy', { ...GOOD, energy: 'hyper' }],
+    ['two traits', { ...GOOD, traits: ['a', 'b'] }],
+    ['long breed', { ...GOOD, breed: 'x'.repeat(61) }],
+    ['not an object', 'hi'],
+  ])('rejects %s', (_n, v) => expect(() => sanitizePersonality(v)).toThrow());
+
+  it('meetPet returns null on garbage, refusal, http error', async () => {
+    expect(await meetPet(fake(text('nope')), Buffer.from(''), 'P', 'dog')).toBeNull();
+    expect(await meetPet(fake(text(JSON.stringify({ ...GOOD, energy: 'x' }))), Buffer.from(''), 'P', 'dog')).toBeNull();
+    const bad = new MetaClient({ apiKey: 'k', fetchImpl: (async () => new Response('x', { status: 500 })) as unknown as typeof fetch });
+    expect(await meetPet(bad, Buffer.from(''), 'P', 'dog')).toBeNull();
+  });
+});
+
+describe('breedFacts', () => {
+  const facts = (...f: { text: string; source: string }[]) => JSON.stringify({ facts: f });
+  it('keeps only sources the search returned, drops long or URL facts', async () => {
+    const res = {
+      status: 'completed',
+      output: [
+        { type: 'web_search_call', status: 'completed', results: [{ url: 'https://a.org/shiba' }] },
+        { type: 'message', content: [{ type: 'output_text', annotations: [{ type: 'url_citation', url: 'https://b.org/x' }],
+          text: facts(
+            { text: 'Shibas are very old.', source: 'https://a.org/shiba' },
+            { text: 'They scream a lot.', source: 'https://invented.org' },
+            { text: 'y'.repeat(91), source: 'https://b.org/x' },
+            { text: 'Go to https://evil.io', source: 'https://b.org/x' },
+          ) }] },
+      ],
+    };
+    expect(await breedFacts(fake(res), 'Shiba', 'dog')).toEqual([
+      { text: 'Shibas are very old.', source: 'https://a.org/shiba' },
+      { text: 'They scream a lot.' },
+    ]);
+  });
+  it('null when nothing usable or the call fails', async () => {
+    expect(await breedFacts(fake(text(facts())), 'Shiba', 'dog')).toBeNull();
+    expect(await breedFacts(fake({ status: 'incomplete' }), 'Shiba', 'dog')).toBeNull();
+  });
+});
+
+describe('validateManifest personality', () => {
+  const base = { pet: 'a', species: 'dog', poses: {} };
+  it('accepts facts, rejects unknown keys and over-long text', () => {
+    validateManifest({ ...base, personality: { ...GOOD, facts: [{ text: 'ok', source: 'https://a.org' }] } });
+    expect(() => validateManifest({ ...base, personality: { ...GOOD, extra: 1 } })).toThrow();
+    expect(() => validateManifest({ ...base, personality: { ...GOOD, lines: ['x'.repeat(41), 'a', 'b'] } })).toThrow();
+    expect(() => validateManifest({ ...base, personality: { ...GOOD, facts: [{ text: 'x'.repeat(91) }] } })).toThrow();
+  });
+});

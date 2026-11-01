@@ -7,10 +7,27 @@ export interface PoseDef {
   footY: number;
 }
 
+export interface Personality {
+  breed: string;
+  coat: string;
+  traits: [string, string, string];
+  energy: 'sleepy' | 'normal' | 'playful';
+  /** 3 to 6 catchphrases, each at most 40 characters, first person. */
+  lines: string[];
+}
+
+export interface PetFact {
+  /** At most 90 characters. */
+  text: string;
+  /** https URL the search returned. */
+  source?: string;
+}
+
 export interface SpriteManifest {
   pet: string;
   species: Species;
   poses: Record<string, PoseDef>;
+  personality?: Personality & { facts?: PetFact[] };
 }
 
 export type BehaviorAction =
