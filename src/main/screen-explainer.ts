@@ -6,7 +6,7 @@ import { IPC } from './ipc';
 const here = fileURLToPath(new URL('.', import.meta.url));
 
 /** The consent step for screen-aware mode: nothing reads the screen until the user presses "Turn it on" here. */
-export function setupScreenExplainer(o: { getHideInShares: () => boolean }): { ask(name: string): Promise<boolean> } {
+export function setupScreenExplainer(o: { getHideInShares: () => boolean; kind?: 'screen' | 'voice' }): { ask(name: string): Promise<boolean> } {
   let win: BrowserWindow | null = null;
   let settle: ((yes: boolean) => void) | null = null;
   ipcMain.on(IPC.screenAnswer, (e, yes: unknown) => {
@@ -36,7 +36,7 @@ export function setupScreenExplainer(o: { getHideInShares: () => boolean }): { a
       w.once('ready-to-show', () => w.show());
       w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       w.webContents.on('will-navigate', (ev) => ev.preventDefault());
-      const q = `?name=${encodeURIComponent(name)}`;
+      const q = `?name=${encodeURIComponent(name)}&kind=${o.kind ?? 'screen'}`;
       const devUrl = process.env['ELECTRON_RENDERER_URL'];
       if (devUrl) void w.loadURL(`${devUrl}/onboarding/screen.html${q}`);
       else void w.loadFile(join(here, '../renderer/onboarding/screen.html'), { search: q });

@@ -120,6 +120,9 @@ function loadAdmin(): ReturnType<typeof parseSettingsFile> {
 /** True when the admin file forces "hide during screen sharing" on, so the menu shows it locked. */
 export const hideLockedByAdmin = (): boolean => loadAdmin().values.hideInShares === true;
 
+/** True when the admin file turns voice off (or is unreadable/offline), so the menu shows it locked. */
+export const voiceLockedByAdmin = (): boolean => { const a = loadAdmin().values; return a.voice === false || a.offline === true; };
+
 export function loadSettings(): Settings {
   const user = parseSettingsFile(readFile(join(app.getPath('userData'), 'settings.json')));
   const admin = loadAdmin();

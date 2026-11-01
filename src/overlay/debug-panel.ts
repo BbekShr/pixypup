@@ -12,7 +12,7 @@ export type DebugInfo = {
   decision: { action: string; reason: string; bubble?: string; source: 'rule' | 'spark+rule' | 'none' } | null;
   sparkMs?: number;
 };
-export type DebugMsg = { on: boolean; name?: string; info?: DebugInfo };
+export type DebugMsg = { on: boolean; name?: string; info?: DebugInfo; heard?: string }; // heard = last voice transcript, local only
 
 const SOURCES = ['rule', 'spark+rule', 'none'];
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -44,6 +44,8 @@ export function parseDebug(raw: unknown): DebugMsg | null {
   const m: DebugMsg = { on: r['on'] };
   const name = str(r['name'], 30);
   if (name) m.name = name;
+  const heard = str(r['heard'], 60);
+  if (heard !== undefined) m.heard = heard;
   const info = r['info'] === undefined ? null : parseInfo(r['info']);
   if (info) m.info = info;
   return m;
@@ -81,6 +83,8 @@ export function createDebugPanel(calm: boolean): (raw: unknown) => void {
   document.body.append(card, mark);
   let name = 'Pakkun';
   let lastBox: Rect | undefined;
+  let lastInfo: DebugInfo | null = null;
+  let heard = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
   const hideMark = (): void => { clearTimeout(timer); mark.style.display = 'none'; };
 
@@ -88,12 +92,16 @@ export function createDebugPanel(calm: boolean): (raw: unknown) => void {
     const m = parseDebug(raw);
     if (!m) return;
     if (m.name) name = m.name;
-    const info = m.info ?? null;
+    if (m.heard !== undefined) heard = m.heard;
+    const info = m.info ?? (m.heard !== undefined ? lastInfo : null);
+    lastInfo = info;
     card.style.display = m.on && info?.gate !== 'snoozed' ? 'block' : 'none';
     if (!m.on || info?.gate !== 'on') { lastBox = undefined; hideMark(); }
     if (!m.on) return;
     title.textContent = `What ${name} sees`;
-    body.replaceChildren(...panelRows(info).map(([k, v, mono]) => {
+    const rows = panelRows(info);
+    if (heard) rows.push(['Heard', `“${heard}”`]);
+    body.replaceChildren(...rows.map(([k, v, mono]) => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;gap:8px;justify-content:space-between';
       const key = document.createElement('span');

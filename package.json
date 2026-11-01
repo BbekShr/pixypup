@@ -27,6 +27,9 @@
     ],
     "mac": {
       "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "PixyPup listens only while you press ⌥ Space so your pet can hear its name and a trick."
+      },
       "target": "dmg",
       "category": "public.app-category.entertainment"
     },

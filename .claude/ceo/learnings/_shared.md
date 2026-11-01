@@ -25,5 +25,7 @@
 - Prefs that mirror OS settings (login item) write to the OS only on the explicit user action, never from a general sync (F16).
 - The admin file is a whitelist of privacy restrictions (`ADMIN_KEYS`); every new setting is user-owned unless deliberately added (F16).
 - WAAPI: an `easing` in the options applies to the whole animation; overshoot easings make later keyframes arrive early. Put pop easing on the first keyframe (F17).
+- Live end-to-end runs with the real model find what unit tests can't (lost first word, name not boosted): every Meta-integrated feature gets one real-key run through the app path, not just the client (F8).
+- Reset per-session handles at the top of start(); attach abort listeners before awaiting a handshake (F8).
 
 ## Archive
