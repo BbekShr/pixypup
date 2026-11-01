@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SpriteManifest } from '../../contracts/types';
 import { naturalWalk, validateManifest } from '../api/manifest';
@@ -57,4 +57,17 @@ export async function loadPack(dir: string): Promise<Pack | null> {
 export async function pickPackDir(candidates: string[], ok: (dir: string) => Promise<boolean>): Promise<string | null> {
   for (const d of candidates) if (await ok(d)) return d;
   return null;
+}
+
+/** Where a slug's pack may live, best first: the user's own, the bundled one, then the built-in Pakkun. */
+export const packCandidates = (slug: string, userRoot: string, libRoot: string): string[] => [
+  ...(isPlainName(slug) ? [join(userRoot, slug), join(libRoot, slug)] : []),
+  join(libRoot, 'Pakkun'),
+];
+
+/** Bundled pets: every dir under libRoot that loads as a pack, named by its manifest. */
+export async function listLibrary(libRoot: string): Promise<{ slug: string; name: string }[]> {
+  const names = (await readdir(libRoot).catch(() => [] as string[])).filter(isPlainName).sort();
+  const packs = await Promise.all(names.map((n) => loadPack(join(libRoot, n))));
+  return packs.flatMap((p, i) => (p ? [{ slug: names[i]!, name: p.manifest.pet }] : []));
 }

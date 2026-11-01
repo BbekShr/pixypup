@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { MAX_FRAME_BYTES, dropStaticWalk, loadPack, pickPackDir } from './pack';
+import { MAX_FRAME_BYTES, dropStaticWalk, loadPack, packCandidates, pickPackDir } from './pack';
 
 const manifest = (frame: string) =>
   JSON.stringify({ pet: 'P', species: 'dog', poses: { idle: { frames: [frame], fps: 2, footY: 0.99 } } });
@@ -111,5 +111,14 @@ describe('pickPackDir', () => {
   });
   it('the shipped Pakkun pack is valid', async () => {
     expect(await loadPack(join(process.cwd(), 'assets/pets/Pakkun'))).not.toBeNull();
+  });
+});
+
+describe('packCandidates', () => {
+  it('tries the user pet, then the bundled one, then Pakkun', () => {
+    expect(packCandidates('Mochi', '/u/pets', '/app/assets/pets')).toEqual(['/u/pets/Mochi', '/app/assets/pets/Mochi', '/app/assets/pets/Pakkun']);
+  });
+  it('never lets a hostile slug steer out of the roots', () => {
+    expect(packCandidates('../x', '/u', '/l')).toEqual(['/l/Pakkun']);
   });
 });

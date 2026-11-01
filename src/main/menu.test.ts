@@ -87,3 +87,28 @@ describe('trayMenuTemplate', () => {
     expect(labels(petMenuTemplate(base)).some((l) => l.startsWith('Send'))).toBe(false);
   });
 });
+
+describe('Pet library submenu', () => {
+  const library = [{ slug: 'Mochi', name: 'Mochi' }, { slug: 'Kuma', name: 'Kuma' }, { slug: 'Pakkun', name: 'Pakkun' }];
+  const pets = [{ slug: 'pakkun', name: 'Pakkun' }];
+  it('follows Add another pet… in both menus and lists pets not on screen, skipping taken slugs case-insensitively', () => {
+    const want = [{ label: 'Mochi', command: 'library:Mochi' }, { label: 'Kuma', command: 'library:Kuma' }];
+    for (const t of [petMenuTemplate({ ...base, pets, library }), trayMenuTemplate({ ...base, pets, library })]) {
+      const i = labels(t).indexOf('Add another pet…');
+      expect(labels(t)[i + 1]).toBe('Pet library');
+      expect(sub(t, 'Pet library')).toEqual(want);
+    }
+  });
+  it('disables every item at MAX_PETS', () => {
+    const four = ['a', 'b', 'c', 'd'].map((s) => ({ slug: s, name: s }));
+    for (const t of [petMenuTemplate({ ...base, pets: four, library }), trayMenuTemplate({ ...base, pets: four, library })]) {
+      const items = sub(t, 'Pet library');
+      expect(items).toHaveLength(3);
+      expect(items.every((i) => 'enabled' in i && i.enabled === false)).toBe(true);
+    }
+  });
+  it('says Everyone\'s here (disabled) when all are on screen', () => {
+    const all = library.map((l) => ({ slug: l.slug.toLowerCase(), name: l.name }));
+    expect(sub(petMenuTemplate({ ...base, pets: all, library }), 'Pet library')).toEqual([{ label: "Everyone's here", command: 'library:none', enabled: false }]);
+  });
+});
