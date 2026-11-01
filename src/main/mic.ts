@@ -7,11 +7,14 @@ import { IPC } from './ipc';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 
-/** Dev only: the 24 kHz 16-bit mono PCM of a WAV (44-byte header), streamed by the mic window instead of getUserMedia. */
+/** Dev only: the 24 kHz 16-bit mono PCM of a WAV, streamed by the mic window instead of getUserMedia. */
 export const fakeMicPcm = (path: string | undefined): ArrayBuffer | undefined => {
   if (!path) return undefined;
   const b = readFileSync(path);
-  return b.buffer.slice(b.byteOffset + 44, b.byteOffset + b.byteLength) as ArrayBuffer;
+  const at = b.indexOf('data'); // afconvert pads the header (FLLR), so the PCM is not at byte 44
+  if (at < 12) throw new Error('PIXY_FAKE_MIC: no data chunk');
+  const start = at + 8;
+  return b.buffer.slice(b.byteOffset + start, b.byteOffset + Math.min(b.length, start + b.readUInt32LE(at + 4))) as ArrayBuffer;
 };
 
 /** A hidden window that holds the microphone only between start() and stop(); it never shows UI. */

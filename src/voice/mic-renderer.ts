@@ -10,7 +10,7 @@ declare global {
 
 let stopCapture: (() => void) | null = null;
 
-const FAKE_CHUNK = 1920; // 80 ms of 24 kHz 16-bit
+const FAKE_CHUNK = 3840; // 80 ms of 24 kHz 16-bit, sent every 80 ms: real time
 
 async function capture(): Promise<() => void> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });

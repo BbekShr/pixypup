@@ -43,7 +43,6 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
     silent = createSilenceDetector();
     d.ui({ kind: 'listening' });
     d.mic.start();
-    t1 = setTimeout(() => fire('timeout'), LISTEN_MS);
     t2 = setTimeout(() => fire('error'), CAP_MS);
     d.open(d.key()!, {
       onTranscript: (t) => {
@@ -56,6 +55,7 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
       (t) => {
         if (me !== id) return t.close();
         tr = t;
+        if (state === 'listening') t1 = setTimeout(() => fire('timeout'), LISTEN_MS); // the window counts from the handshake ack; the 6 s cap still runs from the press
         for (const b of pending) t.push(b);
         pending = [];
         if (state === 'thinking') finish(t, me);
@@ -78,7 +78,7 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
       const heard = text;
       fire('done');
       d.heard(heard.slice(0, 60));
-      const cmd = matchCommand(heard, d.petName());
+      const cmd = matchCommand(heard, d.petName(), { requireName: false }) // pressing the key is the address;
       if (cmd) d.command(cmd);
       d.ui({ kind: cmd ? 'idle' : 'huh' });
     });

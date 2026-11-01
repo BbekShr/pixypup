@@ -13,8 +13,9 @@ function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFail
   let opts!: Omit<VoiceOptions, 'apiKey'>;
   let opened = 0;
   let pushed = 0;
+  const got: ArrayBuffer[] = [];
   const tr: Transcription = {
-    push: () => void pushed++,
+    push: (b) => { pushed++; got.push(b as ArrayBuffer); },
     close: () => void log.push('close'),
     end: async () => {
       if (o.transcript) opts.onTranscript({ text: o.transcript, final: true });
@@ -35,7 +36,7 @@ function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFail
     command: (c) => void cmds.push(c),
     heard: () => undefined,
   });
-  return { s, log, ui, cmds, opened: () => opened, pushed: () => pushed, fail: () => opts.onError({ code: 1011 } as never) };
+  return { s, log, ui, cmds, opened: () => opened, pushed: () => pushed, got, fail: () => opts.onError({ code: 1011 } as never) };
 }
 const kinds = (ui: VoiceUi[]) => ui.map((u) => u.kind);
 
@@ -43,6 +44,34 @@ beforeEach(() => void vi.useFakeTimers());
 afterEach(() => void vi.useRealTimers());
 
 describe('voice session', () => {
+  it('every chunk from the press is kept through a slow handshake and pushed in order', async () => {
+    let ack!: (t: Transcription) => void;
+    const got: ArrayBuffer[] = [];
+    const s = createVoiceSession({ allowed: () => true, key: () => 'k', petName: () => 'P', open: () => new Promise((r) => (ack = r)), mic: { start: () => undefined, stop: () => undefined }, ui: () => undefined, command: () => undefined, heard: () => undefined });
+    s.press();
+    const chunks = [1, 2, 3].map((n) => new Int16Array(960).fill(n).buffer);
+    chunks.slice(0, 2).forEach((c) => s.chunk(c)); // before the ack
+    await vi.advanceTimersByTimeAsync(1500); // a slow handshake must not eat the window
+    ack({ push: (b) => void got.push(b as ArrayBuffer), close: () => undefined, end: async () => undefined });
+    await vi.advanceTimersByTimeAsync(0);
+    s.chunk(chunks[2]!);
+    expect(got).toEqual(chunks);
+    expect(s.state()).toBe('listening');
+    await vi.advanceTimersByTimeAsync(3900); // 4 s counts from the ack
+    expect(s.state()).toBe('listening');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(s.state()).not.toBe('listening');
+  });
+  it('the name is optional after a press', async () => {
+    for (const [said, cmd] of [['can you roll over?', 'roll'], ['sit', 'sit']] as const) {
+      const r = rig({ transcript: said });
+      r.s.press();
+      await vi.advanceTimersByTimeAsync(0);
+      r.s.press();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(r.cmds).toEqual([cmd]);
+    }
+  });
   it('silence after speech ends the window and the final transcript runs the command', async () => {
     const r = rig({ transcript: 'Pakkun, sit' });
     r.s.press();

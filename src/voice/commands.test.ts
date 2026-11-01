@@ -37,3 +37,12 @@ describe('matchCommand hardening', () => {
     expect(matchCommand('Pakkun come here and sit', 'Pakkun')).toBe('sit');
   });
 });
+
+describe('matchCommand without a required name', () => {
+  it('matches bare commands only when asked to', () => {
+    expect(matchCommand('can you roll over?', 'Pakkun', { requireName: false })).toBe('roll');
+    expect(matchCommand('sit', 'Pakkun', { requireName: false })).toBe('sit');
+    expect(matchCommand('hello there', 'Pakkun', { requireName: false })).toBeNull();
+    expect(matchCommand('sit', 'Pakkun')).toBeNull();
+  });
+});
