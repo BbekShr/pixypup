@@ -1,6 +1,7 @@
 import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
+import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
 import { DISPLAY_H, displayWidth, footOffset } from './layout';
 import { BLINK_MS, blinkDelay, bob, breathe, fall, hop, lean, petTransform, pickTarget, rollAngle, squash, walkFrame, walkSpeed } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
@@ -10,7 +11,7 @@ declare global {
     pixy: {
       setClickThrough(on: boolean): void;
       onCommand(cb: (cmd: string) => void): void;
-      onPackChanged(cb: () => void): void;
+      onPackChanged(cb: (h: { x?: number }) => void): void;
       getPack(): Promise<Pack | null>;
       showMenu(): void;
       getStay(): Promise<boolean>;
@@ -34,29 +35,35 @@ let W = 120;
 let H = 120;
 let footY = 1;
 
-async function loadPackSprites(): Promise<string | null> {
+interface Prepared { name: string; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; w: number; h: number; footY: number }
+
+// Decodes everything before anything is swapped, so the old pet keeps its own poses until it has left.
+async function readPack(): Promise<Prepared | null> {
   const pack = await window.pixy.getPack();
   if (!pack) return null;
-  const next: Record<string, PoseSet> = {};
+  const poses: Record<string, PoseSet> = {};
   for (const [name, p] of Object.entries(pack.manifest.poses)) {
-    next[name] = { srcs: p.frames.map((f) => pack.frames[f]).filter((s): s is string => !!s), fps: p.fps };
+    poses[name] = { srcs: p.frames.map((f) => pack.frames[f]).filter((s): s is string => !!s), fps: p.fps };
   }
-  const fresh: HTMLImageElement[] = [];
-  await Promise.all(Object.values(next).flatMap((p) => p.srcs).map(async (s) => {
+  const bitmaps: HTMLImageElement[] = [];
+  await Promise.all(Object.values(poses).flatMap((p) => p.srcs).map(async (s) => {
     const i = new Image();
     i.src = s;
     await i.decode();
-    fresh.push(i);
+    bitmaps.push(i);
   }));
-  const first = fresh.find((i) => i.src === next['idle']?.srcs[0]);
+  const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
-  H = DISPLAY_H;
-  W = displayWidth(first.naturalWidth, first.naturalHeight);
-  footY = pack.manifest.poses['idle']?.footY ?? 1;
-  keep.splice(0, keep.length, ...fresh); // the old pack's bitmaps are released only once the new poses are live
-  poses = next;
+  return { name: pack.manifest.pet, poses, bitmaps, w: displayWidth(first.naturalWidth, first.naturalHeight), h: DISPLAY_H, footY: pack.manifest.poses['idle']?.footY ?? 1 };
+}
+
+function applyPack(p: Prepared): void {
+  H = p.h;
+  W = p.w;
+  footY = p.footY;
+  keep.splice(0, keep.length, ...p.bitmaps); // the old pack's bitmaps are released only once the new poses are live
+  poses = p.poses;
   sizeImg();
-  return pack.manifest.pet;
 }
 
 function sizeImg(): void {
@@ -66,7 +73,7 @@ function sizeImg(): void {
 }
 img.src = pupUrl;
 sizeImg();
-void loadPackSprites().catch(() => undefined);
+void readPack().then((p) => p && applyPack(p)).catch(() => undefined);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
 const floorY = (): number => window.innerHeight - footOffset(H, footY);
@@ -97,7 +104,10 @@ let last = stateAt;
 let stay = false; // menu toggle: no wander targets, idle/sit/sleep only
 let menuCalls = 0;
 let greet: string | null = null; // new pet's name: barked as a greeting on landing
-let pendingDrop: string | null = null; // a pack change that arrived mid-drag
+let pendingSwap: { pack: Prepared; cx: number | undefined } | null = null; // a pet change that arrived mid-drag
+let handoff: Handoff | null = null;
+let queuedCmd: string | null = null; // a menu command that arrived mid-hand-off
+let incoming: { pack: Prepared; cx: number | undefined } | null = null; // the new pet, waiting for the old one to leave
 let shownSrc = '';
 let walked = 0; // distance walked, drives the stride-synced frame and bob
 let zs: HTMLElement[] = [];
@@ -118,12 +128,14 @@ function setState(ev: PetEvent, o: { ms?: number; target?: number } = {}, forced
 
 function enter(prev: PetState): void {
   // brief dip so the frame swap reads as a crossfade
-  img.style.transition = 'none';
-  img.style.opacity = '0.4';
-  requestAnimationFrame(() => {
-    img.style.transition = 'opacity 120ms';
-    img.style.opacity = '1';
-  });
+  if (!calm) {
+    img.style.transition = 'none';
+    img.style.opacity = '0.4';
+    requestAnimationFrame(() => {
+      img.style.transition = 'opacity 120ms';
+      img.style.opacity = '1';
+    });
+  }
   if (prev === 'sleep') { zs.forEach((z) => z.remove()); zs = []; }
   if (state === 'sleep') {
     for (let i = 0; i < 3; i++) {
@@ -132,6 +144,7 @@ function enter(prev: PetState): void {
       z.style.cssText = 'position:absolute;left:0;top:0;font:700 16px sans-serif;color:#555;pointer-events:none';
       fx.append(z);
       zs.push(z);
+      if (calm) { z.style.transform = `translate(${4 + i * 6}px,${-6 - i * 10}px)`; continue; }
       z.animate(
         [{ opacity: 0, transform: 'translate(0,0)' }, { opacity: 1, offset: 0.3 }, { opacity: 0, transform: 'translate(14px,-34px)' }],
         { duration: 2700, delay: i * 900, iterations: Infinity },
@@ -166,16 +179,18 @@ function frame(now: number): void {
       walkAt = now;
       if (greet) {
         const g = greet;
-        lastInteraction = now;
-        setState('bark'); // enter() skips its own "Woof!" while a greeting is pending
         greet = null;
-        sayHi(g);
+        if (handoff === 'drop') handoff = handoffNext(handoff, 'landed');
+        land(g);
       }
     }
   } else if (state === 'walk' && now >= turnUntil) {
     const rem = Math.abs(target - x);
     const want = target >= x ? 1 : -1;
-    if (rem < 1) {
+    if (rem < 1 && handoff === 'trotOff') {
+      handoff = handoffNext(handoff, 'offscreen');
+      dropIn();
+    } else if (rem < 1) {
       const ev = onTimeout('walk', Math.random(), now - lastInteraction);
       setState(ev, ev === 'sit' ? { ms: 4000 } : {});
     } else if (want !== dir) {
@@ -183,7 +198,7 @@ function frame(now: number): void {
       turnUntil = now + TURN_MS;
       walkAt = turnUntil; // speed ramps up from the end of the turn, no lurch
     } else {
-      const step = Math.min(walkSpeed(now - walkAt, rem) * dt, rem);
+      const step = Math.min(walkSpeed(now - walkAt, rem) * (handoff === 'trotOff' ? TROT_SPEEDUP : 1) * dt, rem);
       x += dir * step;
       walked += step;
     }
@@ -261,7 +276,7 @@ img.addEventListener('contextmenu', (e) => {
   window.pixy.showMenu();
 });
 img.addEventListener('pointerdown', (e) => {
-  if (dragging || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
+  if (dragging || handoffBusy(handoff) || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
   dragging = true;
   falling = false;
   lift = Math.min(0, lift);
@@ -292,13 +307,17 @@ function finish(e: PointerEvent): void {
   if (lift < 0) { falling = true; vy = 0; }
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
   if (!img.matches(':hover')) window.pixy.setClickThrough(true);
-  if (pendingDrop) { const n = pendingDrop; pendingDrop = null; dropIn(n); }
+  if (pendingSwap) { const q = pendingSwap; pendingSwap = null; swapPets(q.pack, q.cx); }
 }
 img.addEventListener('pointerup', finish);
 img.addEventListener('pointercancel', finish);
 img.addEventListener('lostpointercapture', finish);
 
-function command(cmd: string): void {
+function command(raw: string): void {
+  const r = routeCommand(handoff, raw, queuedCmd);
+  queuedCmd = r.queued;
+  if (!r.now) return;
+  const cmd = r.now;
   lastInteraction = performance.now();
   if (cmd === 'sit' || cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');
@@ -310,17 +329,49 @@ function command(cmd: string): void {
 }
 window.pixy.onCommand(command);
 
-// A freshly made pet falls in from above the window, lands, and introduces itself.
-function dropIn(name: string): void {
-  if (dragging) { pendingDrop = name; return; }
-  x = Math.max(0, (window.innerWidth - W) / 2);
-  home = x;
+// Old pet trots off the nearest edge at double speed; dropIn() then fires on arrival. Reduced motion: crossfade swap.
+function swapPets(pack: Prepared, cx: number | undefined): void {
+  if (dragging) { pendingSwap = { pack, cx }; return; }
+  incoming = { pack, cx: validCx(cx, window.innerWidth, x + W / 2) };
+  handoff = handoffStart(calm);
+  greet = null;
+  falling = false;
+  lift = 0;
+  lastInteraction = performance.now(); // onboarding takes minutes; without this the pet would nap right after landing
+  if (!calm) { setState('walk', { target: trotTarget(x, W, window.innerWidth) }); return; }
+  img.style.transition = 'opacity 200ms';
+  img.style.opacity = '0';
+  setTimeout(() => {
+    const n = incoming!;
+    applyPack(n.pack);
+    x = home = dropLeft(n.cx, W, window.innerWidth);
+    setState('idle', { ms: 10_000 });
+    img.style.transition = 'opacity 300ms';
+    img.style.opacity = '1';
+    land(n.pack.name);
+  }, 220);
+}
+// The new pet falls in from above, at the spot the onboarding window shrank toward.
+function dropIn(): void {
+  const n = incoming!;
+  applyPack(n.pack);
+  x = home = dropLeft(n.cx, W, window.innerWidth);
   lift = -(floorY() + H);
   vy = 0;
   falling = true;
-  greet = name;
-  lastInteraction = performance.now(); // onboarding takes minutes; without this the pet would nap right after landing
+  greet = n.pack.name;
   setState('idle', { ms: 10_000 });
+}
+function land(name: string): void {
+  lastInteraction = performance.now();
+  setState('bark'); // enter() skips its own "Woof!" while a greeting is pending
+  sayHi(name);
+  setTimeout(() => {
+    if (handoff) handoff = handoffNext(handoff, 'greeted');
+    const r = flushCommand(handoff, queuedCmd);
+    queuedCmd = r.queued;
+    if (r.now) command(r.now);
+  }, 3600);
 }
 function sayHi(name: string): void {
   const b = document.createElement('div');
@@ -332,8 +383,8 @@ function sayHi(name: string): void {
     { duration: 3600, fill: 'backwards', easing: 'cubic-bezier(.34,1.56,.64,1)' },
   ).onfinish = () => b.remove();
 }
-window.pixy.onPackChanged(() => {
-  void loadPackSprites().then((name) => { if (name) dropIn(name); }).catch(() => undefined);
+window.pixy.onPackChanged((h) => {
+  void readPack().then((p) => p && swapPets(p, h.x)).catch(() => undefined);
 });
 
 setState('walk');
@@ -341,5 +392,5 @@ raf = requestAnimationFrame(frame);
 import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ state, x, dir, facing, walked, stay, menuCalls, lift, falling, command }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command }) });
 }

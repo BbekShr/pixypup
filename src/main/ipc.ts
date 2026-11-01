@@ -14,6 +14,7 @@ export const IPC = {
   obOpenKeyPage: 'pixy:ob-open-key-page',
   obKeep: 'pixy:ob-keep',
   obClose: 'pixy:ob-close',
+  obShrink: 'pixy:ob-shrink',
   obProgress: 'pixy:ob-progress',
   obFinished: 'pixy:ob-finished',
 } as const;

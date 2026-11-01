@@ -71,9 +71,19 @@
         </section>
 
         <section class="step" data-step="making">
-          <div class="cutout" id="cutout"><svg class="ico big"><use href="#paw" /></svg></div>
+          <div class="birth" id="birth">
+            <div class="nest"></div>
+            <svg class="ico big paw"><use href="#paw" /></svg>
+            <div class="pet">
+              <img class="layer photo" id="b-photo" alt="" />
+              <img class="layer cut" id="b-cut" alt="" />
+              <img class="layer gen" id="b-gen" alt="" />
+            </div>
+            <div class="sparks" id="sparks" aria-hidden="true"></div>
+          </div>
           <h1 id="making-title">Meeting them…</h1>
           <p class="lead copy" id="copy" aria-live="polite">Learning their ears…</p>
+          <div class="ribbon" id="ribbon" aria-hidden="true"><i id="ribbon-fill"></i></div>
           <div class="tiles" id="tiles"></div>
         </section>
 
@@ -85,12 +95,6 @@
             <button class="btn ghost" id="otherphoto">Another photo</button>
             <button class="btn primary" id="retry">Try again</button>
           </div>
-        </section>
-
-        <section class="step" data-step="done">
-          <img class="hero bob" id="done-img" alt="" />
-          <h1 id="done-title">Say hi!</h1>
-          <p class="lead">Right-click your pet any time.</p>
         </section>
       </div>
     </main>

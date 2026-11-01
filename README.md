@@ -24,4 +24,4 @@ The build is ad-hoc signed (no Apple Developer ID). After copying PixyPup.app to
 All code written from Oct 31 2026 for the Meta Global AI Developer Hackathon.
 
 ## Make your own pet
-On first launch a small welcome window offers to turn a photo of your dog or cat into a pet (right-click the pet, "Make a new pet…", any time). Rehearse without a key: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` (dev builds only).
+On first launch a small welcome window offers to turn a photo of your dog or cat into a pet (right-click the pet, "Make a new pet…", any time). While the pet is drawn the photo melts into the cutout and poses pop in; at the end the window shrinks to the floor, the old pet trots off, and the new one drops in and says hi. Rehearse without a key: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` (dev builds only).

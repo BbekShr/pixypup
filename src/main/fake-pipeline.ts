@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import type { SpriteManifest } from '../../contracts/types';
 import { writePack, type PipelineEvent } from '../api/pose-pipeline';
 
@@ -22,7 +23,8 @@ export async function fakeCreate(o: { srcDir: string; outDir: string; name: stri
   files['sprite-manifest.json'] = JSON.stringify({ ...manifest, pet: o.name, species: o.species }, null, 2);
 
   await wait(cutoutAt);
-  o.emit({ stage: 'cutout', png: await png('idle_0') });
+  // Washed out like a flat photo cutout, so the reveal's morph into the 3D idle is visible in rehearsal.
+  o.emit({ stage: 'cutout', png: await sharp(await png('idle_0')).modulate({ saturation: 0.15, brightness: 0.92 }).png().toBuffer() });
   let at = cutoutAt;
   for (const [i, [name, frac]] of TIMELINE.entries()) {
     const t = from + (to - from) * frac;
