@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem, type MenuState } from './menu';
 
-const base: MenuState = { stay: false, snoozed: false, size: 'medium', energy: 'normal', hideInShares: false, openAtLogin: false, name: 'Pakkun' };
+const base: MenuState = { stay: false, snoozed: false, size: 'medium', energy: 'normal', hideInShares: false, screenAware: false, openAtLogin: false, name: 'Pakkun' };
 const labels = (t: MenuItem[]): string[] => t.map((i) => ('type' in i ? '-' : i.label));
+const find = (t: MenuItem[], l: string): MenuItem | undefined => t.find((i) => 'label' in i && i.label === l);
 const sub = (t: MenuItem[], label: string): MenuItem[] => {
   const m = t.find((i) => 'submenu' in i && i.label === label);
   return m && 'submenu' in m ? m.submenu : [];
@@ -10,7 +11,7 @@ const sub = (t: MenuItem[], label: string): MenuItem[] => {
 
 describe('petMenuTemplate', () => {
   it('has the agreed order, tricks first and Quit last', () => {
-    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Open at login', 'Make a new pet…', '-', 'Quit PixyPup']);
+    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Open at login', 'Make a new pet…', '-', 'Quit PixyPup']);
     expect(petMenuTemplate(base).at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
   });
   it('maps the tricks to overlay command strings', () => {
@@ -30,10 +31,16 @@ describe('petMenuTemplate', () => {
     expect(sub(t, 'Energy').map((i) => 'command' in i && [i.command, i.checked])).toEqual([['energy:sleepy', true], ['energy:normal', false], ['energy:playful', false]]);
   });
   it('hide and login are checkboxes that toggle', () => {
-    const find = (t: MenuItem[], l: string): MenuItem | undefined => t.find((i) => 'label' in i && i.label === l);
     expect(find(petMenuTemplate(base), 'Hide during screen sharing')).toEqual({ label: 'Hide during screen sharing', command: 'hide:on', checked: false });
     expect(find(petMenuTemplate({ ...base, hideInShares: true, openAtLogin: true }), 'Hide during screen sharing')).toMatchObject({ command: 'hide:off', checked: true });
     expect(find(petMenuTemplate({ ...base, openAtLogin: true }), 'Open at login')).toMatchObject({ command: 'login:off', checked: true });
+  });
+  it('notice-my-screen is an off-by-default checkbox; turning it on goes through the explainer command', () => {
+    expect(find(petMenuTemplate(base), 'Notice my screen')).toEqual({ label: 'Notice my screen', command: 'screen:on', checked: false });
+    expect(find(petMenuTemplate({ ...base, screenAware: true }), 'Notice my screen')).toMatchObject({ command: 'screen:off', checked: true });
+  });
+  it('an admin-locked notice-my-screen item is unchecked, disabled and says why', () => {
+    expect(find(petMenuTemplate({ ...base, screenAware: true, screenLocked: true }), 'Notice my screen (set by your organisation)')).toEqual({ label: 'Notice my screen (set by your organisation)', command: 'screen:off', checked: false, enabled: false });
   });
   it('an admin-locked hide item is a checked, disabled entry that says why', () => {
     const t = petMenuTemplate({ ...base, hideInShares: true, hideLocked: true });

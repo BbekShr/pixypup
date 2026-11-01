@@ -40,7 +40,7 @@ describe('ruleDecide', () => {
   });
   it('sniffs the error box center', () => {
     const d = ruleDecide({ ...base, terminalError: { text: 'boom', box: { x: 10, y: 20, w: 100, h: 40 } } });
-    expect(d).toMatchObject({ action: 'sniff', target: { x: 60, y: 40 } });
+    expect(d).toMatchObject({ action: 'sniff', target: { x: -6, y: 40 } });
   });
   it('sniffs window bottom-left without a box', () => {
     const d = ruleDecide({
@@ -51,7 +51,7 @@ describe('ruleDecide', () => {
     expect(d?.target).toEqual({ x: 5, y: 210 });
   });
   it('perks up for Slack badge', () => {
-    expect(ruleDecide({ ...base, slackBadge: '3' })).toMatchObject({ action: 'idle', reason: 'perk up' });
+    expect(ruleDecide({ ...base, slackBadge: '3' })).toMatchObject({ action: 'perk_up' });
   });
   it('call beats error', () => {
     const d = ruleDecide({

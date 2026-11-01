@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'" />
+    <title>Notice my screen</title>
+  </head>
+  <body data-step="welcome">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="paw" viewBox="0 0 32 32">
+        <ellipse cx="16" cy="21" rx="8" ry="6.5" /><ellipse cx="6" cy="13" rx="3.2" ry="4.2" /><ellipse cx="12.5" cy="7.5" rx="3.2" ry="4.4" /><ellipse cx="19.5" cy="7.5" rx="3.2" ry="4.4" /><ellipse cx="26" cy="13" rx="3.2" ry="4.2" />
+      </symbol>
+    </svg>
+    <main class="card">
+      <header>
+        <span class="brand"><svg class="ico"><use href="#paw" /></svg>PixyPup</span>
+        <button class="x" id="close" aria-label="Not now" title="Not now">&times;</button>
+      </header>
+      <div class="stage">
+        <section class="step" data-step="welcome">
+          <img class="hero bob" id="hero" alt="" style="width: 120px" />
+          <h1 id="title">Let your pet notice things?</h1>
+          <p class="lead" id="what"></p>
+          <p class="small soft" id="reads"></p>
+          <p class="small soft">macOS will ask once to let PixyPup control Terminal. Say yes there, and that's all.</p>
+          <div class="actions">
+            <button class="btn ghost" id="no">Not now</button>
+            <button class="btn primary" id="yes">Turn it on</button>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./screen.ts"></script>
+  </body>
+</html>

@@ -196,6 +196,14 @@ describe('terminal reader', () => {
     expect((await read(d)).changed).toBe(false);
     expect((await read(mk('Terminal', out(4, 80, 1, 1, 'ok')))).changed).toBe(true);
   });
+  it('keeps the key when the same error scrolls to another row', async () => {
+    const read = createTerminalReader();
+    const a = await read(mk('Terminal', out(6, 80, 1, 1, 'FAIL x\nb\n')));
+    const b = await read(mk('Terminal', out(6, 80, 1, 1, 'a\nFAIL x\n')));
+    expect(b.terminalError!.box.y).not.toBe(a.terminalError!.box.y);
+    expect(b.key).toBe(a.key);
+    expect(b.changed).toBe(false);
+  });
   it('adds the tab bar when there are several tabs', async () => {
     const r = await createTerminalReader()(mk('Terminal', out(4, 80, 2, 1, screen)));
     expect(r.terminalError?.box).toEqual(lineToScreen(term, 4, 2, 53));

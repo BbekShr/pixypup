@@ -38,11 +38,14 @@ export type BehaviorAction =
   | 'idle'
   | 'sleep'
   | 'sit'
-  | 'roll';
+  | 'roll'
+  | 'perk_up';
 
 export interface BehaviorDecision {
   action: BehaviorAction;
   target?: { x: number; y: number };
   durationMs: number;
   reason: string;
+  /** What the pet says, at most 40 characters. */
+  bubble?: string;
 }

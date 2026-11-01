@@ -2,6 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, TROT_SPEEDUP, validCx, type Handoff } from './handoff';
+import { behaviorBusy, hideSpot, parseBehavior, peekOutX, routeBehavior, SNIFF_MS, sniffPose, type Behavior } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { displayWidth, footOffset } from './layout';
@@ -13,6 +14,7 @@ declare global {
     pixy: {
       setClickThrough(on: boolean): void;
       onCommand(cb: (cmd: string) => void): void;
+      onBehavior(cb: (b: unknown) => void): void;
       onPackChanged(cb: (h: { x?: number }) => void): void;
       getPack(): Promise<Pack | null>;
       showMenu(): void;
@@ -25,6 +27,15 @@ declare global {
 }
 
 interface PoseSet { srcs: string[]; fps: number }
+// A screen-aware behaviour that owns the pet until it ends; the normal state timers are paused meanwhile.
+type Act =
+  | { kind: 'sniff'; phase: 'run' | 'sniff' | 'bark'; until: number; target: { x: number; y: number }; bubble: string }
+  | { kind: 'perk'; until: number }
+  | { kind: 'hide'; phase: 'go' | 'away' | 'peek' | 'peeking'; until: number; side: -1 | 1; spot: number };
+const LONG = 1e9; // a state dwell that never fires; the act ends it
+const BARK_MS = 3500;
+const PERK_MS = 1000;
+const MARK_MS = 2600;
 
 const TURN_MS = 120;
 const STRIDE = 0.22; // of displayed width per walk frame
@@ -139,6 +150,10 @@ let zs: HTMLElement[] = [];
 let resting = false; // snoozed: invisible, and the rAF loop is stopped
 let restTimer: ReturnType<typeof setTimeout> | undefined;
 let wakeSay = false; // wake-up: drop in, then a sleepy greeting
+let act: Act | null = null;
+let queuedBehavior: Behavior | null = null; // the last behaviour that arrived while the pet was busy
+let lastSeq = -1;
+let lastBehavior: Behavior | null = null; // dev panel only
 
 const en = (): ReturnType<typeof energyParams> => energyParams(prefs.energy);
 
@@ -201,6 +216,8 @@ function frame(now: number): void {
   const age = now - stateAt;
 
   if (now >= turnUntil) facing = dir;
+  if (queuedBehavior && !busyNow() && (!act || queuedBehavior.action === 'hide')) { const q = queuedBehavior; queuedBehavior = null; start(q); }
+  if (act && act.until && now >= act.until) actTimeout(now);
   if (falling) {
     const r = fall(lift, vy, dt);
     lift = r.lift;
@@ -228,6 +245,8 @@ function frame(now: number): void {
     if (rem < 1 && handoff === 'trotOff') {
       handoff = handoffNext(handoff, 'offscreen');
       dropIn();
+    } else if (rem < 1 && act) {
+      actArrive(now);
     } else if (rem < 1) {
       const ev = onTimeout('walk', Math.random(), now - lastInteraction, en());
       setState(ev, ev === 'sit' ? { ms: 4000 } : {});
@@ -236,16 +255,16 @@ function frame(now: number): void {
       turnUntil = now + TURN_MS;
       walkAt = turnUntil; // speed ramps up from the end of the turn, no lurch
     } else {
-      const step = Math.min(walkSpeed(now - walkAt, rem, MAX_SPEED * en().speed * sizeScale(prefs.size)) * (handoff === 'trotOff' ? TROT_SPEEDUP : 1) * dt, rem);
+      const step = Math.min(walkSpeed(now - walkAt, rem, MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size)) * (handoff === 'trotOff' || (act?.kind === 'hide' && act.phase === 'go') ? TROT_SPEEDUP : 1) * dt, rem);
       x += dir * step;
       walked += step;
     }
-  } else if (deadline !== null && now >= deadline) {
+  } else if (!act && deadline !== null && now >= deadline) {
     const ev = onTimeout(state, Math.random(), now - lastInteraction, en());
     setState(ev, ev === 'sit' ? { ms: 4000 } : {});
   }
 
-  if (now >= sayAt && canSpeak(state, (handoff !== null && handoff !== 'wander') ||dragging || falling || now < speakingUntil || greet !== null) && speakLine()) sayAt = nextSayAt(now, Math.random(), chatty);
+  if (now >= sayAt && canSpeak(state, act !== null || (handoff !== null && handoff !== 'wander') ||dragging || falling || now < speakingUntil || greet !== null) && speakLine()) sayAt = nextSayAt(now, Math.random(), chatty);
 
   // idle life: look around or tilt the head every 3-6 s
   if (state === 'idle' && now >= lifeAt) {
@@ -279,6 +298,15 @@ function frame(now: number): void {
   } else if (state === 'idle' || state === 'sit') {
     sy = breathe(now, 0.4, 0.025) * (state === 'sit' ? squash(age, 0.06, 150) : 1);
     if (life && lifeKind === 'tilt' && !calm) rot = lifeTilt;
+    if (act?.kind === 'sniff' && act.phase === 'sniff' && !calm) {
+      const p = sniffPose(now - (act.until - SNIFF_MS));
+      rot = p.tilt * facing;
+      dy = p.dy;
+    } else if (act?.kind === 'perk' && !calm) {
+      const h = hop((now - (act.until - PERK_MS)) % 500);
+      dy = h.dy;
+      sy = h.sy;
+    }
   } else if (state === 'sleep') {
     sy = breathe(now, 0.2, 0.04);
   } else if (state === 'bark') {
@@ -320,6 +348,7 @@ img.addEventListener('contextmenu', (e) => {
 img.addEventListener('pointerdown', (e) => {
   if (dragging || handoffBusy(handoff) || e.button !== 0 || e.ctrlKey) return; // right/ctrl click opens the menu; it is neither a drag nor a trick
   dragging = true;
+  if (act && !(act.kind === 'hide' && (act.phase === 'go' || act.phase === 'away'))) act = null; // hiding survives a poke; anything else yields
   falling = false;
   lift = Math.min(0, lift);
   offX = e.clientX - x;
@@ -353,6 +382,7 @@ function finish(e: PointerEvent): void {
   setState(click ? 'click' : 'dragEnd', {}, release(preDrag, click, stay));
   lineOnBark = false;
   if (lift < 0) { falling = true; vy = 0; }
+  if (act?.kind === 'hide') { act.phase = 'go'; setState('walk', { target: act.spot }); } // poked out of hiding: go back
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
   if (!img.matches(':hover')) window.pixy.setClickThrough(true);
   applyRest();
@@ -367,6 +397,7 @@ function command(raw: string): void {
   queuedCmd = r.queued;
   if (!r.now) return;
   const cmd = r.now;
+  if (act?.kind === 'hide') return;
   lastInteraction = performance.now();
   if (cmd === 'sit' || cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');
@@ -384,6 +415,7 @@ const canRest = (): boolean => !dragging && !handoffBusy(handoff);
 function applyRest(): void {
   if (prefs.snoozed === resting || !canRest()) return;
   resting = prefs.snoozed;
+  if (resting) { act = null; queuedBehavior = null; }
   clearTimeout(restTimer);
   document.body.style.transition = `opacity ${calm ? 200 : REST_MS}ms`;
   if (resting) {
@@ -430,10 +462,105 @@ void window.pixy.getPrefs().then((raw) => {
   if (!prefs.snoozed) document.body.style.opacity = '1';
 }).catch(() => { document.body.style.opacity = '1'; });
 
+const busyNow = (): boolean => behaviorBusy({ dragging, falling, resting, snoozed: prefs.snoozed, handoff });
+
+function onBehavior(raw: unknown): void {
+  const b = parseBehavior(raw);
+  if (!b || b.seq === lastSeq) return;
+  lastSeq = b.seq;
+  lastBehavior = b;
+  const r = routeBehavior(b, { busy: busyNow(), acting: act ? (act.kind === 'hide' ? 'hide' : 'other') : null });
+  if (r === 'queue') queuedBehavior = b;
+  else if (r === 'run') start(b);
+}
+
+function face(toward: number): void {
+  dir = facing = toward >= 0 ? 1 : -1;
+  turnUntil = 0;
+}
+
+function start(b: Behavior): void {
+  const now = performance.now();
+  lastInteraction = now;
+  if (b.action === 'hide') {
+    if (b.on) {
+      if (act?.kind === 'hide' && (act.phase === 'go' || act.phase === 'away')) return;
+      if (queuedBehavior?.action !== 'hide') queuedBehavior = null; // a sniff that waited is stale by the time the call ends
+      const h = hideSpot(x, W, window.innerWidth);
+      act = { kind: 'hide', phase: 'go', until: 0, ...h };
+      setState('walk', { target: h.spot });
+    } else if (!b.on && act?.kind === 'hide') {
+      act.phase = 'peek';
+      setState('walk', { target: peekOutX(act.side, W, window.innerWidth) });
+    }
+  } else if (b.action === 'sniff' && b.target) {
+    act = { kind: 'sniff', phase: 'run', until: 0, target: b.target, bubble: b.bubble ?? 'Found a bug!' };
+    setState('walk', { target: Math.min(Math.max(0, b.target.x - W / 2), Math.max(0, window.innerWidth - W)) });
+  } else if (b.action === 'perk_up') {
+    act = { kind: 'perk', until: now + PERK_MS };
+    face(1); // toward the Dock's right side
+    setState('idle', { ms: LONG });
+    say(b.bubble ?? '!', PERK_MS);
+  }
+}
+
+// The walk the act asked for has ended.
+function actArrive(now: number): void {
+  if (!act) return;
+  if (act.kind === 'sniff' && act.phase === 'run') {
+    face(act.target.x - (x + W / 2));
+    lifeAt = now + 8000; // no idle head-turn mid-sniff
+    act.phase = 'sniff';
+    act.until = now + SNIFF_MS;
+    setState('idle', { ms: LONG });
+    showMark(act.target);
+  } else if (act.kind === 'hide' && act.phase === 'go') {
+    act.phase = 'away';
+    face(-act.side); // looks in from the edge
+    setState('idle', { ms: LONG });
+  } else if (act.kind === 'hide' && act.phase === 'peek') {
+    act.phase = 'peeking';
+    act.until = now + 900;
+    setState('idle', { ms: LONG });
+  }
+}
+
+function actTimeout(now: number): void {
+  if (!act) return;
+  const a = act;
+  act = null;
+  lastInteraction = now;
+  if (a.kind === 'sniff' && a.phase === 'sniff') {
+    act = { ...a, phase: 'bark', until: now + BARK_MS };
+    say(a.bubble, BARK_MS); // before the bark, so its own "Woof!" stays quiet
+    setState('bark', { ms: LONG });
+  } else if (a.kind === 'hide' && a.phase === 'peeking') {
+    const max = Math.max(0, window.innerWidth - W);
+    setState('walk', { target: a.side < 0 ? Math.min(max, 200) : Math.max(0, max - 200) });
+  } else {
+    setState('idle');
+  }
+}
+
+// "!" where he found it. Screen-derived coordinates only; no text from the screen is shown here.
+function showMark(p: { x: number; y: number }): void {
+  const m = document.createElement('div');
+  m.textContent = '!';
+  m.style.cssText = `position:absolute;left:${p.x}px;top:${p.y}px;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:var(--blush);color:#fff;font:800 17px/26px var(--font);text-align:center;box-shadow:var(--shadow);pointer-events:none`;
+  document.body.append(m);
+  m.animate(
+    [{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1.25)', offset: 0.12 }, { opacity: 1, transform: 'scale(1)', offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0, transform: 'scale(.8)' }],
+    { duration: MARK_MS },
+  ).onfinish = () => m.remove();
+}
+window.pixy.onBehavior(onBehavior);
+
 // Old pet trots off the nearest edge at double speed; dropIn() then fires on arrival. Reduced motion: crossfade swap.
 function swapPets(pack: Prepared, cx: number | undefined): void {
   if (dragging) { pendingSwap = { pack, cx }; return; }
   wakeSay = false; // main wakes the pet right before it reveals the new one
+  act = null;
+  queuedBehavior = null;
   incoming = { pack, cx: validCx(cx, window.innerWidth, x + W / 2) };
   handoff = handoffStart(calm);
   greet = null;
@@ -504,5 +631,5 @@ raf = requestAnimationFrame(frame);
 import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, menuCalls, lift, falling, handoff, command }) });
 }

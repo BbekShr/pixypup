@@ -6,7 +6,7 @@
   "required": ["action", "durationMs", "reason"],
   "additionalProperties": false,
   "properties": {
-    "action": { "enum": ["walk_to", "sniff", "bark", "hide", "idle", "sleep", "sit", "roll"] },
+    "action": { "enum": ["walk_to", "sniff", "bark", "hide", "idle", "sleep", "sit", "roll", "perk_up"] },
     "target": {
       "type": "object",
       "required": ["x", "y"],
@@ -14,6 +14,7 @@
       "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
     },
     "durationMs": { "type": "number" },
-    "reason": { "type": "string" }
+    "reason": { "type": "string" },
+    "bubble": { "type": "string", "maxLength": 40 }
   }
 }

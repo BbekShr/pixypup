@@ -56,6 +56,9 @@ describe('sizeScale / parsePrefs / commandToPatch', () => {
     expect(commandToPatch('size:large', n)).toEqual({ size: 'large' });
     expect(commandToPatch('energy:playful', n)).toEqual({ energy: 'playful' });
     expect(commandToPatch('hide:on', n)).toEqual({ hideInShares: true });
+    expect(commandToPatch('screen:yes', n)).toEqual({ screenAware: true });
+    expect(commandToPatch('screen:off', n)).toEqual({ screenAware: false });
+    expect(commandToPatch('screen:on', n)).toBeNull(); // on must go through the explainer
     expect(commandToPatch('login:off', n)).toEqual({ openAtLogin: false });
     expect(commandToPatch('wake', n)).toEqual({ snoozeUntil: null });
     expect(commandToPatch('snooze:1h', n)).toEqual({ snoozeUntil: n.getTime() + 3_600_000 });
