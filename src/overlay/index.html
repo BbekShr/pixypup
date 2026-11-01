@@ -6,6 +6,8 @@
     <title>PixyPup</title>
     <style>
       html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+      .hi { position: absolute; left: 0; top: 0; padding: 6px 14px; border-radius: var(--pill); background: var(--cream); border: 2px solid var(--blush); color: var(--ink); font: 700 14px var(--font); white-space: nowrap; box-shadow: var(--shadow); pointer-events: none; }
+      .hi::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 10px; height: 10px; margin-left: -5px; background: var(--cream); border-right: 2px solid var(--blush); border-bottom: 2px solid var(--blush); transform: rotate(45deg); }
       #pup { position: absolute; left: 0; top: 0; width: 120px; height: 120px; user-select: none; -webkit-user-drag: none; cursor: grab; }
     </style>
   </head>

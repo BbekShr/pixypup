@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface Settings {
@@ -8,6 +8,7 @@ export interface Settings {
   offline: boolean;
   adminDisableScreenAware: boolean;
   petName: string;
+  onboarded: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   offline: true,
   adminDisableScreenAware: false,
   petName: 'Pakkun',
+  onboarded: false,
 };
 
 export const ADMIN_FILE = '/Library/Application Support/PixyPup/admin.json';
@@ -30,7 +32,7 @@ export function mergeSettings(
   return merged;
 }
 
-const BOOLEAN_KEYS = ['screenAware', 'voice', 'offline', 'adminDisableScreenAware'] as const;
+const BOOLEAN_KEYS = ['screenAware', 'voice', 'offline', 'adminDisableScreenAware', 'onboarded'] as const;
 
 // null = file missing. Wrong-typed or unknown keys are dropped so e.g. "false" can't read as truthy.
 export function parseSettingsFile(text: string | null | Error): {
@@ -83,4 +85,23 @@ export function loadSettings(): Settings {
     admin.values = { screenAware: false, voice: false, offline: true };
   }
   return mergeSettings(DEFAULT_SETTINGS, user.values, admin.values);
+}
+
+/** Persist a validated patch to the user's settings.json (atomic). The admin file still wins on the next loadSettings. */
+export function saveSettings(patch: unknown): void {
+  const p = parseSettingsFile(JSON.stringify(patch) ?? '');
+  if (p.failed || p.invalid.length > 0 || Object.keys(p.values).length === 0) throw new Error('invalid settings patch');
+  const dir = app.getPath('userData');
+  const file = join(dir, 'settings.json');
+  let current: Record<string, unknown> = {};
+  try {
+    const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) current = raw as Record<string, unknown>;
+  } catch {
+    /* missing or corrupt: start fresh */
+  }
+  mkdirSync(dir, { recursive: true });
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, JSON.stringify({ ...current, ...p.values }, null, 2));
+  renameSync(tmp, file);
 }

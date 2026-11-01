@@ -1,3 +1,4 @@
+import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { DISPLAY_H, displayWidth, footOffset } from './layout';
@@ -9,6 +10,7 @@ declare global {
     pixy: {
       setClickThrough(on: boolean): void;
       onCommand(cb: (cmd: string) => void): void;
+      onPackChanged(cb: () => void): void;
       getPack(): Promise<Pack | null>;
       showMenu(): void;
       getStay(): Promise<boolean>;
@@ -32,9 +34,9 @@ let W = 120;
 let H = 120;
 let footY = 1;
 
-async function loadPackSprites(): Promise<void> {
+async function loadPackSprites(): Promise<string | null> {
   const pack = await window.pixy.getPack();
-  if (!pack) return;
+  if (!pack) return null;
   const next: Record<string, PoseSet> = {};
   for (const [name, p] of Object.entries(pack.manifest.poses)) {
     next[name] = { srcs: p.frames.map((f) => pack.frames[f]).filter((s): s is string => !!s), fps: p.fps };
@@ -46,12 +48,13 @@ async function loadPackSprites(): Promise<void> {
     keep.push(i);
   }));
   const first = keep.find((i) => i.src === next['idle']?.srcs[0]);
-  if (!first) return;
+  if (!first) return null;
   H = DISPLAY_H;
   W = displayWidth(first.naturalWidth, first.naturalHeight);
   footY = pack.manifest.poses['idle']?.footY ?? 1;
   poses = next;
   sizeImg();
+  return pack.manifest.pet;
 }
 
 function sizeImg(): void {
@@ -291,6 +294,28 @@ function command(cmd: string): void {
   } else if (cmd === 'wander') stay = false;
 }
 window.pixy.onCommand(command);
+
+// A freshly made pet falls in from above the window and introduces itself.
+function dropIn(name: string): void {
+  x = Math.max(0, (window.innerWidth - W) / 2);
+  home = x;
+  lift = -(floorY() + H);
+  vy = 0;
+  falling = true;
+  setState('idle', { ms: 5000 });
+  const b = document.createElement('div');
+  b.className = 'hi';
+  b.textContent = `Hi, I'm ${name}!`;
+  fx.append(b);
+  b.animate(
+    [{ opacity: 0, transform: 'translate(-50%,-100%) scale(.6)' }, { opacity: 1, transform: 'translate(-50%,-100%) scale(1)', offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0, transform: 'translate(-50%,-100%) translateY(-8px)' }],
+    { duration: 3600, delay: 1000, fill: 'backwards', easing: 'cubic-bezier(.34,1.56,.64,1)' },
+  ).onfinish = () => b.remove();
+}
+window.pixy.onPackChanged(() => {
+  keep.length = 0;
+  void loadPackSprites().then((name) => { if (name) dropIn(name); }).catch(() => undefined);
+});
 
 setState('walk');
 raf = requestAnimationFrame(frame);

@@ -11,7 +11,7 @@ export default defineConfig({
   preload: {
     build: {
       outDir: 'dist/preload',
-      lib: { entry: resolve('src/main/preload.ts') },
+      lib: { entry: { preload: resolve('src/main/preload.ts'), 'onboarding-preload': resolve('src/main/onboarding-preload.ts') } },
     },
   },
   renderer: {
