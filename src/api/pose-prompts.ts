@@ -22,6 +22,19 @@ export function styleFor(p: MotionProfile): string {
   );
 }
 
+// The dog walk in 8 phases (Disney four-legged walk chart): two rows of four, read left to right, top row then bottom.
+const SHEET8 =
+  'A sprite sheet of exactly 8 frames of this same character walking, arranged in 2 rows of 4 equal columns (reading order: left to right, top row first, then the bottom row), ' +
+  "drawn in strict side profile facing right: the camera is level and perpendicular to the body, we see the pet's left side, only one eye visible, " +
+  'the head points right in the walking direction and does not look at the camera. All four legs clearly visible and separated. ' +
+  'One full walk cycle in 8 phases. Frame 1 contact: right front leg reaching far forward and left hind leg reaching far back, legs at their widest. ' +
+  'Frame 2 down: body at its lowest, weight on the right front leg. Frame 3 pass: the left front leg passing under the body, body rising, head slightly higher. ' +
+  'Frame 4 up: body at its highest, pushing off. Frames 5 to 8: the same four phases with the left side leading ' +
+  '(frame 5 contact: left front leg far forward, right hind leg far back). ' +
+  'Each back leg follows one step behind the opposite front leg, and front and back legs travel the same distance, no sliding. ' +
+  'Same size and the same ground line in every frame; the head bobs slightly and the tail sways with the stride. ' +
+  'Wide empty magenta gaps between the rows and between the columns, no part of one frame touching another.';
+
 const side =
   'drawn in strict side profile facing right: the camera is level and perpendicular to the body, only one eye visible, the head points right and does not look at the camera.';
 const frames4 = (what: string, f: [string, string, string, string], fixed: string) =>
@@ -92,6 +105,7 @@ export function posesFor(p: MotionProfile): Record<string, string> {
   const hint = p.cycle.prompt === SHEET ? '' : ` Motion notes: ${p.cycle.prompt}`;
   return {
     idle_0: p.idlePrompt,
+    walk_sheet8: SHEET8 + hint,
     walk_sheet: base + hint,
     walk_pair: PAIR[p.cycle.kind],
     turn_sheet: turnSheet(p),

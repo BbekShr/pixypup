@@ -32,13 +32,14 @@ export const STYLE = styleFor(defaultProfile('dog'));
 export const POSES = posesFor(defaultProfile('dog'));
 
 // Profile walk frames sit on their own, wider canvas (see layoutFrames); old packs' walk_0..3 are 3/4 view.
-export const SIDE_FRAMES = ['side_0', 'side_1', 'side_2', 'side_3'];
-const WALK_FRAMES = SIDE_FRAMES;
+// 8 on the full 2x4 phase sheet (side_0 is the right-front contact, then down, pass, up, then the left side), 4 on the fallback.
+export const SIDE_FRAMES = Array.from({ length: 8 }, (_, i) => `side_${i}`);
+const WALK_ROWS = 2;
 // Front, front 3/4, side, back 3/4, back: the identity turnaround, sliced from one sheet.
 export const TURN_FRAMES = ['turn_front', 'turn_front34', 'turn_side', 'turn_back34', 'turn_back'];
 // Side and turn frames each share one scale and one wider canvas; every other pose is sized on its own.
 const group = (n: string) => (n.startsWith('side_') ? 's' : n.startsWith('turn_') ? 't' : 'm');
-const POSE_NAMES = ['idle_0', ...WALK_FRAMES, ...TURN_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
+const POSE_NAMES = ['idle_0', ...SIDE_FRAMES, ...TURN_FRAMES, 'sit', 'sleep', 'bark', 'roll', 'idle_blink'];
 // Lying poses are sized by width, everything else by height.
 const LYING = new Set(['sleep', 'roll']);
 const BLINK_MIN_IOU = 0.85;
@@ -306,22 +307,52 @@ export function sliceSheet(rgba: Buffer, w: number, h: number, n: number): { x0:
   return runs.every((r) => Math.abs(r.x1 - r.x0 + 1 - median) <= 0.35 * median) ? runs : null;
 }
 
-/** Cut a keyed sheet into its n (default 4) frames. By connected components, else by columns when bodies are merged. Throws on a bad sheet. */
-export async function sheetFrames(k: Keyed, n = WALK_FRAMES.length): Promise<KeyedFrame[]> {
+/** Cut a keyed sheet into n frames in reading order (`rows` > 1: a grid). By connected components, else by columns when bodies are merged. Throws on a bad sheet. */
+export async function sheetFrames(k: Keyed, n = 4, rows = 1): Promise<KeyedFrame[]> {
   const { data, info } = await sharp(k.png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const raw = (c: { data: Buffer; width: number; height: number }) =>
     sharp(c.data, { raw: { width: c.width, height: c.height, channels: 4 } }).png().toBuffer();
-  const crops = sliceComponents(data, info.width, info.height, n);
+  const crops = sliceComponents(data, info.width, info.height, n, rows);
   if (crops) return Promise.all(crops.map(async (c) => ({ png: await raw(c) })));
-  const runs = sliceSheet(data, info.width, info.height, n);
+  const bands = rows === 1 ? [data] : rowBands(data, info.width, info.height, rows);
+  if (!bands) throw new BadOutputError('bad sheet');
+  const cols = n / rows;
+  return (await Promise.all(bands.map((band) => cutColumns(band, info.width, band.length / 4 / info.width, cols)))).flat();
+}
+
+/** Split a grid sheet into row bands at the emptiest pixel row near each row boundary; null when no row is empty enough. */
+function rowBands(rgba: Buffer, w: number, h: number, rows: number): Buffer[] | null {
+  const count: number[] = [];
+  for (let y = 0; y < h; y++) {
+    let c = 0;
+    for (let x = 0; x < w; x++) if ((rgba[(y * w + x) * 4 + 3] as number) >= 32) c++;
+    count.push(c);
+  }
+  const max = Math.max(...count);
+  const cuts = [0];
+  for (let r = 1; r < rows; r++) {
+    const mid = Math.round((r * h) / rows);
+    const span = Math.round((0.15 * h) / rows);
+    let best = mid;
+    for (let y = mid - span; y <= mid + span; y++) if ((count[y] as number) < (count[best] as number)) best = y;
+    if ((count[best] as number) > 0.05 * max) return null;
+    cuts.push(best);
+  }
+  cuts.push(h);
+  return cuts.slice(0, -1).map((y0, i) => rgba.subarray(y0 * w * 4, (cuts[i + 1] as number) * w * 4));
+}
+
+/** The column cut: each frame trimmed to its own alpha rows. */
+async function cutColumns(data: Buffer, width: number, height: number, n: number): Promise<KeyedFrame[]> {
+  const runs = sliceSheet(data, width, height, n);
   if (!runs) throw new BadOutputError('bad sheet');
   return Promise.all(
     runs.map(async (r) => {
-      const slice = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
-        .extract({ left: r.x0, top: 0, width: r.x1 - r.x0 + 1, height: info.height })
+      const slice = await sharp(data, { raw: { width, height, channels: 4 } })
+        .extract({ left: r.x0, top: 0, width: r.x1 - r.x0 + 1, height })
         .raw()
         .toBuffer({ resolveWithObject: true });
-      let y0 = info.height;
+      let y0 = height;
       let y1 = -1;
       for (let i = 3; i < slice.data.length; i += 4) {
         if ((slice.data[i] as number) === 0) continue;
@@ -329,7 +360,7 @@ export async function sheetFrames(k: Keyed, n = WALK_FRAMES.length): Promise<Key
         y0 = Math.min(y0, y);
         y1 = Math.max(y1, y);
       }
-      const png = await sharp(slice.data, { raw: { width: slice.info.width, height: info.height, channels: 4 } })
+      const png = await sharp(slice.data, { raw: { width: slice.info.width, height, channels: 4 } })
         .extract({ left: 0, top: y0, width: slice.info.width, height: y1 - y0 + 1 })
         .png()
         .toBuffer();
@@ -480,6 +511,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     let failure: string | null = null;
     try {
       const out = await go();
+      names = names.slice(0, out.length); // a fallback walk has fewer frames than the full sheet
       names.forEach((n, i) => (keyed[n] = out[i] as KeyedFrame));
     } catch (err) {
       if (!omit) names.forEach((n) => (keyed[n] = idle));
@@ -503,8 +535,8 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     'turn',
   );
   const refs = [cutoutOnMagenta, idleRaw, ...(turnRaw ? [turnRaw] : [])];
-  const sheet = async (_img: unknown, k: Keyed) => {
-    const frames = await sheetFrames(k);
+  const sheet = (n: number, rows: number) => async (_img: unknown, k: Keyed) => {
+    const frames = await sheetFrames(k, n, rows);
     if (await isStaticSheet(frames)) throw new BadOutputError('static sheet');
     return frames;
   };
@@ -513,19 +545,26 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     const [a, b] = await sheetFrames(k, 2);
     return [a as KeyedFrame, idle, b as KeyedFrame, idle];
   };
+  // Walk: the 8-phase grid (2 tries), then the old 4-frame sheet (1 try), then two contact poses (1 try), then no walk.
+  // Other cycle kinds: their 4-frame sheet (2 tries), then the pair. Worst case 4 walk calls.
   const walk = async () => {
-    try {
-      return await draw('walk_sheet', refs, sheet);
-    } catch (err) {
+    const tries: (() => Promise<KeyedFrame[]>)[] =
+      profile.cycle.kind === 'walk'
+        ? [() => draw('walk_sheet8', refs, sheet(8, WALK_ROWS)), () => draw('walk_sheet', refs, sheet(4, 1), false)]
+        : [() => draw('walk_sheet', refs, sheet(4, 1))];
+    tries.push(() => draw('walk_pair', refs, pair, false));
+    let first: unknown;
+    for (const t of tries) {
       try {
-        return await draw('walk_pair', refs, pair, false);
-      } catch {
-        throw err;
+        return await t();
+      } catch (err) {
+        first ??= err;
       }
     }
+    throw first;
   };
   await Promise.all([
-    run(WALK_FRAMES, walk, 'walk'),
+    run(SIDE_FRAMES, walk, 'walk'),
     ...['sit', 'sleep', 'bark', 'roll'].map((n) => run([n], async () => [await draw(n, refs, single)])),
     run(['idle_blink'], async () => [
       await draw('idle_blink', [idleRaw, ...(turnRaw ? [turnRaw] : [])], async (img, k) => {
@@ -551,7 +590,8 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
     profile,
     poses: {
       idle: pose(['idle_0.png'], 2),
-      ...(keyed['side_0'] ? { walk: pose(SIDE_FRAMES.map((f) => `${f}.png`), 8) } : {}),
+      // side_0 is a contact pose (a front leg fully forward); on the 8-frame sheet it is the right-front contact, then down, pass, up, then the left side.
+      ...(keyed['side_0'] ? { walk: pose(SIDE_FRAMES.filter((f) => keyed[f]).map((f) => `${f}.png`), 8) } : {}),
       ...(keyed['turn_front'] ? { turn: pose(TURN_FRAMES.map((f) => `${f}.png`), 1) } : {}),
       sit: pose(['sit.png'], 1),
       sleep: pose(['sleep.png'], 1),

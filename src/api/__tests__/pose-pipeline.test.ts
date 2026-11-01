@@ -52,8 +52,16 @@ const sheetImg = (widths = [50, 58, 50, 58]) => {
   });
   return sharp({ create: { width: left, height: 100, channels: 3, background: '#ff00ff' } }).composite(blobs).png().toBuffer();
 };
+/** The 8-phase walk sheet: 2 rows x 4 columns of rounded blobs with wide gaps; widths differ so it is not static. */
+const gridImg = (widths = [50, 58, 50, 58, 54, 46, 54, 46]) => {
+  const blobs = widths.map((w, i) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="50"><ellipse cx="${w / 2}" cy="25" rx="${w / 2}" ry="25" fill="#00aa00"/></svg>`;
+    return { input: Buffer.from(svg), left: 10 + (i % 4) * 110, top: 10 + Math.floor(i / 4) * 90 };
+  });
+  return sharp({ create: { width: 460, height: 170, channels: 3, background: '#ff00ff' } }).composite(blobs).png().toBuffer();
+};
 const defaultImage = (pose: string) =>
-  pose === 'walk_sheet' ? sheetImg() : pose === 'turn_sheet' ? sheetImg([50, 50, 50, 50, 50]) : drawn(100, 100, 50, 50);
+  pose === 'walk_sheet8' ? gridImg() : pose === 'walk_sheet' ? sheetImg() : pose === 'turn_sheet' ? sheetImg([50, 50, 50, 50, 50]) : drawn(100, 100, 50, 50);
 
 const photo = () => sharp({ create: { width: 320, height: 334, channels: 3, background: '#888' } }).png().toBuffer();
 
@@ -397,11 +405,11 @@ describe('generateSpritePack', () => {
     return { p, requested, stats };
   };
 
-  it('emits cutout, 15 poses, done, and writes the pack', async () => {
+  it('emits cutout, 19 poses, done, and writes the pack', async () => {
     const events: PipelineEvent[] = [];
     const { p } = await run({}, events);
     const manifest = await p;
-    expect(events.map((e) => e.stage)).toEqual(['cutout', 'profile', ...Array(15).fill('pose'), 'done']);
+    expect(events.map((e) => e.stage)).toEqual(['cutout', 'profile', ...Array(19).fill('pose'), 'done']);
     expect((await readdir(out)).sort()).toEqual([
       'bark.png',
       'idle_0.png',
@@ -411,6 +419,10 @@ describe('generateSpritePack', () => {
       'side_1.png',
       'side_2.png',
       'side_3.png',
+      'side_4.png',
+      'side_5.png',
+      'side_6.png',
+      'side_7.png',
       'sit.png',
       'sleep.png',
       'sprite-manifest.json',
@@ -424,7 +436,7 @@ describe('generateSpritePack', () => {
     expect(manifest.poses.walk?.fps).toBe(8);
     expect(manifest.poses.blink?.frames).toEqual(['idle_blink.png']);
     expect(manifest.poses.blink?.footY).toBe(manifest.poses.idle?.footY);
-    expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']); // the profile walk
+    expect(manifest.poses.walk?.frames).toEqual(Array.from({ length: 8 }, (_, i) => `side_${i}.png`)); // the 8-phase walk
     expect(await readdir(root)).toEqual(['pack']);
   });
 
@@ -433,7 +445,7 @@ describe('generateSpritePack', () => {
     await p;
     expect(requested[0]).toBe('idle_0');
     expect(requested[1]).toBe('turn_sheet');
-    expect(requested.slice(2).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet']);
+    expect(requested.slice(2).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet8']);
     expect(stats.maxInflight).toBe(6); // idle alone, then the other 6 at once; serial would peak at 1
   });
 
@@ -449,23 +461,24 @@ describe('generateSpritePack', () => {
       return post(path, body, sig);
     };
     await generateSpritePack({ client, photo: await photo(), petName: 'P', species: 'dog', outDir: out, timing: { backoffMs: 1 } });
-    expect(refCount).toEqual({ idle_0: 1, turn_sheet: 2, walk_sheet: 3, sit: 3, sleep: 3, bark: 3, roll: 3, idle_blink: 2 });
+    expect(refCount).toEqual({ idle_0: 1, turn_sheet: 2, walk_sheet8: 3, sit: 3, sleep: 3, bark: 3, roll: 3, idle_blink: 2 });
   });
 
   it.each([
     ['3 blobs', () => sheetImg().then((b) => sharp(b).composite([{ input: { create: { width: 60, height: 100, channels: 3, background: '#ff00ff' } }, left: 310, top: 0 }]).png().toBuffer())],
     ['unequal widths', () => sheetImg([50, 50, 50, 20])],
     ['one blob', () => drawn(100, 100, 50, 50)],
-  ])('omits the walk instead of copying idle when the walk sheet is bad (%s): 2 sheet tries + 1 pair try', async (_n, make) => {
+  ])('omits the walk instead of copying idle when the walk sheet is bad (%s): 2 grid tries, 1 four-frame try, 1 pair try', async (_n, make) => {
     const events: PipelineEvent[] = [];
-    const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? make() : n === 'walk_pair' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
+    const { p, requested } = await run({ image: async (n) => (n.startsWith('walk_sheet') ? make() : n === 'walk_pair' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
     const manifest = await p;
-    expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(2);
+    expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(2);
+    expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(1);
     expect(requested.filter((n) => n === 'walk_pair')).toHaveLength(1);
     const failed = events.filter((e) => e.stage === 'pose-failed').map((e) => e.stage === 'pose-failed' && e.name);
-    expect(failed).toEqual(['side_0', 'side_1', 'side_2', 'side_3', 'walk']);
+    expect(failed).toEqual([...Array.from({ length: 8 }, (_, i) => `side_${i}`), 'walk']);
     expect(manifest.poses.walk).toBeUndefined();
-    expect(events.filter((e) => e.stage === 'pose')).toHaveLength(15);
+    expect(events.filter((e) => e.stage === 'pose')).toHaveLength(19);
     expect((await readdir(out)).filter((f) => f.startsWith('side_'))).toEqual([]);
   });
 
@@ -481,6 +494,16 @@ describe('generateSpritePack', () => {
         .png()
         .toBuffer();
     };
+    /** The same 4 identical frames as an 8-cell 2 x 4 grid. */
+    const staticGrid = async () => {
+      const side = await fx('side_0.png');
+      const { width } = await sharp(side).metadata();
+      const w = width as number;
+      return sharp({ create: { width: 4 * (w + 60) + 20, height: 580, channels: 3, background: '#ff00ff' } })
+        .composite(Array.from({ length: 8 }, (_, i) => ({ input: side, left: 10 + (i % 4) * (w + 60), top: 10 + Math.floor(i / 4) * 290 })))
+        .png()
+        .toBuffer();
+    };
 
     it('isStaticSheet is true for the real identical frames and false for different shapes', async () => {
       const same = await Promise.all([0, 1, 2, 3].map(async (i) => ({ png: await fx(`side_${i}.png`) })));
@@ -491,22 +514,23 @@ describe('generateSpritePack', () => {
 
     it('rejects a sheet of identical slices and retries it', async () => {
       const events: PipelineEvent[] = [];
-      const sheetPng = await staticSheet();
-      const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet' ? sheetPng : defaultImage(n)) }, events);
+      const [grid, sheetPng] = [await staticGrid(), await staticSheet()];
+      const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet8' ? grid : n === 'walk_sheet' ? sheetPng : defaultImage(n)) }, events);
       await p;
-      expect(requested.filter((n) => n === 'walk_sheet')).toHaveLength(2);
+      expect(requested.filter((n) => n === 'walk_sheet8')).toHaveLength(2);
       expect(events.find((e) => e.stage === 'pose-failed' && e.name === 'walk')).toMatchObject({ error: 'bad-output' });
     });
 
     it('falls back to a 2-frame sheet: stride, idle, stride, idle', async () => {
       const events: PipelineEvent[] = [];
-      const sheetPng = await staticSheet();
+      const [grid, sheetPng] = [await staticGrid(), await staticSheet()];
       const { p, requested } = await run(
-        { image: async (n) => (n === 'walk_sheet' ? sheetPng : n === 'walk_pair' ? sheetImg([50, 70]) : defaultImage(n)) },
+        { image: async (n) => (n === 'walk_sheet8' ? grid : n === 'walk_sheet' ? sheetPng : n === 'walk_pair' ? sheetImg([50, 70]) : defaultImage(n)) },
         events,
       );
       const manifest = await p;
-      expect(requested.filter((n) => n === 'walk_sheet' || n === 'walk_pair')).toHaveLength(3);
+      expect(requested.filter((n) => n.startsWith('walk_'))).toHaveLength(4); // grid x2, four-frame sheet, pair: the worst case
+      expect(events.some((e) => e.stage === 'pose' && e.name === 'side_4')).toBe(false);
       expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']);
       expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
       const px = async (f: string) => sharp(await readFile(join(out, f))).raw().toBuffer();
@@ -516,10 +540,20 @@ describe('generateSpritePack', () => {
     });
   });
 
-  it('slices a good sheet into 4 walk frames at idle height', async () => {
+  it('falls back to the 4-frame sheet when the grid is bad, with 3 walk calls', async () => {
+    const events: PipelineEvent[] = [];
+    const { p, requested } = await run({ image: async (n) => (n === 'walk_sheet8' ? drawn(100, 100, 50, 50) : defaultImage(n)) }, events);
+    const manifest = await p;
+    expect(requested.filter((n) => n.startsWith('walk_'))).toEqual(['walk_sheet8', 'walk_sheet8', 'walk_sheet']);
+    expect(manifest.poses.walk?.frames).toEqual(['side_0.png', 'side_1.png', 'side_2.png', 'side_3.png']);
+    expect(events.filter((e) => e.stage === 'pose')).toHaveLength(15);
+    expect(events.some((e) => e.stage === 'pose-failed')).toBe(false);
+  });
+
+  it('slices a good sheet into 8 walk frames at idle height', async () => {
     const { p } = await run({});
     await p;
-    for (let i = 0; i < 4; i++) expect(await drawnHeight(await readFile(join(out, `side_${i}.png`)))).toBe(256);
+    for (let i = 0; i < 8; i++) expect(await drawnHeight(await readFile(join(out, `side_${i}.png`)))).toBe(256);
   });
 
   it('falls back to idle when the blink jumps (IoU < 0.85)', async () => {
@@ -617,7 +651,7 @@ describe('generateSpritePack', () => {
     expect(events.find((e) => e.stage === 'pose-failed')).toMatchObject({ name: 'sit', error: 'bad-output' });
   });
 
-  it('emits a body-free pose-failed and a fallback pose event so 15 pose events always arrive', async () => {
+  it('emits a body-free pose-failed and a fallback pose event so 19 pose events always arrive', async () => {
     const events: PipelineEvent[] = [];
     const { p } = await run({ fail: (n) => (n === 'bark' ? new MetaApiError(500, 'SECRET-BODY', '/images/edits') : false) }, events);
     await p;
@@ -625,7 +659,7 @@ describe('generateSpritePack', () => {
     expect(failed).toMatchObject({ name: 'bark', error: 'generation-failed (HTTP 500)' });
     expect(JSON.stringify(events.filter((e) => e.stage !== 'pose' && e.stage !== 'cutout'))).not.toContain('SECRET-BODY');
     const poses = events.filter((e) => e.stage === 'pose');
-    expect(poses).toHaveLength(15);
+    expect(poses).toHaveLength(19);
     expect(poses.find((e) => e.stage === 'pose' && e.name === 'bark')).toMatchObject({ fallback: true });
   });
 });
@@ -835,6 +869,12 @@ describe('profile-driven prompts', () => {
     expect(manifest.poses.walk?.frames).toHaveLength(4);
   });
 
+  it('spells out the 8 walk phases on a 2 x 4 grid; other cycles keep 4 frames', () => {
+    const w = posesFor(defaultProfile('dog')).walk_sheet8!;
+    for (const part of ['exactly 8 frames', '2 rows of 4', 'Frame 1 contact', 'Frame 2 down', 'Frame 3 pass', 'Frame 4 up', 'Frames 5 to 8', 'one step behind', 'tail sways']) expect(w).toContain(part);
+    expect(posesFor(defaultProfile('butterfly')).walk_sheet).toContain('exactly 4 frames');
+  });
+
   it('asks a snake for body undulation', () => {
     const p = posesFor(defaultProfile('snake'));
     expect(p.walk_sheet).toMatch(/S curve/);
@@ -934,7 +974,7 @@ describe('turnaround sheet', () => {
   it('passes the turnaround sheet as an extra reference to every later pose', async () => {
     const { calls } = await go();
     const later = calls.slice(2);
-    expect(later.map((c) => c.pose).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet']);
+    expect(later.map((c) => c.pose).sort()).toEqual(['bark', 'idle_blink', 'roll', 'sit', 'sleep', 'walk_sheet8']);
     for (const c of later) expect(c.refs.length).toBe(c.pose === 'idle_blink' ? 2 : 3);
     expect(new Set(later.map((c) => c.refs.at(-1))).size).toBe(1);
   });

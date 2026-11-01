@@ -45,3 +45,53 @@ describe('sliceComponents', () => {
     expect((await sharp(b!.png).metadata()).width).toBe(70);
   });
 });
+
+describe('grid slicing (2 x 4)', () => {
+  const GW = 300;
+  const GH = 130;
+  const grid = (rects: Rect[]) => {
+    const d = Buffer.alloc(GW * GH * 4);
+    for (const [x0, y0, x1, y1] of rects)
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) d.set([0, 170, 0, 255], (y * GW + x) * 4);
+    return d;
+  };
+  const bodies = (): Rect[] => Array.from({ length: 8 }, (_, i): Rect => [10 + (i % 4) * 70, 10 + Math.floor(i / 4) * 70, 50 + (i % 4) * 70, 50 + Math.floor(i / 4) * 70]);
+
+  it('returns the 8 frames in reading order, top row then bottom row', () => {
+    const rects = bodies();
+    rects[1]![2] += 9; // make frame 2 recognisable by width
+    rects[4]![2] += 19;
+    const crops = sliceComponents(grid(rects), GW, GH, 8, 2)!;
+    expect(crops.map((c) => c.width)).toEqual([41, 50, 41, 41, 60, 41, 41, 41]);
+  });
+
+  it('keeps a tail tip that crosses a column cut with its own frame', () => {
+    // frame 2's tail: detached, x58..78, in the column of frame 1; frame 1's body ends at x50, frame 2 starts at x80
+    const crops = sliceComponents(grid([...bodies(), [58, 15, 78, 19]]), GW, GH, 8, 2)!;
+    expect(crops[0]!.width).toBe(41);
+    expect(crops[1]!.width).toBe(120 - 58 + 1);
+  });
+
+  it('returns null when the rows interleave or the bodies are merged', () => {
+    const rects = bodies();
+    expect(sliceComponents(grid(rects.map((r, i): Rect => (i === 4 ? [r[0], 10, r[2], 50] : r))), GW, GH, 8, 2)).toBeNull();
+    expect(sliceComponents(grid([...bodies(), [51, 30, 79, 31]]), GW, GH, 8, 2)).toBeNull();
+  });
+
+  it('falls back to a column cut per row when two bodies touch', async () => {
+    // rounded bodies (the column cut rejects straight-edged frames); frames 1 and 2 touch at one point, so they fuse into one component
+    const d = Buffer.alloc(GW * GH * 4);
+    const touching = bodies().map((r, i): Rect => [[25, 76, 150, 220][i] ?? r[0], r[1], [75, 126, 200, 270][i] ?? r[2], r[3]]);
+    for (const [x0, y0, x1, y1] of touching)
+      for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++) {
+          const u = (x - (x0 + x1) / 2) / ((x1 - x0) / 2);
+          const v = (y - (y0 + y1) / 2) / ((y1 - y0) / 2);
+          if (u * u + v * v <= 1) d.set([0, 170, 0, 255], (y * GW + x) * 4);
+        }
+    expect(sliceComponents(d, GW, GH, 8, 2)).toBeNull();
+    const png = await sharp(d, { raw: { width: GW, height: GH, channels: 4 } }).png().toBuffer();
+    const frames = await sheetFrames({ png } as never, 8, 2);
+    expect(frames).toHaveLength(8);
+  });
+});

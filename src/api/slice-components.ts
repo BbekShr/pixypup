@@ -16,7 +16,8 @@ interface Comp {
   y1: number;
 }
 
-export function sliceComponents(rgba: Buffer, w: number, h: number, n: number): Crop[] | null {
+/** n frames in reading order; `rows` > 1 lays them on a grid of that many rows. */
+export function sliceComponents(rgba: Buffer, w: number, h: number, n: number, rows = 1): Crop[] | null {
   const label = new Int32Array(w * h);
   const comps: Comp[] = [{ area: 0, x0: 0, y0: 0, x1: 0, y1: 0 }]; // index 0 = unlabelled
   const stack: number[] = [];
@@ -54,7 +55,17 @@ export function sliceComponents(rgba: Buffer, w: number, h: number, n: number): 
   const largest = (comps[order[0] as number] as Comp).area;
   // The n bodies must be comparable in size; a smaller nth means two bodies fused into one component.
   if ((comps[order[n - 1] as number] as Comp).area < 0.3 * largest) return null;
-  const bodies = order.slice(0, n).sort((a, b) => (comps[a] as Comp).x0 + (comps[a] as Comp).x1 - (comps[b] as Comp).x0 - (comps[b] as Comp).x1);
+  const cx = (i: number) => (comps[i] as Comp).x0 + (comps[i] as Comp).x1;
+  const cy = (i: number) => (comps[i] as Comp).y0 + (comps[i] as Comp).y1;
+  const bodies: number[] = [];
+  const perRow = n / rows;
+  const byY = order.slice(0, n).sort((a, b) => cy(a) - cy(b));
+  for (let r = 0; r < rows; r++) bodies.push(...byY.slice(r * perRow, (r + 1) * perRow).sort((a, b) => cx(a) - cx(b)));
+  // Rows must not interleave: every body of a row sits above every body of the next.
+  for (let r = 1; r < rows; r++) {
+    const upper = Math.max(...bodies.slice((r - 1) * perRow, r * perRow).map(cy));
+    if (upper >= Math.min(...bodies.slice(r * perRow, (r + 1) * perRow).map(cy))) return null;
+  }
   const widths = bodies.map((b) => (comps[b] as Comp).x1 - (comps[b] as Comp).x0 + 1).sort((a, b) => a - b);
   const median = widths[Math.floor(n / 2)] as number;
   if (widths.some((v) => Math.abs(v - median) > 0.5 * median)) return null;
