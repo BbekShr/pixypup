@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { IPC } from './ipc';
 import { petMenuTemplate } from './menu';
 import { isPlainName, loadPack, pickPackDir } from './pack';
+import { setupOnboarding } from './onboarding';
 import { loadSettings } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -52,8 +53,9 @@ function createTray(): void {
 
 app.dock?.hide();
 
-void app.whenReady().then(() => {
-  const settings = loadSettings(); // TODO(F1): feed settings to feature gates
+void app.whenReady().then(async () => {
+  let settings = loadSettings(); // TODO(F1): feed settings to feature gates
+  const onboarding = setupOnboarding({ getOverlay: () => win, onSettingsChanged: () => { settings = loadSettings(); }, getPetName: () => settings.petName });
   ipcMain.handle(IPC.getPack, async () => {
     const dev = app.isPackaged ? undefined : process.env['PIXY_PACK_DIR'];
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
@@ -70,7 +72,8 @@ void app.whenReady().then(() => {
     if (!win) return;
     const send = (cmd: string): void => {
       if (cmd === 'stay' || cmd === 'wander') stay = cmd === 'stay';
-      win?.webContents.send(IPC.command, cmd);
+      if (cmd === 'new-pet') onboarding.open(true);
+      else win?.webContents.send(IPC.command, cmd);
     };
     const items = petMenuTemplate({ stay }).map((i): MenuItemConstructorOptions => {
       if ('type' in i) return { type: 'separator' };
@@ -85,6 +88,10 @@ void app.whenReady().then(() => {
   });
   createWindow();
   createTray();
+  // First launch only: Pakkun gets a moment to drop in before the welcome appears.
+  const userPet = isPlainName(settings.petName) && (await loadPack(join(app.getPath('userData'), 'pets', settings.petName))) !== null;
+  if (!app.isPackaged) process.on('SIGUSR2', () => onboarding.open(true)); // dev hook: the native menu can't be driven over CDP
+  if (!settings.onboarded && !userPet) setTimeout(() => onboarding.open(false), 1500);
 });
 
 app.on('window-all-closed', () => app.quit());

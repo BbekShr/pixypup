@@ -13,6 +13,7 @@ export function petMenuTemplate(o: { stay: boolean }): MenuItem[] {
     { label: 'Come here', command: 'come' },
     { type: 'separator' },
     { label: 'Stay here', command: o.stay ? 'wander' : 'stay', checked: o.stay },
+    { label: 'Make a new pet…', command: 'new-pet' },
     { type: 'separator' },
     { label: 'Quit PixyPup', quit: true },
   ];

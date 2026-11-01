@@ -1,0 +1,24 @@
+:root {
+  --cream: #FFF6EC;
+  --cream-deep: #FBE8D3;
+  --ink: #3B2F2A;
+  --ink-soft: rgba(59, 47, 42, 0.64);
+  --blush: #F4A6A0;
+  --honey: #F6C76B;
+  --sky: #BFE3F2;
+  --radius: 20px;
+  --pill: 999px;
+  --font: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  --pop: cubic-bezier(.34, 1.56, .64, 1);
+  --settle: cubic-bezier(.2, .8, .2, 1);
+  --fast: 180ms;
+  --slow: 320ms;
+  --shadow: 0 6px 20px rgba(59, 47, 42, 0.14);
+}
+
+html, body { margin: 0; font: 15px/1.45 var(--font); color: var(--ink); -webkit-font-smoothing: antialiased; }
+.small { font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0s !important; transition-duration: 1ms !important; }
+}

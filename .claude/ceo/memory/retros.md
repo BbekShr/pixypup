@@ -10,3 +10,4 @@ One line per run: `- YYYY-MM-DD <mode/ID>: <friction observed> → <fix made or 
 - 2026-10-31 F4: maintainer feedback mid-build (motion, walking, right-click) was relayed into the running editor via SendMessage, which worked; correctness lens found the lost-pet drag and stuck-drag paths no test covered → fixed with gravity + finish(); native menu still needs a human or computer-use check
 - 2026-10-31 F13: three live runs were needed (walk frames copied each other; blink redrew a sit; sizes drifted; then the slicer assumed gutters Muse doesn't draw) → the live render is the real gate for image work; the code review found only a perf issue
 - 2026-10-31 F15: no friction; small diff reviewed inline by the CEO
+- 2026-10-31 F5a: correctness lens found 3 CONFIRMED flow races no test covered; a reviewer ran git checkout in the shared tree (restored) → lesson added; the real-key run needed a PIXY_DEV_PHOTO hook the brief hadn't asked for

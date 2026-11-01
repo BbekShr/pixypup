@@ -22,3 +22,6 @@ npm run dist           # mac dmg (ad-hoc signed)
 The build is ad-hoc signed (no Apple Developer ID). After copying PixyPup.app to Applications, right-click it and choose Open the first time.
 
 All code written from Oct 31 2026 for the Meta Global AI Developer Hackathon.
+
+## Make your own pet
+On first launch a small welcome window offers to turn a photo of your dog or cat into a pet (right-click the pet, "Make a new pet…", any time). Rehearse without a key: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` (dev builds only).

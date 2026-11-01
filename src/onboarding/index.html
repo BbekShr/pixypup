@@ -1,8 +1,99 @@
 <!doctype html>
-<html>
-  <head><meta charset="UTF-8" /><title>Welcome to PixyPup</title></head>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'" />
+    <title>Make a pet</title>
+  </head>
   <body>
-    <h1>Welcome to PixyPup</h1>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="paw" viewBox="0 0 32 32">
+        <ellipse cx="16" cy="21" rx="8" ry="6.5" /><ellipse cx="6" cy="13" rx="3.2" ry="4.2" /><ellipse cx="12.5" cy="7.5" rx="3.2" ry="4.4" /><ellipse cx="19.5" cy="7.5" rx="3.2" ry="4.4" /><ellipse cx="26" cy="13" rx="3.2" ry="4.2" />
+      </symbol>
+    </svg>
+    <main class="card" id="card">
+      <header>
+        <span class="brand"><svg class="ico"><use href="#paw" /></svg>PixyPup</span>
+        <button class="x" id="close" aria-label="Close" title="Close">&times;</button>
+      </header>
+
+      <div class="stage">
+        <section class="step" data-step="welcome">
+          <img class="hero bob" id="hero" alt="Pakkun, sitting" />
+          <h1>This is Pakkun.</h1>
+          <p class="lead">He'll keep you company.<br />Want your own pet?</p>
+          <div class="actions col">
+            <button class="btn primary" id="start">Make my pet</button>
+            <button class="btn ghost" id="keep">Keep Pakkun for now</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="photo">
+          <h1>Show me their face</h1>
+          <p class="lead">A photo of your dog or cat, all of them in view.</p>
+          <div class="drop" id="drop">
+            <svg class="ico big"><use href="#paw" /></svg>
+            <span>Drop a photo here</span>
+            <button class="btn primary" id="choose">Choose a photo…</button>
+          </div>
+          <p class="note" id="photo-msg" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="step" data-step="name">
+          <img class="thumb" id="thumb" alt="Your photo" />
+          <h1>What's their name?</h1>
+          <input id="name" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Milo" aria-label="Pet name" />
+          <div class="pills" role="radiogroup" aria-label="Dog or cat">
+            <button class="pill on" role="radio" aria-checked="true" data-species="dog">Dog</button>
+            <button class="pill" role="radio" aria-checked="false" data-species="cat">Cat</button>
+          </div>
+          <div class="actions">
+            <button class="btn ghost" data-back>Back</button>
+            <button class="btn primary" id="named" disabled>Next</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="key">
+          <h1>One tiny key</h1>
+          <p class="lead">Pets are drawn with Meta's AI, using your own key.</p>
+          <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your API key" aria-label="Meta API key" />
+          <p class="note" id="key-msg" role="status" aria-live="polite"></p>
+          <p class="small soft">Stored in your Mac's Keychain, never in a file.</p>
+          <button class="link" id="getkey">Get a key at dev.meta.ai</button>
+          <details>
+            <summary>Why?</summary>
+            <p class="small soft">Your photo goes from this Mac straight to Meta's image models with your key, and only when you press the button. PixyPup has no server of its own.</p>
+          </details>
+          <div class="actions">
+            <button class="btn ghost" data-back>Back</button>
+            <button class="btn primary" id="savekey" disabled>Save and go</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="making">
+          <div class="cutout" id="cutout"><svg class="ico big"><use href="#paw" /></svg></div>
+          <h1 id="making-title">Meeting them…</h1>
+          <p class="lead copy" id="copy" aria-live="polite">Learning their ears…</p>
+          <div class="tiles" id="tiles"></div>
+        </section>
+
+        <section class="step" data-step="failed">
+          <svg class="ico big sad"><use href="#paw" /></svg>
+          <h1>Oh no.</h1>
+          <p class="lead" id="fail-msg"></p>
+          <div class="actions">
+            <button class="btn ghost" id="otherphoto">Another photo</button>
+            <button class="btn primary" id="retry">Try again</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="done">
+          <img class="hero bob" id="done-img" alt="" />
+          <h1 id="done-title">Say hi!</h1>
+          <p class="lead">Right-click your pet any time.</p>
+        </section>
+      </div>
+    </main>
     <script type="module" src="./onboarding.ts"></script>
   </body>
 </html>

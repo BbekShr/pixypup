@@ -16,5 +16,7 @@
 - Every pointer path (up, cancel, lostpointercapture) restores click-through; test the invariants as pure functions, not formula re-statements (F4).
 - Before a verify run, check who owns the debug and renderer ports (the maintainer may be running the app); use a different `--remoteDebuggingPort` and never kill processes you didn't start.
 - When separate image calls copy a reference, ask for one sprite sheet and slice locally; save real model output as a test fixture, because synthetic fixtures are too clean (F13: Muse sheet frames nearly touch).
+- Async user flows that outlive their window are owned by main with a run token; the window rebuilds from main-held state (F5a `src/main/run-state.ts`).
+- Reviewers stay read-only: never `git checkout`/`switch` in the shared tree, even detached (F5a reviewer slip).
 
 ## Archive

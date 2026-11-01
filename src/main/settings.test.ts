@@ -20,6 +20,7 @@ const defaults: Settings = {
   offline: true,
   adminDisableScreenAware: false,
   petName: 'Pakkun',
+  onboarded: false,
 };
 
 describe('mergeSettings', () => {
