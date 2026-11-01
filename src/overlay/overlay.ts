@@ -11,7 +11,7 @@ import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } fro
 import { cleanFrame } from './frames';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, TURN_FRONT, TURN_FRONT34, type Mirror, WALK_ACCEL } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -125,7 +125,7 @@ function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], i
   const h0 = head(idle);
   if (h0 === null) return { reg, wag: false };
   for (const [name, p] of Object.entries(poses)) {
-    if (LYING.has(name)) continue;
+    if (LYING.has(name) || name === 'turn') continue; // lying poses and the front-on turnaround are not lined up by their head
     const first = bitmap(p.srcs[0]);
     const ref = !first || sameSize(first) ? h0 : head(first);
     for (const src of p.srcs) {
@@ -461,9 +461,11 @@ function frame(now: number): void {
   const turning = state === 'walk' && now < turnUntil;
   const turnMs = calm ? 0 : TURN_MS;
   const prev = mir;
-  mir = steer(mir, dir * (life && lifeKind === 'look' ? -1 : 1) as 1 | -1, now, turnMs); // look: the head turns away and back, any interruption turns too
+  const turnSrcs = calm ? null : usableTurn(poses['turn']?.srcs);
+  const lookAway = life && lifeKind === 'look' && !turnSrcs; // with a turnaround the look shows the front instead of mirroring away
+  mir = steer(mir, dir * (lookAway ? -1 : 1) as 1 | -1, now, turnMs); // look: the head turns away and back, any interruption turns too
   if (mir !== prev && now - prev.at >= turnMs) { turnH = dir === turnDir || falling || dragging ? 0 : TURN_HOP * H; turnDir = dir; } // a reversal keeps its hop; a look crouches on the spot; no hop off thin air
-  const flip = Math.sign(mirrorScale(mir, now, turnMs));
+  let flip = Math.sign(mirrorScale(mir, now, turnMs));
   facing = flip;
   y = floorY() + lift;
   if (dragging && !calm) {
@@ -492,7 +494,18 @@ function frame(now: number): void {
   const pose = poses[wagging ? 'bark' : name] ?? poses['idle']!;
   const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const front = state === 'sit' && now < frontUntil ? poses['turn']?.srcs[0] : undefined;
-  const src = front ?? pose.srcs[i]!;
+  let src = front ?? pose.srcs[i]!;
+  if (turnSrcs && !front && (state === 'walk' || upright)) {
+    const u = mirrorProgress(mir, now, turnMs);
+    if (u < 1) { // turn through the front view; the mirror flips once, while the symmetric front is drawn
+      const tf = turnFrame(u);
+      if (tf.idx !== 2) src = turnSrcs[tf.idx]!;
+      flip = tf.mirrorFromFacing ? mir.from : mir.to;
+    } else if (life && lifeKind === 'look') {
+      const e = envelope(now - lifeStart, lifeUntil - lifeStart);
+      if (e > 0.15) src = turnSrcs[e > 0.85 ? TURN_FRONT : TURN_FRONT34]!; // the head turns to the viewer, then back
+    }
+  }
   if (src !== shownSrc) { img.src = src; shownSrc = src; }
   const fw = shownW(src);
   if (img.style.width !== `${fw}px`) img.style.width = `${fw}px`; // a wider frame (the profile walk) stays centred on the pet

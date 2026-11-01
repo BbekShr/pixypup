@@ -42,6 +42,24 @@ export const mirrorScale = (m: Mirror, now: number, durMs: number): number =>
 export const mirrorProgress = (m: Mirror, now: number, durMs: number): number =>
   now - m.at >= durMs ? 1 : (now - m.at) / durMs;
 
+export const TURN_FRONT = 0;
+export const TURN_FRONT34 = 1;
+export const TURN_SIDE = 2;
+
+/**
+ * A pack with a turnaround ([front, front34, side, ...]) turns through its front view instead of squeezing the side
+ * view. idx is the turn frame to draw (TURN_SIDE = keep the normal frame); mirrorFromFacing says which side the mirror
+ * shows: the old facing before the apex, the new one after, so the flip happens while the symmetric front is drawn.
+ * Symmetric in u <-> 1-u, so a reversal mid-turn stays continuous.
+ */
+export function turnFrame(u: number): { idx: 0 | 1 | 2; mirrorFromFacing: boolean } {
+  const v = Math.min(u, 1 - u);
+  return { idx: v < 0.2 ? TURN_SIDE : v < 0.4 ? TURN_FRONT34 : TURN_FRONT, mirrorFromFacing: u < 0.5 };
+}
+
+/** The turnaround frames of a pack, or null when it has none worth using (needs front, front34 and side). */
+export const usableTurn = (frames: string[] | undefined): string[] | null => (frames && frames.length >= 3 ? frames : null);
+
 /** Hop-turn body for progress u: crouch, an airborne arc (apex at 0.5, where the mirror swaps), landing squash. Symmetric in u <-> 1-u, so a reversal stays continuous. heightPx 0 = crouch only. */
 export function hopTurn(u: number, heightPx: number): { dy: number; sx: number; sy: number } {
   const v = Math.min(u, 1 - u);

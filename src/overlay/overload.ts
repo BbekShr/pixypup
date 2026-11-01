@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import type { Pack } from '../main/pack';
 import { cleanFrame } from './frames';
 import { displayWidth } from './layout';
-import { boundGait, gait, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, walkFrame } from './motion';
+import { boundGait, gait, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, turnFrame, usableTurn, walkFrame } from './motion';
 import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW_MS, TURN_MS, type CastMember } from './overload-choreo';
 
 declare global {
@@ -13,7 +13,7 @@ declare global {
 }
 
 interface Start { packs: Pack[]; seed: number }
-interface Prep { idle: string; walk: string[]; fps: number; footY: number; natW: Map<string, number>; idleW: number; drawn: boolean; flier: boolean; member: CastMember }
+interface Prep { idle: string; walk: string[]; turn: string[] | null; fps: number; footY: number; natW: Map<string, number>; idleW: number; drawn: boolean; flier: boolean; member: CastMember }
 
 const STRIDE = 0.22; // of displayed width per walk frame, as in the overlay
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -29,6 +29,14 @@ async function prep(pack: Pack): Promise<Prep | null> {
   let walk = (poses['walk']?.frames ?? []).map((f) => pack.frames[f]).filter((s): s is string => !!s);
   const natW = new Map<string, number>();
   let idleH = 1;
+  const turn = usableTurn(poses['turn']?.frames.map((f) => pack.frames[f]).filter((s): s is string => !!s))?.slice(0, 2) ?? null; // front and front34 are all a turn needs
+  await Promise.all((turn ?? []).map(async (s) => {
+    const i = new Image();
+    i.src = s;
+    await i.decode();
+    keep.push(i);
+    natW.set(s, i.naturalWidth);
+  }));
   walk = await Promise.all([idle, ...walk].map(async (s) => {
     const i = new Image();
     i.src = s;
@@ -44,7 +52,7 @@ async function prep(pack: Pack): Promise<Prep | null> {
   const prof = pack.manifest.profile;
   const flier = prof?.locomotion === 'fly';
   const member: CastMember = { flier, aspect: displayWidth(idleW, idleH, 1), air: flier && prof?.air ? { min: prof.air.minLiftBody, max: prof.air.maxLiftBody } : undefined };
-  return { idle, walk, fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0 && natW.get(walk[0]!) !== idleW, flier, member };
+  return { idle, walk, turn, fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0 && natW.get(walk[0]!) !== idleW, flier, member };
 }
 
 function heart(x: number, y: number): void {
@@ -121,6 +129,11 @@ async function begin(raw: unknown): Promise<void> {
         if (u < 1) {
           const ht = hopTurn(u, s.turnH);
           y += ht.dy; sx = ht.sx; sy = ht.sy;
+          if (c.turn) { // through the front view; the mirror flips once, while it is drawn
+            const tf = turnFrame(u);
+            if (tf.idx !== 2) src = c.turn[tf.idx]!;
+            flip = tf.mirrorFromFacing ? s.mir.from : s.mir.to;
+          }
         }
         else if (c.flier) rot = lean(dir, 0.5) + 3 * Math.sin(flyLift(p, t) / 12);
         else if (s.v > 0) {

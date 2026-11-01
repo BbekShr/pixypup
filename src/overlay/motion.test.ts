@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, type Mirror, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -454,5 +454,25 @@ describe('hopTurn', () => {
       expect(Math.abs(f(r, 1000 + e).dy - f(base, 1000 + e - 1).dy)).toBeLessThanOrEqual(step + 1e-9);
       expect(Math.abs(f(r, 1000 + e).sy - f(base, 1000 + e - 1).sy) * 8).toBeLessThanOrEqual(step + 1e-9);
     }
+  });
+});
+
+describe('turnFrame', () => {
+  it('goes side, front34, front at the apex, front34, side', () => {
+    const seq = [0.05, 0.3, 0.5, 0.7, 0.95].map((u) => turnFrame(u).idx);
+    expect(seq).toEqual([TURN_SIDE, TURN_FRONT34, TURN_FRONT, TURN_FRONT34, TURN_SIDE]);
+  });
+  it('is symmetric under u -> 1-u', () => {
+    for (let u = 0; u <= 1; u += 0.01) expect(turnFrame(u).idx).toBe(turnFrame(1 - u).idx);
+  });
+  it('flips the mirror once, at the apex where the front is drawn', () => {
+    let flips = 0;
+    let prev = turnFrame(0);
+    for (let u = 0.001; u <= 1; u += 0.001) {
+      const f = turnFrame(u);
+      if (f.mirrorFromFacing !== prev.mirrorFromFacing) { flips++; expect(f.idx).toBe(TURN_FRONT); }
+      prev = f;
+    }
+    expect(flips).toBe(1);
   });
 });
