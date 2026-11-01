@@ -26,6 +26,10 @@ describe('openClient', () => {
     expect(blocked('voice', o)).toThrow(NetworkBlockedError);
     expect(() => openClient('create-pet', o, 'k')).not.toThrow();
   });
+  it('talk is allowed by default and blocked only by offline', () => {
+    expect(() => openClient('talk', s, 'k')).not.toThrow();
+    expect(blocked('talk', { ...s, offline: true })).toThrow(NetworkBlockedError);
+  });
   it('voice setting allows voice when online', () => {
     expect(() => openClient('voice', { ...on, voice: true }, 'k')).not.toThrow();
     expect(blocked('voice', on)).toThrow(NetworkBlockedError);
