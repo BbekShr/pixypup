@@ -9,6 +9,9 @@ export const puppetSpecies = (species?: string): 'dog' | 'cat' | null => {
   return /\b(cat|kitten|kitty)s?\b/.test(s) ? 'cat' : /\b(dog|puppy|pup)s?\b/.test(s) ? 'dog' : null;
 };
 
+/** What a click-bark says: a cat meows. */
+export const barkWord = (species?: string): string => (puppetSpecies(species) === 'cat' ? 'Meow!' : 'Woof!');
+
 /** Which leg rig replaces a pack's walk: none when the drawn walk was picked by a judge model (it reads better than any rig). */
 export const rigFor = (species: string | undefined, walk?: { judge?: string }): 'dog' | 'cat' | null => (walk?.judge ? null : puppetSpecies(species));
 

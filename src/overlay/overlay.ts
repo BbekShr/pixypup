@@ -9,11 +9,11 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } from './call';
 import { alphaPlane as alpha, cleanFrame } from './frames';
-import { GAITS, bakeWalk, legBand, rigFor } from './puppet';
+import { GAITS, bakeWalk, barkWord, legBand, rigFor } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, registersByHead, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -86,12 +86,13 @@ let sayAt = Infinity;
 let speakingUntil = 0;
 let lastLine: string | null = null;
 let lineOnBark = false;
+let bark = 'Woof!'; // "Meow!" for a cat
 let woofs = false; // this bark shows "Woof!" bubbles
 let woofShown = -1; // the last burst that got one
 const query = new URLSearchParams(location.search);
 const chatty = import.meta.env.DEV && query.get('chatty') === '1';
 
-interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number>; rig: Rig }
+interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; bark: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number>; rig: Rig }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
 const STATIC_WALK_OVERLAP = 0.98;
@@ -139,6 +140,7 @@ function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], i
     }
     if (LYING.has(name)) continue; // lying poses are not lined up by their head
     const first = bitmap(p.srcs[0]);
+    if (!registersByHead(name, !first || sameSize(first))) continue;
     const ref = !first || sameSize(first) ? h0 : head(first);
     for (const src of p.srcs) {
       const b = bitmap(src) ?? idle;
@@ -216,13 +218,14 @@ async function readPack(): Promise<Prepared | null> {
     } else rig = { reason: 'no leg band found in idle' };
   }
   const { reg, wag } = register(poses, bitmaps, first);
-  return { name: pack.manifest.pet, strideFrac: strideFrac ?? walkStride(poses['walk'], bitmaps, first), bodyScale: body ?? profileScale(pack.manifest.profile?.gait), rig, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
+  return { name: pack.manifest.pet, strideFrac: strideFrac ?? walkStride(poses['walk'], bitmaps, first), bodyScale: body ?? profileScale(pack.manifest.profile?.gait), rig, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', bark: barkWord(pack.manifest.species), lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
 }
 
 function applyPack(p: Prepared): void {
   nat = { w: p.nw, h: p.nh };
   layout();
   footY = p.footY;
+  bark = p.bark;
   for (const b of keep) if (b.src.startsWith('blob:')) URL.revokeObjectURL(b.src); // the cleaned frames of the pack being replaced
   keep.splice(0, keep.length, ...p.bitmaps); // the old pack's bitmaps are released only once the new poses are live
   poses = p.poses;
@@ -418,7 +421,7 @@ function enter(prev: PetState): void {
 
 function woofBubble(): void {
   const b = document.createElement('div');
-  b.textContent = 'Woof!';
+  b.textContent = bark;
   b.style.cssText = 'position:absolute;left:0;top:0;font:700 14px sans-serif;background:#fff;color:#222;padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none';
   fx.append(b);
   b.animate(
@@ -929,7 +932,7 @@ function start(b: Behavior): void {
     say(b.bubble ?? '!', PERK_MS);
   } else if (b.action === 'talk' && b.mood) {
     const plan = talkPlan(b.mood, b.crisis === true);
-    const bubble = b.crisis ? '' : (b.bubble ?? 'Woof!'); // a crisis is met with company, not a bark
+    const bubble = b.crisis ? '' : (b.bubble ?? bark); // a crisis is met with company, not a bark
     if (plan.pose === 'celebrate') start({ ...b, action: 'celebrate' });
     else {
       act = { kind: 'talk', phase: 'go', until: 0, plan, bubble };

@@ -234,6 +234,12 @@ export function headX(alpha: ArrayLike<number>, w: number, h: number, stride = 1
   return sum / n;
 }
 
+/**
+ * Whether a pose's frames are lined up by their head. Drawn walks (a different size from idle) are not: the raised tail or
+ * ears enter the top 30% of the silhouette on some frames, so headX jumps ~16 display px back and forth twice a cycle.
+ */
+export const registersByHead = (pose: string, sameSizeAsIdle: boolean): boolean => !(pose === 'walk' && !sameSizeAsIdle);
+
 /** Share of opaque pixels two same-size frames have in common (intersection over union). */
 export function overlap(a: ArrayLike<number>, b: ArrayLike<number>, stride = 1): number {
   let both = 0;

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { GAITS, cycleStrideNat, legBand, legSides, liftAt, tailColumns, tailOffset, puppetSpecies, rigFor, shearAt, stripRuns } from './puppet';
+import { GAITS, cycleStrideNat, legBand, legSides, liftAt, tailColumns, tailOffset, barkWord, puppetSpecies, rigFor, shearAt, stripRuns } from './puppet';
 
 const W = 120;
 const H = 100;
@@ -51,6 +51,12 @@ describe('shearAt', () => {
 });
 
 describe('species and gaits', () => {
+  it('a cat meows, everyone else woofs', () => {
+    expect(barkWord('cat')).toBe('Meow!');
+    expect(barkWord('tabby cat')).toBe('Meow!');
+    expect(barkWord('shiba inu dog')).toBe('Woof!');
+    expect(barkWord(undefined)).toBe('Woof!');
+  });
   it('maps species', () => {
     expect(puppetSpecies('Dog')).toBe('dog');
     expect(puppetSpecies('puppy')).toBe('dog');

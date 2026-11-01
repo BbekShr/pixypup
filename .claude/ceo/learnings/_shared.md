@@ -1,6 +1,8 @@
 # Shared lessons (every agent)
 
 ## Active
+- Before a CDP runtime sample, check `ioreg -l | grep CGSSessionScreenIsLocked` and `document.visibilityState`: a locked Mac hides the overlay, pauses rAF and freezes the pet; report the gate blocked, not failed (walk-quality).
+- Don't shrink strideFromFrames' lower clamp by frame count: every pack collapses to the floor and feet skate ~4x body speed; a faster drawn walk is a deliberate foot-slide trade (walk-quality, dropped 94886a5).
 - When a PR changes walk or animation behaviour, grep README.md and docs/index.html for wag/rig/baked/model counts and re-copy `assets/pets/*/side_*` into `docs/img` (cmp) before closing: docs went stale within hours of #39.
 - A generated bundle committed under `docs/` must be regenerated from the real source (`npm run site-js`), never hand-ported: the site's walk drifted from the app once already (docs-latest).
 - After scripting inline JS into `docs/index.html`, extract it and `node --check` it: one redeclaration silently kills the whole page (docs-latest).
