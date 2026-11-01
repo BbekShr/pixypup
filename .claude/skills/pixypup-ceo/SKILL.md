@@ -86,13 +86,13 @@ User-data paths (never read, written or deleted by any agent): `~/Library/Applic
 
 ## Model routing
 
-**Model policy (set by the maintainer):** this org runs on the lower tiers on purpose. "Plan" tier is `sonnet`, not opus. Release manager, repro, backlog reconciliation and doc edits run on `haiku`. The maintainer's own session makes the few top-tier calls (pose-set judgment, cut-or-keep, demo staging); don't escalate model tiers to compensate, escalate the decision to the human instead.
+**Model policy (set by the maintainer, updated 2026-10-31):** execution runs on the lower tiers on purpose. Planning, product and design judgment may use `fable` (the maintainer: "use fable to plan if needed"): dispatch the built-in `Plan` agent with `model: fable` for hard items and product-level plans; everything else stays on `sonnet`/`haiku`. Release manager, repro, backlog reconciliation and doc edits run on `haiku`. The maintainer's own session makes the few top-tier calls (pose-set judgment, cut-or-keep, demo staging); don't escalate model tiers to compensate, escalate the decision to the human instead.
 
 Plan at the top tier; execute at the cheapest tier the work allows.
 
 | Tier | Model | Use for |
 |---|---|---|
-| Plan | `sonnet` | you; read-only plans for hard items (built-in `Plan` agent or the architect); adjudicating disagreements |
+| Plan | `fable` (hard items, product/design plans) or `sonnet` | you; read-only plans for hard items (built-in `Plan` agent or the architect); adjudicating disagreements |
 | Execute | `sonnet` | editors executing a written plan or a scoped fix; review lenses; specialists |
 | Mechanical | `haiku` | running gates, checklists, doc/backlog edits, anything specified line by line |
 
@@ -177,7 +177,7 @@ For each selected item, sequentially unless the items' files are disjoint:
 2. Simple item (one perimeter, obvious fix): dispatch the owning editor with the scoped finding,
    **the playbook to follow** (`.claude/ceo/playbooks/<kind>.md`, plus the matching Pstack
    playbook if it's installed), the proving-test requirement, and the cheap gates.
-   Hard item: dispatch the built-in `Plan` agent at `sonnet` (read-only) for a plan, check each acceptance criterion maps to a step and a verification, then hand the plan verbatim to the owning editor at `sonnet`. For F3 (pose pipeline) and F7 (behaviour + coordinate mapping), stop after the plan and put it in front of the maintainer before building.
+   Hard item: dispatch the built-in `Plan` agent at `fable` (read-only) for a plan, check each acceptance criterion maps to a step and a verification, then hand the plan verbatim to the owning editor at `sonnet`. For F3 (pose pipeline) and F7 (behaviour + coordinate mapping), stop after the plan and put it in front of the maintainer before building.
 3. Parallel editors on disjoint items each get `isolation: "worktree"` and run only cheap gates.
 
 ### 4. Review ∥ QA (one message)
