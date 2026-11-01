@@ -17,6 +17,7 @@
     "walk-sheet": "tsx scripts/walk-sheet.ts",
     "build-native": "bash scripts/build-native.sh",
     "dist": "npm run build-native && npm run build && electron-builder --mac dmg",
+    "site-js": "esbuild scripts/site-puppet.ts --bundle --minify --banner:js=\"/* eslint-disable */\" --format=iife --target=es2022 --outfile=docs/js/puppet.js",
     "make-art": "tsx scripts/make-icon.mts && tsx scripts/make-dmg-art.mts"
   },
   "build": {
