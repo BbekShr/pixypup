@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, type Mirror, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, bob, envelope, airStep, dangle, gait, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, type Mirror, TURN_FLOOR, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -305,6 +305,33 @@ describe('frame registration', () => {
     expect(overlap(idle, idle)).toBe(1);
     expect(overlap(idle, walk)).toBeLessThan(0.6);
     expect(overlap([0, 0], [0, 0])).toBe(0);
+  });
+});
+
+describe('boundGait', () => {
+  const H = 100;
+  const stride = 20;
+  const samples = Array.from({ length: 200 }, (_, i) => boundGait((i / 200) * stride, stride, H));
+  it('leaves the ground by at least 0.05h once per stride and is grounded at each footfall', () => {
+    expect(Math.max(...samples.map((s) => -s.dy))).toBeGreaterThanOrEqual(0.05 * H);
+    expect(Math.max(...samples.map((s) => -s.dy))).toBeLessThanOrEqual(0.07 * H + 1e-9);
+    expect(boundGait(0, stride, H).dy).toBeCloseTo(0);
+    expect(boundGait(stride, stride, H).dy).toBeCloseTo(0);
+    expect(boundGait(3 * stride, stride, H).dy).toBeCloseTo(0);
+  });
+  it('stretches mid-air, squashes on landing, keeps volume, and pitches forward at push-off', () => {
+    expect(boundGait(10, stride, H).sy).toBeCloseTo(1.06);
+    expect(boundGait(0, stride, H).sy).toBeCloseTo(0.92);
+    for (const s of samples) expect(s.sx * s.sy).toBeCloseTo(1);
+    const rot = samples.map((s) => s.rot);
+    expect(Math.max(...rot)).toBeGreaterThan(3);
+    expect(Math.max(...rot)).toBeLessThan(4.5);
+  });
+  it('does not bounce a body that has not moved', () => {
+    const still = boundGait(7 * stride, stride, H); // stopped on a footfall: the same pose every frame, nothing airborne
+    expect(Math.abs(still.dy)).toBeLessThan(1e-9);
+    expect(Math.abs(still.rot)).toBeLessThan(1e-9);
+    expect(boundGait(7 * stride, stride, H)).toEqual(still);
   });
 });
 

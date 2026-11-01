@@ -9,7 +9,7 @@ import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { displayWidth, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gait, headX, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, type Mirror, WALK_ACCEL } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -80,6 +80,7 @@ const chatty = import.meta.env.DEV && new URLSearchParams(location.search).get('
 interface Prepared { name: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number> }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
+const STATIC_WALK_OVERLAP = 0.98;
 const WAG_OVERLAP = 0.85; // bark this close to idle (same stance, tail up) doubles as a tail wag
 
 /**
@@ -88,14 +89,27 @@ const WAG_OVERLAP = 0.85; // bark this close to idle (same stance, tail up) doub
  * drawn on its own canvas size (the profile walk) that pose's first frame, so its body stays centred.
  * Also whether the bark frame is close enough to idle to flick between them as a wag.
  */
+const alpha = (i: HTMLImageElement): Uint8ClampedArray | null => {
+  const c = new OffscreenCanvas(i.naturalWidth, i.naturalHeight).getContext('2d', { willReadFrequently: true });
+  if (!c) return null;
+  c.drawImage(i, 0, 0);
+  return c.getImageData(0, 0, i.naturalWidth, i.naturalHeight).data.subarray(3);
+};
+
+/** Belt and braces for packs main could not tell apart byte for byte: a walk that is the same silhouette throughout. */
+function staticWalk(walk: PoseSet | undefined, bitmaps: HTMLImageElement[]): boolean {
+  const frames = walk?.srcs.map((s) => bitmaps.find((b) => b.src === s));
+  const first = frames?.[0];
+  const a0 = first && alpha(first);
+  if (!frames || !first || !a0) return false;
+  return frames.every((f) => {
+    const a = f && f.naturalWidth === first.naturalWidth && f.naturalHeight === first.naturalHeight ? alpha(f) : null;
+    return !!a && overlap(a0, a, 4) >= STATIC_WALK_OVERLAP;
+  });
+}
+
 function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], idle: HTMLImageElement): { reg: Map<string, number>; wag: boolean } {
   const reg = new Map<string, number>();
-  const alpha = (i: HTMLImageElement): Uint8ClampedArray | null => {
-    const c = new OffscreenCanvas(i.naturalWidth, i.naturalHeight).getContext('2d', { willReadFrequently: true });
-    if (!c) return null;
-    c.drawImage(i, 0, 0);
-    return c.getImageData(0, 0, i.naturalWidth, i.naturalHeight).data.subarray(3);
-  };
   const head = (i: HTMLImageElement): number | null => {
     const a = alpha(i);
     const h = a && headX(a, i.naturalWidth, i.naturalHeight, 4);
@@ -139,6 +153,7 @@ async function readPack(): Promise<Prepared | null> {
   }));
   const first = bitmaps.find((i) => i.src === poses['idle']?.srcs[0]);
   if (!first) return null;
+  if (staticWalk(poses['walk'], bitmaps)) delete poses['walk'];
   const { reg, wag } = register(poses, bitmaps, first);
   return { name: pack.manifest.pet, lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
 }
@@ -450,7 +465,8 @@ function frame(now: number): void {
   let rot = 0;
   if (walking) {
     if (!calm) {
-      const g = gait(walked, stride, shownW(poses['walk']?.srcs[0]) !== W); // a wider walk frame is the drawn profile cycle
+      const drawn = shownW(poses['walk']?.srcs[0]) !== W; // a wider walk frame is the drawn profile cycle
+      const g = drawn ? gait(walked, stride, true) : boundGait(walked, stride, H);
       dy = g.dy;
       sx = g.sx;
       sy = g.sy;

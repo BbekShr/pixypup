@@ -247,6 +247,18 @@ export function gait(distancePx: number, stridePx: number, drawn = false): Pose 
   return { dx: 0, dy: k * bob(distancePx, stridePx), rot: drawn ? 0 : 1.2 * Math.sin(Math.PI * p), sx: 1 - (sy - 1) / 2, sy };
 }
 
+/**
+ * A bounding trot for a pet with no drawn walk cycle: one small airborne bound per stride, stretched mid-air and
+ * squashed on each landing (volume kept: sx = 1/sy), nose pitched down at push-off and easing back. Locked to
+ * distance, so a body that isn't moving doesn't bounce. rot is nose-down positive; the caller signs it for the facing.
+ */
+export function boundGait(distancePx: number, stridePx: number, h: number): Pose {
+  const q = (distancePx / stridePx) % 1;
+  const air = Math.sin(Math.PI * q);
+  const sy = 1 + 0.06 * air - 0.08 * Math.max(0, 1 - q / 0.2);
+  return { dx: 0, dy: -0.07 * h * air, rot: 6 * air * (1 - q), sx: 1 / sy, sy };
+}
+
 const WOOFS = [180, 520]; // two woofs per burst
 const WOOF_EVERY = 1400;
 const WIND_MS = 90;

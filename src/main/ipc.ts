@@ -30,5 +30,6 @@ export const IPC = {
   obFinished: 'pixy:ob-finished',
   obPersonality: 'pixy:ob-personality',
   obFacts: 'pixy:ob-facts',
+  obStepsFailed: 'pixy:ob-steps-failed',
   obOpenSource: 'pixy:ob-open-source',
 } as const;

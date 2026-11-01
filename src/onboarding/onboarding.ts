@@ -9,7 +9,8 @@ import { advance, initialFlow, type Code, type Flow, type FlowEvent } from './fl
 declare global {
   interface Window {
     pixyOb: {
-      state(): Promise<{ needsKey: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[] }) | null }>;
+      state(): Promise<{ needsKey: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[]; walkFailed: boolean }) | null }>;
+      onStepsFailed(cb: () => void): void;
       onFinished(cb: (r: CreateResult) => void): void;
       pickPhoto(): Promise<PhotoResult>;
       dropPhoto(file: File): Promise<PhotoResult>;
@@ -48,6 +49,7 @@ let species: 'dog' | 'cat' = 'dog';
 let petName = '';
 let idleUrl = '';
 let hasCutout = false;
+let stepsLost = false; // the walk cycle could not be drawn: say so once, at the reveal
 let walkTimer = 0;
 const walk = new Map<string, string>(); // the stepping tile cycles whatever walk frames have arrived
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -102,6 +104,7 @@ function fill(): void {
 
 function setupMaking(): void {
   hasCutout = false;
+  stepsLost = false;
   idleUrl = '';
   clearInterval(walkTimer);
   walkTimer = 0;
@@ -111,7 +114,7 @@ function setupMaking(): void {
   for (const id of ['b-photo', 'b-cut', 'b-gen']) $(id).removeAttribute('src');
   const photo = $('thumb').getAttribute('src'); // absent when the window was reopened mid-run
   if (photo) { $('b-photo').setAttribute('src', photo); birth().classList.add('has'); }
-  $('tiles').innerHTML = TILES.map(([k, label]) => `<div class="tile" data-tile="${k}"><div class="box"><svg class="ico"><use href="#paw" /></svg></div>${label}</div>`).join('');
+  $('tiles').innerHTML = TILES.map(([k, label]) => `<div class="tile" data-tile="${k}"><div class="box"><svg class="ico"><use href="#paw" /></svg></div><span class="lbl">${label}</span></div>`).join('');
   $('making-title').textContent = `Meeting ${petName}…`;
   fill();
   personality = null;
@@ -152,7 +155,7 @@ function reveal(): void {
   clearInterval(walkTimer);
   walkTimer = 0;
   $('making-title').textContent = `Say hi to ${petName}!`;
-  showCopy({ text: personality?.lines[0] ?? 'Right-click your pet any time.' });
+  showCopy({ text: stepsLost ? "Couldn't draw my steps today, so I'll bounce along" : (personality?.lines[0] ?? 'Right-click your pet any time.') });
   if (idleUrl) {
     $('b-gen').setAttribute('src', idleUrl);
     setTimeout(() => birth().classList.add('gen-on'), 350);
@@ -220,6 +223,15 @@ function applyProgress(p: Progress): void {
   }
   fill();
 }
+const IMPROV = "I'll improvise my steps";
+function stepsFailed(): void {
+  stepsLost = true;
+  const tile = document.querySelector('[data-tile="walk"]');
+  tile?.setAttribute('title', IMPROV);
+  const lbl = tile?.querySelector('.lbl');
+  if (lbl) lbl.textContent = 'improvising';
+}
+window.pixyOb.onStepsFailed(stepsFailed);
 window.pixyOb.onProgress(applyProgress);
 window.pixyOb.onFinished(finished);
 window.pixyOb.onPersonality((p) => { if (flow.step === 'making') showPersonality(p); });
@@ -281,6 +293,7 @@ void window.pixyOb.state().then((s) => {
     flow = { ...flow, step: 'making' };
     setupMaking();
     s.running.progress.forEach(applyProgress);
+    if (s.running.walkFailed) stepsFailed();
     if (s.running.personality) showPersonality(s.running.personality);
     facts = s.running.facts ?? [];
   }

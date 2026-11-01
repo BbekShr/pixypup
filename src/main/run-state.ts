@@ -3,7 +3,7 @@ import type { Personality, PetFact } from '../../contracts/types';
 export interface Progress { kind: 'cutout' | 'pose'; name: string; url: string }
 
 /** The one pet-making run in flight. `id` is its token: events from any other run are ignored. */
-export interface Run { id: number; name: string; species: 'dog' | 'cat'; progress: Progress[]; personality?: Personality; facts?: PetFact[] }
+export interface Run { id: number; name: string; species: 'dog' | 'cat'; progress: Progress[]; personality?: Personality; facts?: PetFact[]; failed?: string[] }
 export interface Runs { current: Run | null; last: number }
 
 export const noRuns: Runs = { current: null, last: 0 };
@@ -48,3 +48,15 @@ export function recordInfo(r: Runs, id: number, info: { personality: Personality
 }
 
 export const finishRun = (r: Runs, id: number): Runs => (r.current?.id === id ? { ...r, current: null } : r);
+
+const SIDE_FRAMES = ['side_0', 'side_1', 'side_2', 'side_3'];
+
+export function recordFailed(r: Runs, id: number, name: string): Runs {
+  if (r.current?.id !== id) return r;
+  const failed = [...new Set([...(r.current.failed ?? []), name])];
+  return { ...r, current: { ...r.current, failed } };
+}
+
+/** The walk cycle is lost when the pipeline says so, or when every side frame failed. */
+export const walkFailed = (run: Pick<Run, 'failed'> | null): boolean =>
+  !!run?.failed && (run.failed.includes('walk') || SIDE_FRAMES.every((n) => run.failed!.includes(n)));

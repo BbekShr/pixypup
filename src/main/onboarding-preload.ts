@@ -9,7 +9,7 @@ export type CreateResult = { ok: true; name: string; idle?: string } | { ok: fal
 
 // Narrow on purpose: no paths from the page except a dropped File (main re-validates), no raw errors back.
 contextBridge.exposeInMainWorld('pixyOb', {
-  state: (): Promise<{ needsKey: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[] }) | null }> => ipcRenderer.invoke(IPC.obState),
+  state: (): Promise<{ needsKey: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[]; walkFailed: boolean }) | null }> => ipcRenderer.invoke(IPC.obState),
   pickPhoto: (): Promise<PhotoResult> => ipcRenderer.invoke(IPC.obPickPhoto),
   dropPhoto: (file: File): Promise<PhotoResult> => ipcRenderer.invoke(IPC.obDropPhoto, webUtils.getPathForFile(file)),
   devPhoto: (): Promise<PhotoResult> => ipcRenderer.invoke(IPC.obDevPhoto),
@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld('pixyOb', {
   },
   onFacts: (cb: (f: FactView[]) => void): void => {
     ipcRenderer.on(IPC.obFacts, (_e, f: FactView[]) => cb(f));
+  },
+  onStepsFailed: (cb: () => void): void => {
+    ipcRenderer.on(IPC.obStepsFailed, () => cb());
   },
   openSource: (index: number): void => ipcRenderer.send(IPC.obOpenSource, index),
   keep: (): void => ipcRenderer.send(IPC.obKeep),
