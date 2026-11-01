@@ -28,6 +28,6 @@ Entry format:
 - agent-org version: 0.1.0
 - template: skills/org-init/templates/agents/release-manager.md
 - what happened: the "feature-specific check" paragraph says a missing check "is a NO-GO-WITH-GAP, not a pass", but the Verdict section lists only GO, GO-WITH-GAP and NO-GO. A haiku release manager returned NO-GO-WITH-GAP on an org-only smoke run; a case author reading the Verdict section expects GO-WITH-GAP.
-- evidence: smoke run on org/bootstrap-2026-10-31 @5fcf790, gates 1-4 green, verdict NO-GO-WITH-GAP.
+- evidence: smoke run on org/bootstrap-2026-10-31 @13fd86a, gates 1-4 green, verdict NO-GO-WITH-GAP.
 - proposed change: add NO-GO-WITH-GAP to the Verdict list (or change the paragraph to GO-WITH-GAP) so the two sections agree.
 - local workaround: eval case pixypup-4 expects NO-GO-WITH-GAP.

@@ -2,7 +2,7 @@
 id: pixypup-1
 agent: pixypup-ai-engineer
 kind: fix-the-bug
-base: d34133f39523612b40bb5356d1a1c313b5f711d2
+base: 6aed3e888c65b2bf26db8e209869dc72392aabcf
 ---
 ## Task
 Bug report from the maintainer: "I had a failing test in a Terminal window whose title was

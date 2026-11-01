@@ -2,7 +2,7 @@
 id: pixypup-2
 agent: pixypup-app-engineer
 kind: fix-the-bug
-base: d34133f39523612b40bb5356d1a1c313b5f711d2
+base: 6aed3e888c65b2bf26db8e209869dc72392aabcf
 ---
 ## Task
 Bug report: "Our IT team pushed a settings file with `\"screenAware\": \"false\"` (a string) and

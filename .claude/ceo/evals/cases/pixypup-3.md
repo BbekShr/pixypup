@@ -2,7 +2,7 @@
 id: pixypup-3
 agent: pixypup-security-engineer
 kind: find-the-bug
-base: d34133f39523612b40bb5356d1a1c313b5f711d2
+base: 6aed3e888c65b2bf26db8e209869dc72392aabcf
 ---
 ## Task
 Audit `src/main/settings.ts` against the enterprise promises in `docs/ENTERPRISE.md`

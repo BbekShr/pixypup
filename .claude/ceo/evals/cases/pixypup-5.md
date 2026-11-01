@@ -2,7 +2,7 @@
 id: pixypup-5
 agent: pixypup-repro
 kind: triage
-base: d34133f39523612b40bb5356d1a1c313b5f711d2
+base: 6aed3e888c65b2bf26db8e209869dc72392aabcf
 ---
 ## Task
 Bug report: "When a Terminal window's title contains the word zoom, PixyPup thinks I'm on a

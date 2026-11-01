@@ -2,7 +2,7 @@
 id: pixypup-4
 agent: pixypup-release-manager
 kind: gate
-base: d34133f39523612b40bb5356d1a1c313b5f711d2
+base: 6aed3e888c65b2bf26db8e209869dc72392aabcf
 ---
 ## Task
 Run the verification bar on this commit and give your verdict. The brief supplies no feature check.
