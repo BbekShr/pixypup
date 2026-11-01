@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SpriteManifest } from '../../contracts/types';
-import { validateManifest } from '../api/pose-pipeline';
+import { validateManifest } from '../api/manifest';
 
 export interface Pack {
   manifest: SpriteManifest;
