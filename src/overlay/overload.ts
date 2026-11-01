@@ -3,6 +3,7 @@ import type { Pack } from '../main/pack';
 import { alphaPlane, cleanFrame } from './frames';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth } from './layout';
+import { GAITS, bakeWalk, legBand, puppetSpecies } from './puppet';
 import { boundGait, gaitParams, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, profileScale, turnFrame, usableTurn, walkBody, walkFrame } from './motion';
 import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW_MS, T, TURN_MS, type CastMember } from './overload-choreo';
 
@@ -51,14 +52,35 @@ async function prep(pack: Pack): Promise<Prep | null> {
     return f.src;
   })).then((all) => all.slice(1));
   const idleW = natW.get(idle)!;
+  let strideFrac: number | undefined;
+  let body: { bounce: number; pitch: number } | undefined;
+  const kind = puppetSpecies(pack.manifest.species);
+  if (kind) {
+    const idleImg = keep.find((i) => i.src === idle);
+    const a = idleImg && alphaPlane(idleImg);
+    const band = idleImg && a && legBand(a, idleImg.naturalWidth, idleImg.naturalHeight, 4);
+    if (band) {
+      const gait = GAITS[kind];
+      try {
+        const baked = await bakeWalk(idleImg, band, gait, a);
+        keep.push(...baked.bitmaps);
+        walk = baked.srcs;
+        for (const b of baked.bitmaps) natW.set(b.src, b.naturalWidth);
+        strideFrac = baked.cycleNat / gait.frames / idleW;
+        body = { bounce: gait.bounce, pitch: gait.pitch };
+      } catch { /* keep the AI walk */ }
+    }
+  }
   const prof = pack.manifest.profile;
   const flier = prof?.locomotion === 'fly';
   const member: CastMember = { flier, aspect: displayWidth(idleW, idleH, 1), air: flier && prof?.air ? { min: prof.air.minLiftBody, max: prof.air.maxLiftBody } : undefined };
-  const w0 = walkImgs[0];
-  const alphas = walkImgs.map(alphaPlane);
-  const same = !!w0 && walkImgs.every((f) => f.naturalWidth === w0.naturalWidth && f.naturalHeight === w0.naturalHeight);
-  const strideFrac = same && alphas.every((a) => a) ? strideFromFrames(alphas as Uint8ClampedArray[], w0.naturalWidth, w0.naturalHeight, 4, idleW) / idleW : FALLBACK_STRIDE; // measured from the art so the feet don't slide
-  return { idle, walk, turn, strideFrac, body: profileScale(prof?.gait), fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0, flier, member }; // drawn: loadPack already dropped walks that never move
+  const measuredStride = (): number => {
+    const w0 = walkImgs[0];
+    const alphas = walkImgs.map(alphaPlane);
+    const same = !!w0 && walkImgs.every((f) => f.naturalWidth === w0.naturalWidth && f.naturalHeight === w0.naturalHeight);
+    return same && alphas.every((a) => a) ? strideFromFrames(alphas as Uint8ClampedArray[], w0.naturalWidth, w0.naturalHeight, 4, idleW) / idleW : FALLBACK_STRIDE; // measured from the art so the feet don't slide
+  };
+  return { idle, walk, turn, strideFrac: strideFrac ?? measuredStride(), body: body ?? profileScale(prof?.gait), fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0, flier, member }; // drawn: loadPack already dropped walks that never move
 }
 
 function heart(x: number, y: number): void {
