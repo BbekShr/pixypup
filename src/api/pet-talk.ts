@@ -19,7 +19,8 @@ const CRISIS_RE = /\b(kill myself|suicid\w*|end my life|want to die|don'?t want 
 // "kms" only as the last word and not after a number, so "5 kms" and "kms per hour" stay clean.
 const KMS_RE = /(?<!\d )\bkms$/;
 export const isCrisis = (text: string): boolean => {
-  const t = text.toLowerCase().replace(/[\u2019\u2018\u02bc`]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // NFKD folds fullwidth letters and splits accents; zero-width/format chars and combining marks are dropped, not turned into word breaks.
+  const t = text.normalize('NFKD').replace(/[\p{Cf}\p{M}]/gu, '').toLowerCase().replace(/[\u2019\u2018\u02bc`]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
   return CRISIS_RE.test(t) || KMS_RE.test(t);
 };
 
