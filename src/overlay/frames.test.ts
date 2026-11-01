@@ -22,6 +22,13 @@ describe('edgeSlivers', () => {
     rect(a, 2, 8, 4, 10); // tiny but not on an edge column
     expect(edgeSlivers(a, W, H)).toEqual([]);
   });
+  it('keeps a detached tip on an edge the body also touches, drops one on the other edge', () => {
+    const a = new Uint8Array(W * H);
+    rect(a, 12, 4, 40, 16); // body runs to the right edge
+    rect(a, 38, 0, 40, 2); // tip on the right edge: kept
+    rect(a, 0, 6, 1, 8); // sliver on the left edge: removed
+    expect(edgeSlivers(a, W, H).sort((p, q) => p - q)).toEqual([6 * W, 7 * W]);
+  });
   it('reads a strided alpha plane like RGBA data', () => {
     const a = new Uint8Array(W * H);
     rect(a, 8, 4, 28, 16);

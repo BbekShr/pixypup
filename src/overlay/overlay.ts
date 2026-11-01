@@ -125,7 +125,16 @@ function register(poses: Record<string, PoseSet>, bitmaps: HTMLImageElement[], i
   const h0 = head(idle);
   if (h0 === null) return { reg, wag: false };
   for (const [name, p] of Object.entries(poses)) {
-    if (LYING.has(name) || name === 'turn') continue; // lying poses and the front-on turnaround are not lined up by their head
+    if (name === 'turn') {
+      // Front-on frames: the head glides from the side view's place (idle's) to the centre, so it never pops across the swap.
+      p.srcs.slice(0, 2).forEach((src, k) => {
+        const b = bitmap(src);
+        const h = b && head(b);
+        if (b && h !== null && h !== undefined) reg.set(src, Math.max(-0.15 * b.naturalWidth, Math.min(0.15 * b.naturalWidth, h - (k === 0 ? 0 : 0.5) * h0)));
+      });
+      continue;
+    }
+    if (LYING.has(name)) continue; // lying poses are not lined up by their head
     const first = bitmap(p.srcs[0]);
     const ref = !first || sameSize(first) ? h0 : head(first);
     for (const src of p.srcs) {
@@ -160,13 +169,16 @@ async function readPack(): Promise<Prepared | null> {
   if (!first) return null;
   for (const name of ['walk', 'turn']) { // old packs: a sliver of a neighbouring frame's tail on the edge
     const p = poses[name];
-    if (p) p.srcs = await Promise.all(p.srcs.map(async (s) => {
+    if (!p) continue;
+    const cleaned = new Map<string, string>(); // one pass per distinct frame: a pose may repeat a src
+    await Promise.all([...new Set(p.srcs)].map(async (s) => {
       const b = bitmaps.find((q) => q.src === s);
       const c = b && (await cleanFrame(b).catch(() => null));
-      if (!b || !c) return s;
+      if (!b || !c) return;
       bitmaps[bitmaps.indexOf(b)] = c;
-      return c.src;
+      cleaned.set(s, c.src);
     }));
+    p.srcs = p.srcs.map((s) => cleaned.get(s) ?? s);
   }
   if (staticWalk(poses['walk'], bitmaps)) delete poses['walk'];
   const { reg, wag } = register(poses, bitmaps, first);
@@ -177,6 +189,7 @@ function applyPack(p: Prepared): void {
   nat = { w: p.nw, h: p.nh };
   layout();
   footY = p.footY;
+  for (const b of keep) if (b.src.startsWith('blob:')) URL.revokeObjectURL(b.src); // the cleaned frames of the pack being replaced
   keep.splice(0, keep.length, ...p.bitmaps); // the old pack's bitmaps are released only once the new poses are live
   poses = p.poses;
   reg = p.reg;
@@ -206,12 +219,15 @@ img.src = pupUrl;
 sizeImg();
 img.addEventListener('load', () => { if (!nat) { layout(); sizeImg(); } }, { once: true });
 const enterDrop = query.get('enter') === 'drop' && !calm; // a pet just added: it falls in like the hand-off's new pet
+if (enterDrop) img.style.display = 'none'; // no placeholder landing: the drop waits for the pack
+const shown = (): void => { img.style.display = ''; };
 void readPack().then((p) => {
+  shown();
   if (!p) return;
   if (!enterDrop) return applyPack(p);
   incoming = { pack: p, cx: undefined };
   dropIn();
-}).catch(() => undefined);
+}).catch(shown);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
 const floorY = (): number => window.innerHeight - footOffset(H, footY);
@@ -225,7 +241,6 @@ let dang = { angle: 0, omega: 0 }; // body swing under the hand, deg
 let handX = 0;
 let handV = 0;
 let falling = false;
-if (enterDrop) { falling = true; lift = -4000; } // out of sight until its pack arrives
 let landAt = -1e9;
 let raf = 0;
 let y = floorY();
@@ -517,7 +532,7 @@ function frame(now: number): void {
   let rot = 0;
   if (walking) {
     if (!calm) {
-      const drawn = shownW(poses['walk']?.srcs[0]) !== W; // a wider walk frame is the drawn profile cycle
+      const drawn = !!poses['walk']; // a walk that survived the static-frame test is a drawn cycle, whatever its canvas width
       const g = drawn ? gait(walked, stride, true) : boundGait(walked, stride, H);
       dy = g.dy;
       sx = g.sx;
