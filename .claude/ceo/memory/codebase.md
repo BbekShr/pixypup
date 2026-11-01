@@ -14,4 +14,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-10-31 (org smoke @13fd86a): release manager on haiku reproduced the baseline (21/21 tests, 0 lint, 0 type errors, build ok) and followed the report contract. Agents in `.claude/agents/` register only in a session started after they exist.
 
+- 2026-10-31 (pose test): SAM 3.1 returns 0 matches for "red text"/"error text"/"text" on a terminal screenshot; a local red-pixel row scan finds each red line. Muse Image edits return WebP; ~10-22 s per pose. `docs/POSE-TEST.md`
+
 ## Clean audits (so discovery skips these grounds)
