@@ -35,4 +35,5 @@ export const IPC = {
   overloadStart: 'pixy:overload-start',
   overloadCursor: 'pixy:overload-cursor',
   overloadDone: 'pixy:overload-done',
+  overloadStarted: 'pixy:overload-started',
 } as const;

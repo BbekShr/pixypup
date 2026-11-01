@@ -8,6 +8,7 @@ import { isPlainName, loadPack, type Pack } from './pack';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const CURSOR_HZ_MS = 33;
+const START_CAP_MS = 15_000;
 
 /** Every saved pet plus the built-in one, one per name. */
 async function gatherPacks(): Promise<Pack[]> {
@@ -45,12 +46,26 @@ export function setupOverload(o: { hideInShares: () => boolean; onChange: () => 
   }
 
   ipcMain.on(IPC.overloadDone, (e) => { if (win && e.sender === win.webContents) stop(); });
+  // The show's clock starts when the first frame draws, not when the window opens (decoding 24 sprites takes a moment); START_CAP_MS bounds a page that never starts.
+  ipcMain.on(IPC.overloadStarted, (e) => {
+    if (!win || e.sender !== win.webContents) return;
+    clearTimeout(endTimer);
+    endTimer = setTimeout(stop, SHOW_MS + 1500);
+  });
 
   async function start(): Promise<void> {
     if (on) return;
     on = true;
     const mine = ++gen;
     o.onChange();
+    try {
+      await open(mine);
+    } catch {
+      if (gen === mine) stop(); // a pack or window that throws must not leave the overload "running"
+    }
+  }
+
+  async function open(mine: number): Promise<void> {
     const packs = await gatherPacks();
     if (gen !== mine || packs.length === 0) { if (gen === mine) stop(); return; }
     const b = screen.getPrimaryDisplay().workArea;
@@ -60,6 +75,7 @@ export function setupOverload(o: { hideInShares: () => boolean; onChange: () => 
       webPreferences: { preload: join(here, '../preload/overload-preload.mjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
     });
     win = w;
+    for (const ev of ['render-process-gone', 'unresponsive'] as const) w.webContents.on(ev as 'render-process-gone', () => { if (!w.isDestroyed()) w.setIgnoreMouseEvents(true, { forward: true }); });
     w.setAlwaysOnTop(true, 'screen-saver');
     w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     w.setIgnoreMouseEvents(true); // never takes input, on any path
@@ -75,7 +91,7 @@ export function setupOverload(o: { hideInShares: () => boolean; onChange: () => 
         w.webContents.send(IPC.overloadCursor, { x: c.x - b.x, y: c.y - b.y });
       }, CURSOR_HZ_MS);
     });
-    endTimer = setTimeout(stop, SHOW_MS + 500);
+    endTimer = setTimeout(stop, SHOW_MS + START_CAP_MS);
     const devUrl = process.env['ELECTRON_RENDERER_URL'];
     if (devUrl) void w.loadURL(`${devUrl}/overlay/overload.html`);
     else void w.loadFile(join(here, '../renderer/overlay/overload.html'));

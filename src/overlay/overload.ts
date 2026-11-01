@@ -7,7 +7,7 @@ import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW
 
 declare global {
   interface Window {
-    pixyOverload: { onStart(cb: (p: unknown) => void): void; onCursor(cb: (c: { x: number; y: number }) => void): void; done(): void };
+    pixyOverload: { onStart(cb: (p: unknown) => void): void; onCursor(cb: (c: { x: number; y: number }) => void): void; started(): void; done(): void };
     __pixyOverload: { frameMs: number; count: number; t: number };
   }
 }
@@ -69,7 +69,7 @@ function heart(x: number, y: number): void {
 
 async function begin(raw: unknown): Promise<void> {
   const { packs, seed } = raw as Start;
-  const preps = await Promise.all(packs.map(prep));
+  const preps = await Promise.all(packs.map((p) => prep(p).catch(() => null))); // one undecodable pack is skipped, not fatal
   const ok = preps.flatMap((p, i) => (p ? [i] : []));
   if (ok.length === 0) { window.pixyOverload.done(); return; }
   const cast = castIndices(ok.length).map((k) => preps[ok[k]!]!);
@@ -94,7 +94,9 @@ async function begin(raw: unknown): Promise<void> {
   let ema = 0;
   window.__pixyOverload.count = els.length;
 
+  let announced = false;
   const frame = (): void => {
+    if (!announced) { announced = true; window.pixyOverload.started(); }
     const w0 = performance.now();
     const t = w0 - start;
     const dt = Math.min(0.05, (w0 - last) / 1000);
@@ -164,4 +166,4 @@ async function begin(raw: unknown): Promise<void> {
   requestAnimationFrame(frame);
 }
 
-window.pixyOverload.onStart((p) => { void begin(p); });
+window.pixyOverload.onStart((p) => { begin(p).catch(() => window.pixyOverload.done()); });
