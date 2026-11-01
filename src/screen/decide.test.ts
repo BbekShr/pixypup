@@ -21,10 +21,13 @@ describe('ruleDecide', () => {
       expect(ruleDecide({ ...base, windows: [{ owner: 'Safari', title, bounds: b }] })?.action).toBe('hide');
     }
   });
-  it('does not hide for documents that merely mention Meet or Zoom', () => {
-    for (const title of ['Meet - Q3 agenda', 'Meet - abc', 'Zoom meeting notes', 'Zoom Meeting notes - Notion']) {
+  it('does not hide for documents that merely mention Zoom', () => {
+    for (const title of ['Zoom meeting notes', 'Zoom Meeting notes - Notion', 'Notes from the Meet - Q3']) {
       expect(ruleDecide({ ...base, windows: [{ owner: 'Notion', title, bounds: b }] })).toBeNull();
     }
+  });
+  it('hides for a named Meet (calendar event title)', () => {
+    expect(ruleDecide({ ...base, windows: [{ owner: 'Google Chrome', title: 'Meet - Weekly Sync', bounds: b }] })?.action).toBe('hide');
   });
   it('hides for a Chrome Meet tab with a full title', () => {
     const d = ruleDecide({
