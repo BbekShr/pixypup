@@ -29,4 +29,5 @@ Level: **L1** (target L1) since 2026-10-31.
 | 2026-11-01 | F7 | #16 | landed-clean | no | 4 CONFIRMED + 5 lower | no | 4 sonnet editor runs (2 roles), 1 sonnet lens, 1 live Spark probe |
 | 2026-11-01 | F17 | #17 | landed-edited | yes (CEO README line) | 1 CONFIRMED (bubble easing, found by editor) | no | 1 sonnet editor run; CEO inline review |
 | 2026-11-01 | F12 | #18 | landed-clean | no | 0 | no | 1 sonnet editor run; CEO inline review |
-| 2026-11-01 | F8 | (this PR) | open | yes (CEO keyword one-liner) | 4 CONFIRMED + 8 lower | no | 6 sonnet editor runs (2 roles), 1 sonnet lens, 4 real-key runs |
+| 2026-11-01 | F8 | #19 | landed-edited | yes (CEO keyword one-liner) | 4 CONFIRMED + 8 lower | no | 6 sonnet editor runs (2 roles), 1 sonnet lens, 4 real-key runs |
+| 2026-11-01 | F10 | (this PR) | open | no | 1 CONFIRMED (asar bloat, found by editor) | no | 1 sonnet editor run; CEO review of art + evidence |

@@ -45,4 +45,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F8): voice = `src/api/voice.ts` (openVoice gated, async) + `src/main/voice-session.ts` + `src/main/mic.ts` + `src/voice/{listen,commands,pcm}.ts`; dev `PIXY_FAKE_MIC=<wav>` (parses the data chunk), `pref('voice:listen')`, `pref('voice:fake:<text>')`; real driver out/_voicedrive.mjs. Tests 413 in 34 files.
 
+- 2026-11-01 (F10): `npm run dist` → release/PixyPup-0.1.0-arm64.dmg (~125 MB); afterPack `scripts/ad-hoc-sign.mjs`; art via `npm run make-art`; electron-builder output must stay `release/` (dist/ is in build.files). Tests 414.
+
 ## Clean audits (so discovery skips these grounds)
