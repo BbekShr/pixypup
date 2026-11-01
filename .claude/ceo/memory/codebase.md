@@ -35,4 +35,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 - 2026-11-01 (F16): main owns prefs (`run()` → saveSettings → loadSettings → `sync()` → `pixy:prefs`); `src/main/prefs.ts` pure; dev hook `__pixyDebug.pref('size:large'|'snooze:1h'|'wake'…)`; port 9229 may be taken by an unrelated workerd. Tests 257 in 21 files.
 
+- 2026-11-01 (P2): `openClient(purpose, loadSettings(), key)` in `src/api/gate.ts` is the only MetaClient path; scripts use `clientForScripts()`; `offline` defaults false (admin restriction). Tests 265 in 22 files. `src/api/__tests__/network-gate.test.ts`
+
 ## Clean audits (so discovery skips these grounds)
