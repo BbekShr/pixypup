@@ -9,10 +9,10 @@ export const puppetSpecies = (species?: string): 'dog' | 'cat' | null => {
   return /\b(cat|kitten|kitty)s?\b/.test(s) ? 'cat' : /\b(dog|puppy|pup)s?\b/.test(s) ? 'dog' : null;
 };
 
-export interface PuppetGait { frames: number; swing: number; lift: number; lowered: number; bounce: number; pitch: number }
+export interface PuppetGait { frames: number; swing: number; lift: number; lowered: number; bounce: number; pitch: number; tail: { f: number; amp: number; lag: number } }
 export const GAITS: Record<'dog' | 'cat', PuppetGait> = {
-  dog: { frames: 24, swing: 0.45, lift: 0.22, lowered: 1, bounce: 1.3, pitch: 1 },
-  cat: { frames: 24, swing: 0.42, lift: 0.15, lowered: 0.97, bounce: 0.6, pitch: 0.6 },
+  dog: { frames: 24, swing: 0.45, lift: 0.22, lowered: 1, bounce: 1.3, pitch: 1, tail: { f: 2, amp: 0.1, lag: 0.6 } },
+  cat: { frames: 24, swing: 0.42, lift: 0.15, lowered: 0.97, bounce: 0.6, pitch: 0.6, tail: { f: 1, amp: 0.07, lag: 1.6 } },
 };
 
 export interface LegBand { bellyY: number; splitX: number; bottom: number }
@@ -107,6 +107,35 @@ export function stripRuns(sides: ArrayLike<number>): { x0: number; x1: number; f
   return out;
 }
 
+export interface Tail { x0: number; x1: number; root: number; len: number }
+
+/** The columns strictly behind the rearmost hind-leg pixel in the lower half of the band (2 px margin), or null when they hold under 3% of the opaque pixels or over 30% of the width: a tail wags, a rump does not. */
+export function tailColumns(alpha: ArrayLike<number>, w: number, h: number, stride: number, sides: Uint8Array, band: LegBand, frontRight: boolean): Tail | null {
+  let edge = frontRight ? w : -1;
+  const from = Math.floor((band.bottom - band.bellyY + 1) / 2) * w; // the lower half: up top the hind leg merges with the rump
+  for (let i = from; i < sides.length; i++) if (sides[i] === 2) edge = frontRight ? Math.min(edge, i % w) : Math.max(edge, i % w);
+  if (edge < 0 || edge >= w) return null;
+  const [x0, x1] = frontRight ? [0, edge - 2] : [edge + 3, w];
+  let total = 0;
+  let inside = 0;
+  let tip = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if ((alpha[(y * w + x) * stride] ?? 0) <= 128) continue;
+      total++;
+      if (x >= x0 && x < x1) { inside++; tip = tip < 0 ? x : frontRight ? Math.min(tip, x) : Math.max(tip, x); }
+    }
+  }
+  if (inside < 0.03 * total) return null;
+  const root = frontRight ? x1 - 1 : x0;
+  const len = Math.abs(root - tip);
+  return len < 2 || len > 0.3 * w ? null : { x0, x1, root, len };
+}
+
+/** Vertical offset (px) of a tail column at distance r (0 root, 1 tip) of the tail at frame k of n; the root never moves and f is whole so the loop is seamless. */
+export const tailOffset = (k: number, n: number, r: number, gait: PuppetGait, len: number): number =>
+  gait.tail.amp * len * r ** 1.5 * Math.sin((2 * Math.PI * gait.tail.f * k) / n - gait.tail.lag * r);
+
 export interface Baked { srcs: string[]; bitmaps: HTMLImageElement[]; cycleNat: number; centroids: number[] }
 
 export async function bakeWalk(idle: HTMLImageElement, band: LegBand, gait: PuppetGait, alpha?: ArrayLike<number> | null): Promise<Baked> {
@@ -120,10 +149,11 @@ export async function bakeWalk(idle: HTMLImageElement, band: LegBand, gait: Pupp
   const liftPx = gait.lift * bandH;
   if (!a) throw new Error('no canvas');
   const sideOf = legSides(a, w, 4, band, frontRight);
+  const tail = tailColumns(a, w, h, 4, sideOf, band, frontRight);
   const strips: { y: number; sh: number; depth: number; runs: ReturnType<typeof stripRuns> }[] = [];
   for (let y = band.bellyY; y < h; y += 2) {
     const sh = Math.min(2, h - y);
-    const cols = Array.from({ length: w }, (_, x) => { for (let r = 0; r < sh && y + r <= band.bottom; r++) { const v = sideOf[(y + r - band.bellyY) * w + x]!; if (v) return v; } return 0; });
+    const cols = Array.from({ length: w }, (_, x) => { if (tail && x >= tail.x0 && x < tail.x1) return 0; for (let r = 0; r < sh && y + r <= band.bottom; r++) { const v = sideOf[(y + r - band.bellyY) * w + x]!; if (v) return v; } return 0; });
     strips.push({ y, sh, depth: Math.min(1, (y + sh / 2 - band.bellyY) / bandH), runs: stripRuns(cols) });
   }
   const out: Baked = { srcs: [], bitmaps: [], cycleNat: cycleStrideNat(gait, bandH), centroids: [] };
@@ -134,7 +164,16 @@ export async function bakeWalk(idle: HTMLImageElement, band: LegBand, gait: Pupp
     if (!ctx) throw new Error('no canvas');
     ctx.translate(0, h * (1 - gait.lowered)); // crouch toward the ground line
     ctx.scale(1, gait.lowered);
-    ctx.drawImage(idle, 0, 0, w, band.bellyY, 0, 0, w, band.bellyY);
+    const bx = tail ? (tail.x0 === 0 ? tail.x1 : 0) : 0; // the tail is drawn by its own pass
+    const bw = tail ? w - (tail.x1 - tail.x0) : w;
+    ctx.drawImage(idle, bx, 0, bw, band.bellyY, bx, 0, bw, band.bellyY);
+    if (tail) {
+      for (let x = tail.x0; x < tail.x1; x++) {
+        const dy = tailOffset(k, gait.frames, Math.min(1, Math.abs(x - tail.root) / tail.len), gait, tail.len);
+        const sx = Math.min(x, w - 2);
+        ctx.drawImage(idle, sx, 0, 2, h, sx, dy, 2, h); // 2 source columns: overlap, so a shifted column leaves no gap
+      }
+    }
     for (const st of strips) {
       for (const r of st.runs) {
         const dx = shearAt(k, gait.frames, st.depth, amp, r.front);
