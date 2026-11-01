@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDecider, shouldCallSpark, type Observation } from './decide';
 import schema from '../../contracts/behavior-decision.schema.json';
 
-const base: Observation = { windows: [], slackBadge: null, terminalError: null };
+const base: Observation = { windows: [], badge: null, terminalError: null };
 const fail = (text = 'FAIL add.test.ts expected 2 got 3'): Observation => ({ ...base, terminalError: { text } });
 
 describe('contract', () => {
@@ -26,7 +26,7 @@ describe('createDecider', () => {
     const spark = vi.fn(async () => ({ bubble: 'Add is off by one' }));
     const d = createDecider({ spark });
     expect(await d.decide(base, 'k')).toEqual({ decision: null, source: 'none' });
-    const slack = await d.decide({ ...base, slackBadge: '2' }, 'k');
+    const slack = await d.decide({ ...base, badge: { app: 'Mail', label: '2' } }, 'k');
     expect(slack).toMatchObject({ source: 'rule', decision: { action: 'perk_up' } });
     const call = await d.decide({ ...fail(), windows: [{ owner: 'zoom.us', title: '', bounds: { x: 0, y: 0, w: 1, h: 1 } }] }, 'k');
     expect(call.decision?.action).toBe('hide');

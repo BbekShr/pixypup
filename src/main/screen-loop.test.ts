@@ -4,7 +4,7 @@ import type { Behavior } from '../overlay/behavior';
 import type { DebugInfo } from '../overlay/debug-panel';
 import { startScreenLoop, type LoopDeps } from './screen-loop';
 
-const obs = (o: Partial<Observation> = {}): Observation => ({ windows: [], slackBadge: null, terminalError: null, ...o });
+const obs = (o: Partial<Observation> = {}): Observation => ({ windows: [], badge: null, terminalError: null, ...o });
 const BOX = { x: 600, y: 300, w: 200, h: 16 };
 const err = obs({ terminalError: { text: 'FAIL a.test.ts', box: BOX } });
 const call = obs({ windows: [{ owner: 'zoom.us', title: 'Zoom Meeting', bounds: BOX }] });
@@ -17,7 +17,7 @@ function setup(over: Partial<LoopDeps> = {}) {
   let snoozed = false;
   const reader = { tick: vi.fn(async () => ({ observation: current, debug: { terminalKey: key } })) };
   const decide = vi.fn(async (o: Observation) => ({
-    decision: o.windows.length ? { action: 'hide' as const, durationMs: 1, reason: 'call' } : o.terminalError ? { action: 'sniff' as const, target: { x: 700, y: 308 }, durationMs: 1, reason: 'err', bubble: 'Found a bug!' } : o.slackBadge ? { action: 'perk_up' as const, durationMs: 1, reason: 'slack' } : null,
+    decision: o.windows.length ? { action: 'hide' as const, durationMs: 1, reason: 'call' } : o.terminalError ? { action: 'sniff' as const, target: { x: 700, y: 308 }, durationMs: 1, reason: 'err', bubble: 'Found a bug!' } : o.badge ? { action: 'perk_up' as const, durationMs: 1, reason: 'slack' } : null,
   }));
   const stop = startScreenLoop({ getSettings: () => settings, isSnoozed: () => snoozed, overlay: { bounds: () => ({ x: 0, y: 25, width: 1440, height: 875 }), send: (b) => sent.push(b) }, reader, decider: { decide }, ...over });
   return { sent, reader, decide, settings, stop, set: (o: Observation, k = key) => { current = o; key = k; }, snooze: (v: boolean) => { snoozed = v; } };
@@ -106,11 +106,11 @@ describe('startScreenLoop', () => {
 
   it('perks up once per new badge', async () => {
     const t = setup();
-    t.set(obs({ slackBadge: '3' }), '');
+    t.set(obs({ badge: { app: 'Mail', label: '3' } }), '');
     await tick(3);
     t.set(obs(), '');
     await tick();
-    t.set(obs({ slackBadge: '1' }), '');
+    t.set(obs({ badge: { app: 'Mail', label: '1' } }), '');
     await tick();
     expect(t.sent.map((b) => b.action)).toEqual(['perk_up', 'perk_up']);
     t.stop();

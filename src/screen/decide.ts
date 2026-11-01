@@ -4,7 +4,7 @@ export type Box = { x: number; y: number; w: number; h: number };
 
 export type Observation = {
   windows: { owner: string; title: string; bounds: Box }[];
-  slackBadge: string | null;
+  badge: { app: string; label: string } | null;
   terminalError: { text: string; box?: Box } | null;
 };
 
@@ -31,7 +31,7 @@ export function ruleDecide(obs: Observation): BehaviorDecision | null {
     return { action: 'sniff', target, durationMs: 4000, reason: 'terminal error spotted' };
   }
 
-  if (obs.slackBadge) return { action: 'perk_up', durationMs: 3000, reason: 'slack badge' };
+  if (obs.badge) return { action: 'perk_up', durationMs: 3000, reason: `new badge in ${obs.badge.app.slice(0, 30)}` };
   return null;
 }
 

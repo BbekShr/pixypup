@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ruleDecide, type Observation } from './decide';
 
-const base: Observation = { windows: [], slackBadge: null, terminalError: null };
+const base: Observation = { windows: [], badge: null, terminalError: null };
 const b = { x: 0, y: 0, w: 100, h: 50 };
 
 describe('ruleDecide', () => {
@@ -50,13 +50,17 @@ describe('ruleDecide', () => {
     });
     expect(d?.target).toEqual({ x: 5, y: 210 });
   });
-  it('perks up for Slack badge', () => {
-    expect(ruleDecide({ ...base, slackBadge: '3' })).toMatchObject({ action: 'perk_up' });
+  it('perks up for a badge, naming the app (truncated)', () => {
+    expect(ruleDecide({ ...base, badge: { app: 'Mail', label: '3' } })).toMatchObject({ action: 'perk_up', reason: 'new badge in Mail' });
+    expect(ruleDecide({ ...base, badge: { app: 'x'.repeat(50), label: '1' } })?.reason).toBe(`new badge in ${'x'.repeat(30)}`);
+  });
+  it('sniff beats perk_up', () => {
+    expect(ruleDecide({ ...base, badge: { app: 'Mail', label: '1' }, terminalError: { text: 'x' } })?.action).toBe('sniff');
   });
   it('call beats error', () => {
     const d = ruleDecide({
       windows: [{ owner: 'zoom.us', title: '', bounds: b }],
-      slackBadge: '1',
+      badge: { app: 'Mail', label: '1' },
       terminalError: { text: 'x' },
     });
     expect(d?.action).toBe('hide');

@@ -29,7 +29,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
   let hideOn = false;
   let clear = 0;
   let lastKey = '';
-  let lastBadge: string | null = null;
+  let lastBadge: Observation['badge'] = null;
   const allowed = (): boolean => {
     const s = d.getSettings();
     return s.screenAware && !s.adminDisableScreenAware && !s.offline && !d.isSnoozed();
@@ -69,7 +69,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
         setHide(false, 'call ended'); // an empty window list is a failed read (unknown), not "the call ended"
       }
       if (debug.terminalKey === '') lastKey = '';
-      const badge = observation.slackBadge;
+      const badge = observation.badge;
       if (hideOn) {
         /* still hidden: the overlay would drop it, so keep it pending */
       } else if (decision?.action === 'sniff' && decision.target && debug.terminalKey !== lastKey) {
@@ -94,7 +94,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
           ts: Date.now(),
           gate: 'on',
           terminal: { found: !!observation.terminalError, ...(box && bounds ? { box: { ...toOverlayPoint(box, bounds), w: box.w, h: box.h } } : {}), ...(observation.terminalError ? { text: observation.terminalError.text.slice(0, 80) } : {}) },
-          slack: badge,
+          slack: badge?.label ?? null,
           call: decision?.action === 'hide',
           decision: decision ? { action: decision.action, reason: decision.reason, ...(bubble ? { bubble } : {}), source: keep?.source ?? source } : null,
           ...(sparkMs !== undefined ? { sparkMs } : {}),
