@@ -80,7 +80,7 @@ Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia p
 > **Screen and voice off, and no message sent, means zero network calls. Not one.**
 
 - 🙅 **Everything is opt-in.** Screen awareness and voice are off by default, each explained before you turn it on.
-- 💾 **Nothing is saved.** No screen captures, no recorded audio. Only your pets and settings are kept. Your Meta key lives in the macOS Keychain, never in a file.
+- 💾 **Nothing is saved.** No screen captures, no recorded audio. Only your pets and settings are kept. Your Meta key is encrypted with your macOS Keychain, never stored in plain text.
 - 👀 **He sees very little.** Only your front Terminal's text and the list of open windows. Never a screenshot of your screen. API keys, tokens and `KEY=` values in that text are redacted on your Mac before anything is sent.
 - 🏢 **Work-laptop friendly.** An admin file can lock screen and voice off for a whole team ([docs/ENTERPRISE.md](docs/ENTERPRISE.md)).
 - 🧘 **Respects Reduce Motion.** Follows the macOS setting automatically.
