@@ -34,7 +34,7 @@ PixyPup chains five Meta models through the Meta Model API:
 - **Muse Spark 1.3** (`muse-spark-1.3`) is the pet's brain. It reads the failing test line (passed as quoted data, never as instructions), decides how to react, writes the speech bubble in the pet's voice, and explains what probably broke when you click for a hint. It also powers "Talk to Pakkun", a desk-buddy chat.
 - **Voice Transcribe** (`muse-voice-transcribe-1.0`) turns "Pakkun, sit" into a trick, and only listens while you hold ⌥ Space.
 
-Everything around the models is local: an Electron overlay, a Swift helper that reads window and Dock state, a stride-matched sprite animator, and rule-based fallbacks so the pet still reacts with no network connection. The repo has 675 automated tests.
+Everything around the models is local: an Electron overlay, a Swift helper that reads window and Dock state, a stride-matched sprite animator, and rule-based fallbacks so the pet still reacts with no network connection. The repo has 686 automated tests.
 
 ## Why are Meta's models important to your solution?
 
