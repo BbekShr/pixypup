@@ -11,7 +11,7 @@ describe('defaultProfile', () => {
     expect(d.cycle.prompt).toBe(POSES.walk_sheet);
     expect(d.idlePrompt).toBe(POSES.idle_0);
     expect(d.roles.rest.prompt).toBe(POSES.sit);
-    expect(d.roles.sleep.prompt).toBe(POSES.sleep);
+    expect(POSES.sleep).toBe(`${d.roles.sleep.prompt} The pet has exactly one tail: if it curls round to the front it is that same tail, never a second one, and nothing covers the face.`);
     expect(d.roles.voice.prompt).toBe(POSES.bark);
     expect(d.roles.trick.prompt).toBe(POSES.roll);
     expect(d.locomotion).toBe('quadruped');

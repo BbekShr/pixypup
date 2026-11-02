@@ -937,6 +937,12 @@ describe('profile-driven prompts', () => {
     expect(manifest.poses.walk?.frames).toHaveLength(4);
   });
 
+  it('asks a four-legged sleeper for exactly one tail, and nothing else for a butterfly', () => {
+    expect(posesFor(defaultProfile('dog')).sleep).toContain('exactly one tail');
+    expect(posesFor(defaultProfile('cat')).sleep).toContain('exactly one tail');
+    expect(posesFor(defaultProfile('butterfly')).sleep).not.toContain('tail');
+  });
+
   it('spells out the 8 walk phases on a 2 x 4 grid; other cycles keep 4 frames', () => {
     const w = posesFor(defaultProfile('dog')).walk_sheet8!;
     for (const part of ['exactly 8 frames', '2 rows of 4', 'Frame 1 contact', 'Frame 2 down', 'Frame 3 pass', 'Frame 4 up', 'Frames 5 to 8', 'one step behind', 'tail sways']) expect(w).toContain(part);

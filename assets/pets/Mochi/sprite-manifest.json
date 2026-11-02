@@ -3,20 +3,20 @@
   "species": "cat",
   "profile": {
     "locomotion": "quadruped",
-    "subject": "a grey tabby cat",
-    "styleHints": "grey tabby coat with dark stripes, ringed black-tipped tail, green eyes, large upright ears",
+    "subject": "a slender grey tabby cat",
+    "styleHints": "Grey tabby stripes, ringed tail, large upright ears, green eyes",
     "gait": {
       "cadenceHz": 1.8,
-      "strideBody": 0.8,
+      "strideBody": 0.9,
       "bounce": 0.06,
       "pitchDeg": 3,
-      "speedBody": 0.6
+      "speedBody": 0.7
     },
     "cycle": {
       "kind": "walk",
-      "prompt": "Same grey tabby cat with dark stripes and ringed tail in strict side profile facing right, one green eye visible, walking quadruped gait, 4-frame sequence showing legs alternating, tail slightly swaying, same size in every frame, 4 equal columns with wide magenta gaps, horizontal sprite sheet"
+      "prompt": "a slender grey tabby cat with black stripes and ringed tail walking, strict side profile facing right, one green eye visible, large upright ears, legs in quadruped walk sequence, tail extended, same size in every frame, 4 equal columns with wide magenta gaps, horizontal sprite sheet of exactly 4 frames"
     },
-    "idlePrompt": "Pose: standing alert in side view facing right, four paws grounded, tail extended back, head up with ears forward",
+    "idlePrompt": "Pose: standing alert in side view facing right, tail low, head up, large ears perked, watching",
     "fidgets": [
       "groom",
       "knead",
@@ -24,24 +24,24 @@
     ],
     "roles": {
       "rest": {
-        "label": "Sit & Rest",
-        "prompt": "Pose: sitting upright with front paws together, tail curled around side, head facing right, calm relaxed posture",
-        "bubble": "prrp"
+        "label": "Sit Pretty",
+        "prompt": "Pose: sitting upright with hind legs folded, front paws straight, tail curled around paws, ears forward",
+        "bubble": "purr"
       },
       "sleep": {
-        "label": "Curl Up",
+        "label": "Curl Up Nap",
         "prompt": "Pose: curled up asleep in a tight loaf, seen from the side, eyes closed, paws tucked under the chest; exactly one tail, wrapped along the front of the body with the tip beside the front paws; nothing over the face",
-        "bubble": "Zzz"
+        "bubble": "zzz"
       },
       "voice": {
         "label": "Meow",
-        "prompt": "Pose: standing with head tilted up right, mouth open mid-meow, tail upright, ears forward",
+        "prompt": "Pose: sitting with mouth open meowing, head tilted up, ears perked, tail upright",
         "bubble": "Meow!"
       },
       "trick": {
-        "label": "Knead Biscuits",
-        "prompt": "Pose: standing with front paws alternately kneading in air, head tilted, tail raised high with happy arch",
-        "bubble": "prrp!"
+        "label": "Pounce Play",
+        "prompt": "Pose: in playful pounce crouch with front low, rear up, tail high with striped tip, eyes wide",
+        "bubble": "eep!"
       }
     },
     "energy": "curious"
@@ -52,7 +52,7 @@
         "idle_0.png"
       ],
       "fps": 2,
-      "footY": 0.9948717948717949
+      "footY": 0.9939759036144579
     },
     "walk": {
       "frames": [
@@ -66,85 +66,74 @@
         "side_7.png"
       ],
       "fps": 8,
-      "footY": 0.9948717948717949,
+      "footY": 0.9939759036144579,
       "judge": "muse-wonder-1.0"
-    },
-    "turn": {
-      "frames": [
-        "turn_front.png",
-        "turn_front34.png",
-        "turn_side.png",
-        "turn_back34.png",
-        "turn_back.png"
-      ],
-      "fps": 1,
-      "footY": 0.9948717948717949
     },
     "sit": {
       "frames": [
         "sit.png"
       ],
       "fps": 1,
-      "footY": 0.9948717948717949
+      "footY": 0.9939759036144579
     },
     "sleep": {
       "frames": [
         "sleep.png"
       ],
       "fps": 1,
-      "footY": 0.9948717948717949
+      "footY": 0.9939759036144579
     },
     "bark": {
       "frames": [
         "bark.png"
       ],
       "fps": 4,
-      "footY": 0.9948717948717949
+      "footY": 0.9939759036144579
     },
     "roll": {
       "frames": [
         "roll.png"
       ],
       "fps": 2,
-      "footY": 0.9948717948717949
+      "footY": 0.9939759036144579
     },
     "blink": {
       "frames": [
         "idle_blink.png"
       ],
       "fps": 1,
-      "footY": 0.9948717948717949
+      "footY": 0.9939759036144579
     }
   },
   "personality": {
-    "breed": "Egyptian Mau mix",
-    "coat": "Silver grey spotted tabby",
+    "breed": "Egyptian Mau Mix",
+    "coat": "Gray brown spotted tabby",
     "traits": [
-      "curious",
-      "alert",
-      "sleek"
+      "Curious",
+      "Lively",
+      "Sweet"
     ],
     "energy": "playful",
     "lines": [
-      "Hi hi! I'm Mochi, let's play!",
-      "Did you call my name? I'm here!",
-      "Look at my stripy tail, whee!",
-      "I'm curious, what's that over there?",
-      "Pick me up for zoomies time!",
-      "Stay with me, I'm your buddy!"
+      "Hi hi Im Mochi lets go play",
+      "Did you call me I heard you",
+      "I see everything with these eyes",
+      "Follow me I found something fun",
+      "Zoomies first snacks later okay",
+      "Stay close Im your best buddy"
     ],
     "facts": [
       {
-        "text": "Egyptian Maus are the only naturally spotted pet cats in the world.",
+        "text": "Egyptian Maus are the only naturally spotted pet cat breed.",
         "source": "https://www.wisdompanel.com/en-us/cat-breeds/egyptian-mau"
       },
       {
-        "text": "They can run up to 30 miles per hour, the fastest pet cat.",
+        "text": "They can run up to 30 miles per hour, super fast!",
         "source": "https://www.purina.com/cats/cat-breeds/egyptian-mau"
       },
       {
-        "text": "They can jump six feet high from a standstill.",
-        "source": "https://vcahospitals.com/east-anchorage/know-your-pet/cat-breeds/egyptian-mau"
+        "text": "Mau means cat in Egyptian, and they love to play fetch.",
+        "source": "https://www.purina.com/cats/cat-breeds/egyptian-mau"
       }
     ]
   }
