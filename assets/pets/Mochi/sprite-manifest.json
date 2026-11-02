@@ -30,7 +30,7 @@
       },
       "sleep": {
         "label": "Curl Up",
-        "prompt": "Pose: curled in a tight loaf with tail over nose, eyes closed, paws tucked under chest",
+        "prompt": "Pose: curled up asleep in a tight loaf, seen from the side, eyes closed, paws tucked under the chest; exactly one tail, wrapped along the front of the body with the tip beside the front paws; nothing over the face",
         "bubble": "Zzz"
       },
       "voice": {

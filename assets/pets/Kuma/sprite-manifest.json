@@ -30,7 +30,7 @@
       },
       "sleep": {
         "label": "Sleep curled",
-        "prompt": "Pose: curled on side with paws tucked, its one curled fluffy tail wrapped around the body with the tip over the nose (exactly one tail), eyes closed sleeping peacefully",
+        "prompt": "Pose: curled up asleep on its side, eyes closed, paws tucked; exactly one tail, curled from the rump around the front of the body with the tip beside the front paws; no tail near the face",
         "bubble": "Zzz"
       },
       "voice": {
