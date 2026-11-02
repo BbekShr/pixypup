@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- The demo desktop, in the website's two "wall" palettes: ?theme=light|dark. Rendered by demo/stage/render.sh. -->
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; }
+  body.light { background: radial-gradient(70% 60% at 15% 5%, #FBD9CF 0, transparent 60%), radial-gradient(80% 70% at 100% 100%, #D3E6F2 0, transparent 62%), radial-gradient(60% 30% at 50% 108%, rgba(242,145,127,.22), transparent 70%), linear-gradient(160deg, #FBEDE6, #EEF1F4); --paw: rgba(180,71,58,.07); --mark: rgba(19,19,21,.10); }
+  body.dark { background: radial-gradient(70% 60% at 18% 8%, #3B2A3A 0, transparent 60%), radial-gradient(80% 70% at 100% 100%, #1B3049 0, transparent 62%), radial-gradient(50% 40% at 50% 104%, rgba(245,155,139,.28), transparent 70%), linear-gradient(160deg, #19151E, #0E141E); --paw: rgba(255,179,165,.07); --mark: rgba(242,241,238,.10); }
+  svg.trail { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .mark { position: absolute; right: 4.2vw; top: 6.5vh; font: 900 3.2vw Nunito, system-ui; letter-spacing: -.02em; color: var(--mark); }
+</style>
+<svg class="trail" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"><g id="paws"></g></svg>
+<div class="mark">PixyPup</div>
+<script>
+  document.body.className = new URLSearchParams(location.search).get('theme') || 'light';
+  // A faint paw trail wandering in from the top left, clear of the menu bar, the centre and the pet's floor.
+  const g = document.getElementById('paws');
+  const pts = [[150,190],[205,170],[262,200],[318,182],[372,214],[430,200],[486,236],[540,226],[594,262],[650,258],[1010,520],[1062,500],[1116,530],[1170,512],[1224,544],[1280,528]];
+  pts.forEach(([x, y], i) => {
+    const s = i % 2 ? 1 : -1, a = 18 + s * 8;
+    g.insertAdjacentHTML('beforeend', `<g transform="translate(${x},${y + s * 9}) rotate(${a + 90}) scale(.55)" fill="var(--paw)"><ellipse cx="0" cy="8" rx="13" ry="11"/><ellipse cx="-13" cy="-8" rx="5" ry="6.5"/><ellipse cx="-4.5" cy="-14" rx="5" ry="6.5"/><ellipse cx="4.5" cy="-14" rx="5" ry="6.5"/><ellipse cx="13" cy="-8" rx="5" ry="6.5"/></g>`);
+  });
+</script>

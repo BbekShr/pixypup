@@ -1,3 +1,5 @@
 #!/bin/bash
-# Opened with `open`, this runs in Terminal with no Automation prompt.
-cd "$(dirname "$0")/.." && clear && npx vitest run --config demo/vitest.config.ts
+# Opens the styled demo Terminal on the failing test (no Automation prompt: Terminal opens its own settings file).
+root="$(cd "$(dirname "$0")/.." && pwd)"
+bash "$root/demo/stage/build.sh" >/dev/null
+open "$root/demo/bin/PixyPup Fail.terminal"
