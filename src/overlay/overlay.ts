@@ -8,7 +8,7 @@ import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/
 import { createDebugPanel } from './debug-panel';
 import { NEEDS_KEY, parseVoice } from '../voice/listen';
 import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } from './call';
-import { alphaPlane as alpha, cleanFrame } from './frames';
+import { alphaPlane as alpha, cleanFrame, walkTiming } from './frames';
 import { GAITS, bakeWalk, barkWord, legBand, rigFor } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth, footOffset } from './layout';
@@ -36,7 +36,7 @@ declare global {
   }
 }
 
-interface PoseSet { srcs: string[]; fps: number }
+interface PoseSet { srcs: string[]; fps: number; spans?: number[] }
 // A screen-aware behaviour that owns the pet until it ends; the normal state timers are paused meanwhile.
 type Act =
   | { kind: 'sniff'; phase: 'run' | 'sniff' | 'bark'; until: number; target: { x: number; y: number }; bubble: string; hint: boolean }
@@ -196,6 +196,10 @@ async function readPack(): Promise<Prepared | null> {
     p.srcs = p.srcs.map((s) => cleaned.get(s) ?? s);
   }
   if (staticWalk(poses['walk'], bitmaps)) delete poses['walk'];
+  else if (poses['walk']) {
+    const imgs = poses['walk'].srcs.map((src) => bitmaps.find((b) => b.src === src));
+    if (imgs.every((i) => i)) poses['walk'].spans = walkTiming(imgs as HTMLImageElement[]);
+  }
   let strideFrac: number | undefined;
   let body: { bounce: number; pitch: number } | undefined;
   let rig: Rig = null;
@@ -549,7 +553,7 @@ function frame(now: number): void {
   }
   const wagging = life && lifeKind === 'wag' && !calm && Math.floor((now - lifeStart) / WAG_FRAME_MS) % 2 === 1;
   const pose = poses[wagging ? 'bark' : name] ?? poses['idle']!;
-  const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
+  const i = Math.max(0, walking ? walkFrame(walked, pose.srcs.length, stride, pose.spans) : Math.floor((now / 1000) * pose.fps) % pose.srcs.length);
   const front = state === 'sit' && now < frontUntil ? poses['turn']?.srcs[0] : undefined;
   if (walking) walkIdx = i;
   let src = front ?? pose.srcs[i]!;

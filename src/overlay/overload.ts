@@ -1,6 +1,6 @@
 import '../ui/tokens.css';
 import type { Pack } from '../main/pack';
-import { alphaPlane, cleanFrame } from './frames';
+import { alphaPlane, cleanFrame, walkTiming } from './frames';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth } from './layout';
 import { GAITS, bakeWalk, legBand, puppetSpecies } from './puppet';
@@ -15,7 +15,7 @@ declare global {
 }
 
 interface Start { packs: Pack[]; seed: number }
-interface Prep { idle: string; walk: string[]; turn: string[] | null; strideFrac: number; body: { bounce: number; pitch: number }; fps: number; footY: number; natW: Map<string, number>; idleW: number; drawn: boolean; flier: boolean; member: CastMember }
+interface Prep { idle: string; walk: string[]; spans?: number[]; turn: string[] | null; strideFrac: number; body: { bounce: number; pitch: number }; fps: number; footY: number; natW: Map<string, number>; idleW: number; drawn: boolean; flier: boolean; member: CastMember }
 
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keep: HTMLImageElement[] = []; // decoded bitmaps live as long as the show so swapping src never re-decodes
@@ -52,6 +52,7 @@ async function prep(pack: Pack): Promise<Prep | null> {
     return f.src;
   })).then((all) => all.slice(1));
   const idleW = natW.get(idle)!;
+  let spans = walkTiming(walkImgs);
   let strideFrac: number | undefined;
   let body: { bounce: number; pitch: number } | undefined;
   const kind = puppetSpecies(pack.manifest.species);
@@ -65,6 +66,7 @@ async function prep(pack: Pack): Promise<Prep | null> {
         const baked = await bakeWalk(idleImg, band, gait, a);
         keep.push(...baked.bitmaps);
         walk = baked.srcs;
+        spans = undefined; // the rig's frames are evenly spaced already
         for (const b of baked.bitmaps) natW.set(b.src, b.naturalWidth);
         strideFrac = baked.cycleNat / gait.frames / idleW;
         body = { bounce: gait.bounce, pitch: gait.pitch };
@@ -80,7 +82,7 @@ async function prep(pack: Pack): Promise<Prep | null> {
     const same = !!w0 && walkImgs.every((f) => f.naturalWidth === w0.naturalWidth && f.naturalHeight === w0.naturalHeight);
     return same && alphas.every((a) => a) ? strideFromFrames(alphas as Uint8ClampedArray[], w0.naturalWidth, w0.naturalHeight, 4, idleW) / idleW : FALLBACK_STRIDE; // measured from the art so the feet don't slide
   };
-  return { idle, walk, turn, strideFrac: strideFrac ?? measuredStride(), body: body ?? profileScale(prof?.gait), fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0, flier, member }; // drawn: loadPack already dropped walks that never move
+  return { idle, walk, spans, turn, strideFrac: strideFrac ?? measuredStride(), body: body ?? profileScale(prof?.gait), fps: poses['walk']?.fps ?? 8, footY: poses['idle']?.footY ?? 1, natW, idleW, drawn: walk.length > 0, flier, member }; // drawn: loadPack already dropped walks that never move
 }
 
 function heart(x: number, y: number): void {
@@ -156,7 +158,7 @@ async function begin(raw: unknown): Promise<void> {
         const gp = gaitParams(t >= T.conga ? 'trot' : 'walk'); // the conga and the exit trot
         const stride = c.strideFrac * p.w * gp.reach;
         if (c.flier && c.walk.length) src = c.walk[Math.floor((t / 1000) * c.fps) % c.walk.length]!;
-        else if (s.v > 0 && u >= 1 && c.walk.length) src = c.walk[walkFrame(s.walked, c.walk.length, stride)]!;
+        else if (s.v > 0 && u >= 1 && c.walk.length) src = c.walk[walkFrame(s.walked, c.walk.length, stride, c.spans)]!;
         if (u < 1) {
           const ht = hopTurn(u, s.turnH);
           y += ht.dy; sx = ht.sx; sy = ht.sy;

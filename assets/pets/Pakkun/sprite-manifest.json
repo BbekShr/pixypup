@@ -1,13 +1,58 @@
 {
   "pet": "Pakkun",
   "species": "dog",
+  "profile": {
+    "locomotion": "quadruped",
+    "subject": "a cream golden retriever dog",
+    "styleHints": "Creamy white long fur, floppy ears, black nose, pink tongue out, feathery tail",
+    "gait": {
+      "cadenceHz": 1.6,
+      "strideBody": 0.9,
+      "bounce": 0.06,
+      "pitchDeg": 4,
+      "speedBody": 0.6
+    },
+    "cycle": {
+      "kind": "walk",
+      "prompt": "Same cream golden retriever dog in strict side profile facing right, one dark eye visible, 4-frame trot walk cycle with legs alternating, fluffy tail wagging slightly, pink tongue out, same size in every frame, 4 equal columns with wide magenta gaps, plain white background, cute kids style"
+    },
+    "idlePrompt": "Pose: standing alert in side view facing right, four paws planted, head up, mouth open with tongue out panting, tail relaxed",
+    "fidgets": [
+      "groom",
+      "wave",
+      "bob"
+    ],
+    "roles": {
+      "rest": {
+        "label": "Sit and rest",
+        "prompt": "Pose: sitting calmly with front legs straight, hind legs folded, head up, tongue out panting happily, feathery tail curled around paws",
+        "bubble": "Haa haa"
+      },
+      "sleep": {
+        "label": "Sleep curled",
+        "prompt": "Pose: curled up on side with paws tucked, head resting on paws, eyes closed, fluffy tail over nose, peacefully sleeping",
+        "bubble": "Zzz"
+      },
+      "voice": {
+        "label": "Happy bark",
+        "prompt": "Pose: standing with head raised, mouth open wide barking, ears perked, tail wagging up, chest forward",
+        "bubble": "Woof!"
+      },
+      "trick": {
+        "label": "Shake a paw",
+        "prompt": "Pose: sitting and lifting one front paw up high to shake, head tilted, mouth open smiling, tail wagging fast",
+        "bubble": "Yay!"
+      }
+    },
+    "energy": "gentle happy"
+  },
   "poses": {
     "idle": {
       "frames": [
         "idle_0.png"
       ],
       "fps": 2,
-      "footY": 0.9922779922779923
+      "footY": 0.9934426229508196
     },
     "walk": {
       "frames": [
@@ -21,61 +66,86 @@
         "side_7.png"
       ],
       "fps": 8,
-      "footY": 0.9922779922779923,
+      "footY": 0.9934426229508196,
       "judge": "muse-wonder-1.0"
+    },
+    "turn": {
+      "frames": [
+        "turn_front.png",
+        "turn_front34.png",
+        "turn_side.png",
+        "turn_back34.png",
+        "turn_back.png"
+      ],
+      "fps": 1,
+      "footY": 0.9934426229508196
     },
     "sit": {
       "frames": [
         "sit.png"
       ],
       "fps": 1,
-      "footY": 0.9922779922779923
+      "footY": 0.9934426229508196
     },
     "sleep": {
       "frames": [
         "sleep.png"
       ],
       "fps": 1,
-      "footY": 0.9922779922779923
+      "footY": 0.9934426229508196
     },
     "bark": {
       "frames": [
         "bark.png"
       ],
       "fps": 4,
-      "footY": 0.9922779922779923
+      "footY": 0.9934426229508196
     },
     "roll": {
       "frames": [
         "roll.png"
       ],
       "fps": 2,
-      "footY": 0.9922779922779923
+      "footY": 0.9934426229508196
     },
     "blink": {
       "frames": [
         "idle_blink.png"
       ],
       "fps": 1,
-      "footY": 0.9922779922779923
+      "footY": 0.9934426229508196
     }
   },
   "personality": {
-    "breed": "Golden Retriever",
-    "coat": "Fluffy golden fur with a cream chest",
+    "breed": "English Cream Golden Retriever",
+    "coat": "creamy white long fur",
     "traits": [
-      "Gentle",
-      "Goofy",
-      "Foodie"
+      "gentle",
+      "cheerful",
+      "loyal"
     ],
     "energy": "playful",
     "lines": [
-      "Hi, I'm Pakkun! Got snacks?",
-      "I love belly rubs the most!",
-      "Is it treat time yet?",
-      "I'll guard your desk, promise!",
-      "Wanna play fetch later?",
-      "You're my favourite human!"
+      "Hi, I'm Pakkun, let's be friends!",
+      "I love sunny grassy days so much",
+      "See my happy smile? It's for you",
+      "Let's play outside together today",
+      "I'm your big fluffy best buddy",
+      "Stay close, I'll keep you happy"
+    ],
+    "facts": [
+      {
+        "text": "They have a soft light cream coat that looks almost white.",
+        "source": "https://www.dogster.com/dog-breeds/english-cream-white-golden-retriever-facts/"
+      },
+      {
+        "text": "They are friendly, gentle dogs and great friends for kids.",
+        "source": "https://www.betterpet.com/learn/english-cream-golden-retriever"
+      },
+      {
+        "text": "They are smart, love to learn, and need daily play and walks.",
+        "source": "https://barkneywick.com/pages/english-cream-golden-retriever-facts"
+      }
     ]
   }
 }
