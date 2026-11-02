@@ -3,7 +3,7 @@ import type { Pack } from '../main/pack';
 import { alphaPlane, cleanFrame, walkTiming } from './frames';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
 import { displayWidth } from './layout';
-import { GAITS, bakeWalk, legBand, puppetSpecies } from './puppet';
+import { GAITS, bakeWalk, legBand, rigFor } from './puppet';
 import { boundGait, gaitParams, hop, hopTurn, landSquash, LAND_SQUASH_MS, lean, MAX_SPEED, mirrorProgress, mirrorScale, petTransform, profileScale, turnFrame, usableTurn, walkBody, walkFrame } from './motion';
 import { calmAlpha, calmX, castIndices, createShow, flyLift, HOP_WINDOW_MS, SHOW_MS, T, TURN_MS, type CastMember } from './overload-choreo';
 
@@ -55,7 +55,7 @@ async function prep(pack: Pack): Promise<Prep | null> {
   let spans = walkTiming(walkImgs);
   let strideFrac: number | undefined;
   let body: { bounce: number; pitch: number } | undefined;
-  const kind = puppetSpecies(pack.manifest.species);
+  const kind = rigFor(pack.manifest.species, poses['walk']); // same rule as the main pet: a judged drawn walk beats the rig
   if (kind) {
     const idleImg = keep.find((i) => i.src === idle);
     const a = idleImg && alphaPlane(idleImg);
