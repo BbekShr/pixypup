@@ -30,6 +30,18 @@ describe('headCrop', () => {
     expect(r.y + r.height).toBeGreaterThan(top);
     expect(r.height).toBeLessThan(h * 0.7); // a face, not the whole dog
   });
+  it.each(['Pakkun', 'Kuma', 'Mochi'])('%s: the whole face fits, nothing of the pet pokes out on the side it faces', async (p) => {
+    const { a, w, h } = await alphaOf(join(__dirname, `../../assets/pets/${p}/idle_0.png`));
+    const r = headCrop(a, w, h, 4)!;
+    // Bundled pets face right: no opaque pixel in the crop's rows may lie right of it (the old crop cut off the snout).
+    for (let y = r.y; y < r.y + r.height; y++) for (let x = r.x + r.width; x < w; x++) expect(a[(y * w + x) * 4]! > 128).toBe(false);
+  });
+  it('anchors to the left edge for a pet that faces left', () => {
+    // 10x10: a tall "head" column on the left, a low "body" to the right.
+    const a = new Uint8Array(100);
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) if ((x < 3 && y >= 1) || (y >= 6 && y < 9)) a[y * 10 + x] = 255;
+    expect(headCrop(a, 10, 10)!.x).toBe(0);
+  });
   it('is null for a blank frame', () => {
     expect(headCrop(new Uint8Array(100), 10, 10)).toBeNull();
   });

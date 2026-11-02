@@ -46,7 +46,7 @@ const winOf = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): BrowserW
 let tray: Tray | null = null;
 let trayIcon: Electron.NativeImage | null = null; // the placeholder, used only while no pet's pack has loaded
 let trayIconDim: Electron.NativeImage | null = null;
-const petIcons = new Map<string, { icon: Electron.NativeImage; dim: Electron.NativeImage }>(); // slug -> its face for the menu bar
+const petIcons = new Map<string, { icon: Electron.NativeImage; dim: Electron.NativeImage; avatar: string }>(); // slug -> its face for the menu bar and the chat
 let lastFailure: { text: string; at: number } | null = null; // the sniffed failure, in memory only, for a hint the user asks for
 let fakeScreen: ReturnType<typeof fakeReader> | undefined;
 let debugOn = false; // "Show what <name> sees": not persisted, resets each launch
@@ -110,8 +110,10 @@ function trayImage(src: Electron.NativeImage, k: number): Electron.NativeImage {
   return out;
 }
 
-/** The menu-bar icon of a pet: its head, cropped from the idle frame. null when the frame can't be read. */
-function petTrayIcons(dataUrl: string): { icon: Electron.NativeImage; dim: Electron.NativeImage } | null {
+const AVATAR_PX = 128; // the chat shows the face at ~44 pt; 128 px stays sharp at 2x
+
+/** A pet's face, cropped from the idle frame: menu-bar icons plus a larger copy for the chat. null when the frame can't be read. */
+function petTrayIcons(dataUrl: string): { icon: Electron.NativeImage; dim: Electron.NativeImage; avatar: string } | null {
   const img = nativeImage.createFromDataURL(dataUrl);
   if (img.isEmpty()) return null;
   const { width, height } = img.getSize();
@@ -119,7 +121,7 @@ function petTrayIcons(dataUrl: string): { icon: Electron.NativeImage; dim: Elect
   const r = headCrop(px.subarray(3), width, height, 4);
   if (!r) return null;
   const head = img.crop(r);
-  return { icon: trayImage(head, 1), dim: trayImage(head, 0.35) };
+  return { icon: trayImage(head, 1), dim: trayImage(head, 0.35), avatar: head.resize({ width: AVATAR_PX, height: AVATAR_PX, quality: 'best' }).toDataURL() };
 }
 
 function createTray(): void {
@@ -386,7 +388,7 @@ void app.whenReady().then(async () => {
     key: getApiKey,
     settings: loadSettings,
     getHideInShares: () => settings.hideInShares,
-    avatar: () => petIcons.get(primarySlug())?.icon.toDataURL(),
+    avatar: () => petIcons.get(primarySlug())?.avatar,
     // The reply moves the pet beside the chat window; a snoozed pet stays asleep.
     act: (r, b) => {
       const w = primary();
