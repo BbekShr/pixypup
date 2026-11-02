@@ -9,7 +9,15 @@ whole take. The staging details behind each beat are in [DEMO.md](DEMO.md).
 1. **Install the fresh build.** Open `release/PixyPup-0.1.0-arm64.dmg` and drag PixyPup onto Applications
    (replace the old copy). Start a QuickTime screen recording first: this is the install clip for beat 2.
    First open: right-click PixyPup in Applications, choose **Open**, then **Open** again.
-2. **Grant the permissions on this build** (they reset whenever the app is rebuilt):
+2. **Grant the permissions on this build** (they reset whenever the app is rebuilt). A rebuild gets a new
+   ad-hoc signature, and the old switches in System Settings stay on but no longer match it, so PixyPup is
+   silently refused. Before granting, clear the stale entries, then reopen PixyPup:
+
+   ```bash
+   tccutil reset AppleEvents dev.pixypup.app && tccutil reset Accessibility dev.pixypup.app
+   ```
+
+   (On recent macOS, Accessibility is called **Device Control and Data Access**.)
    - Right-click the pet, turn on **Notice my screen**, and accept the explainer.
    - System Settings > Privacy & Security > **Accessibility**: add PixyPup (for the Dock badge reaction).
    - System Settings > Privacy & Security > **Screen Recording**: add PixyPup, then quit and reopen it (for the call hide).
