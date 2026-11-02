@@ -229,15 +229,19 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
       shown = { fromMenu, add };
       if (!runs.current) photoBuf = null;
       adding = add;
+      // Centred on the pet's display: `center` picks whichever screen is active, so with several monitors the welcome
+      // could open on one the pet isn't on.
+      const area = screen.getDisplayMatching(o.getOverlay()?.getBounds() ?? screen.getPrimaryDisplay().bounds).workArea;
       win = new BrowserWindow({
         width: 480,
         height: 560,
+        x: Math.round(area.x + (area.width - 480) / 2),
+        y: Math.round(area.y + (area.height - 560) / 2),
         frame: false,
         transparent: true,
         hasShadow: false,
         resizable: false,
         show: false,
-        center: true,
         fullscreenable: false,
         webPreferences: { preload: join(here, '../preload/onboarding-preload.mjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
       });

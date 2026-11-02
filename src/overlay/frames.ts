@@ -1,3 +1,5 @@
+import { legChange, walkSpans } from './motion';
+
 // Old packs have walk frames where the slicer cut through a neighbouring frame's tail, leaving a detached sliver on the left or right edge.
 
 const SLIVER = 0.03; // of the largest component's pixels
@@ -50,6 +52,22 @@ export function alphaPlane(i: HTMLImageElement): Uint8ClampedArray | null {
   if (!c) return null;
   c.drawImage(i, 0, 0);
   return c.getImageData(0, 0, i.naturalWidth, i.naturalHeight).data.subarray(3);
+}
+
+/** Each drawn walk frame's share of the cycle (motion.walkSpans), from how much its legs change before the next frame. */
+export function walkTiming(frames: HTMLImageElement[]): number[] | undefined {
+  if (frames.length < 3 || frames.some((f) => !f.naturalHeight)) return undefined;
+  const H = 64;
+  const sw = frames.map((f) => Math.max(1, Math.round((f.naturalWidth * H) / f.naturalHeight)));
+  const W = Math.max(...sw);
+  const c = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true });
+  if (!c) return undefined;
+  const masks = frames.map((f, i) => {
+    c.clearRect(0, 0, W, H);
+    c.drawImage(f, Math.floor((W - sw[i]!) / 2), 0, sw[i]!, H); // centred, feet on the bottom edge
+    return c.getImageData(0, 0, W, H).data;
+  });
+  return walkSpans(legChange(masks, W, H, 4));
 }
 
 /** A decoded copy of the frame with its edge slivers erased (a blob: URL), or null when it has none or cannot be cleaned: keep the original. */

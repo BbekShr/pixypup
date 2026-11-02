@@ -3,48 +3,47 @@
   "species": "dog",
   "profile": {
     "locomotion": "quadruped",
-    "subject": "a red Shiba Inu dog",
-    "styleHints": "red-tan coat, white chest and legs, curled fluffy tail, erect ears, fox face",
+    "subject": "a red shiba inu dog",
+    "styleHints": "red-tan coat with white chest and muzzle, erect ears, curled fluffy tail",
     "gait": {
       "cadenceHz": 2,
       "strideBody": 0.9,
       "bounce": 0.06,
-      "pitchDeg": 4,
-      "speedBody": 0.5
+      "pitchDeg": 5,
+      "speedBody": 0.6
     },
     "cycle": {
       "kind": "walk",
-      "prompt": "same red Shiba Inu dog with cream chest and legs, curled fluffy tail over back, erect ears, in strict side profile facing right, one eye visible, walking in 4 frames with legs alternating in trot, head steady, same size in every frame, 4 equal columns with wide magenta gaps"
+      "prompt": "horizontal sprite sheet of exactly 4 frames of the same red shiba inu dog trotting, strict side profile facing right, one eye visible, same size in every frame, 4 equal columns with wide magenta gaps, legs in walk sequence, curled fluffy tail, erect ears"
     },
-    "idlePrompt": "Pose: standing alert in side view facing right, four legs straight, curled tail over back, head up ears pricked",
+    "idlePrompt": "Pose: standing alert in side view facing right, head up, erect ears, curled tail over back, four paws planted",
     "fidgets": [
-      "bob",
       "groom",
-      "wave"
+      "bob"
     ],
     "roles": {
       "rest": {
-        "label": "Sit Rest",
-        "prompt": "Pose: sitting upright with hind legs folded, front legs straight, fluffy curled tail around side, head up calm",
-        "bubble": "Huff"
+        "label": "Sit",
+        "prompt": "Pose: sitting upright with front legs straight, curled fluffy tail around side, head facing right, calm",
+        "bubble": "sigh"
       },
       "sleep": {
-        "label": "Curl Sleep",
-        "prompt": "Pose: lying curled on side with legs tucked, fluffy tail over nose, eyes closed, ears relaxed",
-        "bubble": "Zzz"
+        "label": "Nap time",
+        "prompt": "Pose: curled up lying on side, paws tucked in, fluffy tail over nose, eyes closed sleeping",
+        "bubble": "zzz"
       },
       "voice": {
         "label": "Bark",
-        "prompt": "Pose: standing with head up and mouth open barking, ears pricked, curled tail high over back",
+        "prompt": "Pose: standing facing right, mouth open barking, ears perked, curled tail up, chest forward",
         "bubble": "Woof!"
       },
       "trick": {
-        "label": "Shake Paw",
-        "prompt": "Pose: sitting up with one front paw lifted for shake, head tilted, mouth slightly open, curled tail wagging high",
-        "bubble": "Ta-da!"
+        "label": "Beg!",
+        "prompt": "Pose: sitting up begging on hind legs, front paws lifted, head tilted right, curled tail wagging",
+        "bubble": "Yip!"
       }
     },
-    "energy": "alert playful"
+    "energy": "loyal alert"
   },
   "poses": {
     "idle": {
@@ -52,7 +51,7 @@
         "idle_0.png"
       ],
       "fps": 2,
-      "footY": 0.9925925925925926
+      "footY": 0.9948586118251928
     },
     "walk": {
       "frames": [
@@ -66,7 +65,7 @@
         "side_7.png"
       ],
       "fps": 8,
-      "footY": 0.9925925925925926,
+      "footY": 0.9948586118251928,
       "judge": "muse-wonder-1.0"
     },
     "turn": {
@@ -78,73 +77,73 @@
         "turn_back.png"
       ],
       "fps": 1,
-      "footY": 0.9925925925925926
+      "footY": 0.9948586118251928
     },
     "sit": {
       "frames": [
         "sit.png"
       ],
       "fps": 1,
-      "footY": 0.9925925925925926
+      "footY": 0.9948586118251928
     },
     "sleep": {
       "frames": [
         "sleep.png"
       ],
       "fps": 1,
-      "footY": 0.9925925925925926
+      "footY": 0.9948586118251928
     },
     "bark": {
       "frames": [
         "bark.png"
       ],
       "fps": 4,
-      "footY": 0.9925925925925926
+      "footY": 0.9948586118251928
     },
     "roll": {
       "frames": [
         "roll.png"
       ],
       "fps": 2,
-      "footY": 0.9925925925925926
+      "footY": 0.9948586118251928
     },
     "blink": {
       "frames": [
         "idle_blink.png"
       ],
       "fps": 1,
-      "footY": 0.9925925925925926
+      "footY": 0.9948586118251928
     }
   },
   "personality": {
     "breed": "Shiba Inu",
-    "coat": "red tan with white markings",
+    "coat": "Red tan with white markings",
     "traits": [
-      "Alert",
       "Proud",
+      "Alert",
       "Loyal"
     ],
     "energy": "normal",
     "lines": [
-      "Hi I'm Kuma, let's run outside",
-      "My fluffy tail is super happy",
-      "I stand tall and proud today",
-      "I sniff fun trails that way",
-      "I'll guard you, stay close",
-      "I love my sunny grassy spot"
+      "I'm Kuma, hear me roar",
+      "Look at my fluffy curled tail",
+      "I love my grass zoomies",
+      "I stand proud and strong",
+      "Let's explore the park together",
+      "Wanna be my best friend"
     ],
     "facts": [
       {
-        "text": "Shiba Inus come from Japan and are one of its oldest dog breeds.",
-        "source": "https://www.unitedpetclub.com/en-US/animals/Dog/Shiba-Inu"
+        "text": "Shiba Inus come from Japan and are the smallest native Japanese dog.",
+        "source": "https://en.wikipedia.org/wiki/Shiba_Inu"
       },
       {
-        "text": "They look like little foxes with pointy ears and curly tails.",
-        "source": "https://www.rover.com/uk/blog/breeds/shiba-inu/"
+        "text": "Long ago in Japan, Shiba Inus hunted birds and small game in brush.",
+        "source": "https://www.purina.com/dogs/dog-breeds/shiba-inu"
       },
       {
-        "text": "Shiba Inus are bold, loyal and smart, and act a bit like cats.",
-        "source": "https://www.unitedpetclub.com/en-US/animals/Dog/Shiba-Inu"
+        "text": "Shiba Inus have prick ears, curly tails, and soft fluffy coats.",
+        "source": "https://www.purina.com/dogs/dog-breeds/shiba-inu"
       }
     ]
   }
