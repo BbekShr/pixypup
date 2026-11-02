@@ -34,7 +34,7 @@ PixyPup is my entry in the **Meta Global AI Developer Hackathon 2026**, Indie De
 
 PixyPup puts a tiny, very good pup on your Mac. Meet **Pakkun**: he lives along the bottom of your screen. He walks on a transparent, click-through layer, so he never gets in the way of your work. Pet him and he wiggles. Click him and he sits, barks, and rolls over. Leave him alone and he yawns, curls up, and naps.
 
-Then the magic part: **give him a photo of _your_ pet**, and about a minute and a half later your own dog or cat is the one trotting across your Mac.
+Then the magic part: **give him a photo of _your_ pet**, and a few minutes later your own dog or cat is the one trotting across your Mac.
 
 <div align="center">
 <img src="docs/little-moments.png" alt="Four Pakkun moments: hearts when you pet him, I love belly rubs the most!, a nap and a roll-over trick" width="70%">
@@ -44,7 +44,7 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute and 
 
 | | |
 |---|---|
-| 📸 **Photo → pet in about 90 seconds** | Drop a photo, type a name. **SAM 3.1** cuts your pet out, **Muse Image** draws a matching set of 3D poses, and you watch each one pop in. |
+| 📸 **Photo → pet in a few minutes** | Drop a photo, type a name. **SAM 3.1** cuts your pet out, **Muse Image** draws a matching set of 3D poses, and you watch each one pop in. |
 | 💬 **Perks up at messages** | A new Dock badge from Slack, Mail, Messages or any app, and his ears go up. |
 | 🙈 **Hides on calls** | Zoom or Meet open? He tiptoes to the screen edge until your call ends. |
 | 🫂 **Talk to Pakkun** | A desk buddy for rough days. Right-click him, choose *Talk to Pakkun…*, and tell him how your day is going. He answers in woofs and acts it out beside the chat. Nothing leaves your Mac until you press Send. |
@@ -101,7 +101,7 @@ Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia p
 
 1. [Download `PixyPup-0.1.0-arm64.dmg`](https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg) (all builds are on [Releases](https://github.com/BbekShr/pixypup/releases)) and open it. Or [build it yourself](#build): `npm run dist` writes it to `release/`.
 2. Drag Pakkun onto the Applications folder ("Drag me home").
-3. **First open only:** right-click PixyPup in Applications, choose **Open**, then **Open** again. It's an indie app signed ad hoc, not notarised by Apple yet, so a plain double-click is refused once. After that it opens normally.
+3. **First open only:** open PixyPup once (macOS refuses it), then go to System Settings → Privacy & Security and click **Open Anyway**. It's an indie app, self-signed and not notarised by Apple yet. After that it opens normally.
 
 There's no Dock icon: look for your pet on the desktop floor and the menu bar icon.
 
@@ -123,7 +123,7 @@ npm run dev      # launch the app
 npm run typecheck && npm run lint && npm test && npm run build   # the gates
 npm run pose-test       # try the pose pipeline
 npm run build-native    # compile native/pixyhelper.swift
-npm run dist            # mac dmg (ad-hoc signed), written to release/
+npm run dist            # mac dmg (signed with a local "PixyPup Dev" certificate if you have one, else ad hoc), written to release/
 npm run make-art        # regenerate the app icon and DMG background
 npm run site-js         # rebuild docs/js/puppet.js (the site's walk)
 ```

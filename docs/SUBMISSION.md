@@ -18,7 +18,7 @@ Portal: https://cerebralvalley.ai/e/meta-ai-developer-hackathon/hackathon/submit
 
 I spend my workdays alone with a screen, deep in terminals and dense docs. My dog Pakkun is who gets me through it, but he can't sit at my desk. Desktop pets already exist, but they are stock characters, and none of them can see what you're doing, so they're decoration rather than company.
 
-PixyPup turns one photo of your own dog or cat into a companion that lives on your Mac. Drop in a photo, and about 90 seconds later your pet trots along the bottom of your screen, on a click-through layer that never steals your focus. Pet it and it wiggles; click it and it sits, barks or rolls over; leave it alone and it naps.
+PixyPup turns one photo of your own dog or cat into a companion that lives on your Mac. Drop in a photo, and a few minutes later your pet trots along the bottom of your screen, on a click-through layer that never steals your focus. Pet it and it wiggles; click it and it sits, barks or rolls over; leave it alone and it naps.
 
 It also keeps an eye on your work with you. When a test fails in your terminal, your pet runs to the red line, sniffs it and barks. Click it for a hint about why the test failed, and when you fix it, it cheers. It perks up at new Slack or Mail badges, hides at the screen edge when you join a call, and does tricks on voice command ("Pakkun, sit").
 
@@ -38,7 +38,7 @@ Everything around the models is local: an Electron overlay, a Swift helper that 
 
 ## Why are Meta's models important to your solution?
 
-Without them, the product can't exist. Turning one casual phone photo into a full, consistent set of animated poses of *your* pet used to need an illustrator or a 3D artist. SAM 3.1 and Muse Image do it in about 90 seconds, and Muse Wonder handles the quality check that would otherwise need a human: catching a wrong pose or a second tail, and choosing which walk cycle looks alive.
+Without them, the product can't exist. Turning one casual phone photo into a full, consistent set of animated poses of *your* pet used to need an illustrator or a 3D artist. SAM 3.1 and Muse Image do it in a few minutes, and Muse Wonder handles the quality check that would otherwise need a human: catching a wrong pose or a second tail, and choosing which walk cycle looks alive.
 
 Muse Spark is what turns a cute sprite into a companion. It understands what's on screen well enough to tell a failing test from noise, reacts in character, and gives a useful hint about the bug. Fast, low-cost calls keep the reactions feeling live, and Voice Transcribe makes talking to your pet natural.
 

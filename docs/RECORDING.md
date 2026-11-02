@@ -8,7 +8,7 @@ whole take. The staging details behind each beat are in [DEMO.md](DEMO.md).
 
 1. **Install the fresh build.** Open `release/PixyPup-0.1.0-arm64.dmg` and drag PixyPup onto Applications
    (replace the old copy). Start a QuickTime screen recording first: this is the install clip for beat 2.
-   First open: right-click PixyPup in Applications, choose **Open**, then **Open** again.
+   First open: open PixyPup once, then System Settings → Privacy & Security → **Open Anyway**.
 2. **Grant the permissions on this build** (they reset whenever the app is rebuilt). A rebuild gets a new
    ad-hoc signature, and the old switches in System Settings stay on but no longer match it, so PixyPup is
    silently refused. Before granting, clear the stale entries, then reopen PixyPup:
@@ -68,7 +68,7 @@ Keep each clip a little long; the edit will trim it.
 |---|---|---|---|
 | 1 | **Hook** (camera) | You with the real Pakkun, 15 s: "I spend my days in dense docs and terminals. He gets me through it. I wanted *him* on my screen, not a stock mascot." | 0:00 |
 | 2 | **Install** | The DMG drag from Part 1, then the pet drops onto the desktop | 0:15 |
-| 3 | **Photo → pet** | Right-click > **Add another pet…**, drop a photo from `assets/photos/` (HEIC is fine), name it, and let the whole run play (about 90 s). Sped up in the edit. | 0:30 |
+| 3 | **Photo → pet** | Right-click > **Add another pet…**, drop a photo from `assets/photos/` (HEIC is fine), name it, and let the whole run play (about 3½ minutes, with Muse Wonder reviewing every pose). Sped up in the edit. | 0:30 |
 | 4 | **The sniff** (never cut) | `fail` → sniff and bark → click for the hint → `fix` → the cheer. Keep the debug card in shot. | 1:05 |
 | 5 | **Badge and call** | `badge` (he perks up), then `call` (he hides), then close the tab | 1:30 |
 | 6 | **Voice** | Hold ⌥ Space: "Pakkun, sit", then "roll over" | 1:45 |
