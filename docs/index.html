@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PixyPup · your pet, on your Mac</title>
-<meta name="description" content="One photo of your dog or cat becomes a 3D companion on your Mac with PixyPup. It walks, does tricks, sniffs your failing tests. Built with Meta SAM 3.1, Muse Image, Muse Spark and Voice Transcribe.">
+<meta name="description" content="PixyPup turns one photo of your dog or cat into a 3D companion that keeps you company on your Mac at work. Built for a wife who misses her golden retriever at the office, with Meta SAM 3.1, Muse Image, Muse Wonder, Muse Spark and Voice Transcribe.">
 <meta property="og:title" content="PixyPup · your pet, on your Mac">
-<meta property="og:description" content="One photo in. One very good pup out. He walks your desktop, does tricks, and sniffs out your failing tests.">
+<meta property="og:description" content="My wife misses our dog Pakkun at the office, so I put him on her screen. One photo in, one very good pup out, keeping you company all workday.">
 <meta property="og:image" content="https://bbekshr.github.io/pixypup/og.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -140,6 +140,8 @@ nav .gh:hover { color: var(--ink); background: var(--panel-2); }
 @keyframes rise { to { transform: none; } }
 .hero-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; flex-wrap: wrap; margin-top: 32px; }
 .hero-row .lede { margin: 0; max-width: 40ch; }
+.lede .sig { display: block; margin-top: 10px; font-size: 15px; color: var(--ink-3); }
+.lede .sig::before { content: "— "; }
 .js .hero .tag, .js .hero-row > * { opacity: 0; transform: translateY(18px); animation: up .7s var(--land) forwards; }
 .js .hero .tag { animation-delay: 0s; }
 .js .hero-row > :first-child { animation-delay: .42s; }
@@ -496,13 +498,13 @@ footer a { color: var(--ink-2); }
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="tag"><i class="ph ph-paw-print"></i>Meta Global AI Developer Hackathon 2026</span>
+    <span class="tag"><i class="ph ph-paw-print"></i>Meta Global AI Developer Hackathon 2026 · Indie Developer · Build for Your World</span>
     <h1 class="kin" aria-label="Your pet, on your Mac.">
       <span class="ln" aria-hidden="true"><span class="w" style="--i:0">Your</span> <span class="w" style="--i:1">pet,</span></span>
       <span class="ln mute" aria-hidden="true"><span class="w" style="--i:2">on</span> <span class="w" style="--i:3">your</span> <span class="w" style="--i:4">Mac.</span></span>
     </h1>
     <div class="hero-row">
-      <p class="lede">One photo of your dog or cat becomes a 3D companion who walks your desktop and sniffs out failing tests.</p>
+      <p class="lede">My wife goes to the office every day and misses our golden retriever, Pakkun. She can't take him with her, so I built PixyPup: one photo, and Pakkun lives on her screen. <span class="sig">Bek</span></p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg"><i class="ph ph-apple-logo"></i>Download for Mac</a>
         <a class="btn btn-ghost" href="https://github.com/BbekShr/pixypup"><i class="ph ph-star"></i>Star on GitHub</a>
@@ -538,10 +540,10 @@ footer a { color: var(--ink-2); }
         </div>
         <span class="sep" aria-hidden="true"></span>
         <div role="group" aria-label="Try a reaction" style="display:contents">
-          <button class="chip" data-act="fail"><i class="ph ph-flask"></i>Break a test</button>
-          <button class="chip" data-act="fix"><i class="ph ph-check-circle"></i>Fix it</button>
           <button class="chip" data-act="badge"><i class="ph ph-chat-circle-dots"></i>New message</button>
           <button class="chip" data-act="trick"><i class="ph ph-tennis-ball"></i>Do a trick</button>
+          <button class="chip" data-act="fail"><i class="ph ph-flask"></i>Break a test</button>
+          <button class="chip" data-act="fix"><i class="ph ph-check-circle"></i>Fix it</button>
         </div>
       </div>
     </div>
@@ -617,18 +619,10 @@ footer a { color: var(--ink-2); }
   <div class="wrap notices">
     <div class="stick">
       <h2 class="rv">A pet who gets your workday.</h2>
-      <p class="lede rv" style="--d:.06s">Turn on "Notice my screen" and Pakkun reacts to what is actually happening. Off by default, of course.</p>
+      <p class="lede rv" style="--d:.06s">Your own pet on your desk, all day at work. Turn on "Notice my screen" and he reacts to what is actually happening. Off by default, of course.</p>
       <p class="note rv" style="--d:.12s"><i class="ph ph-eye"></i><span>He reads only the front Terminal's text and the list of open windows. Secrets are blanked on your Mac first, and nothing is saved. "Show what Pakkun sees" opens a card with his every decision.</span></p>
     </div>
     <div class="rx-list">
-      <article class="panel rx rv">
-        <div class="vis">
-          <div class="mini-term"><span>~/app $ npm test</span>FAIL src/math.test.ts &gt; adds numbers</div>
-          <img class="petimg" src="img/pakkun/bark.webp" alt="" style="right:14%" loading="lazy">
-          <span class="mini-bub" style="right:9%; bottom:156px">Found a bug!</span>
-        </div>
-        <div class="txt"><h3>Sniffs failing tests</h3><p>A red line in your Terminal? He runs over, sniffs, and barks a line written by <b>Muse Spark 1.3</b>. Click him for a hint. Make it green and he rolls over and cheers.</p></div>
-      </article>
       <article class="panel rx rv">
         <div class="vis">
           <div class="app-ico on" style="left:28px; top:34px; right:auto"><i class="ph ph-chat-teardrop-dots"></i><b>3</b></div>
@@ -643,6 +637,14 @@ footer a { color: var(--ink-2); }
           <img class="petimg" src="img/pakkun/side_2.webp" alt="" style="right:-60px; height:130px" loading="lazy">
         </div>
         <div class="txt"><h3>Hides on calls</h3><p>Zoom or Meet window open? He tiptoes to the edge of the screen and waits until your call ends. A very professional pup.</p></div>
+      </article>
+      <article class="panel rx rv">
+        <div class="vis">
+          <div class="mini-term"><span>~/app $ npm test</span>FAIL src/math.test.ts &gt; adds numbers</div>
+          <img class="petimg" src="img/pakkun/bark.webp" alt="" style="right:14%" loading="lazy">
+          <span class="mini-bub" style="right:9%; bottom:156px">Found a bug!</span>
+        </div>
+        <div class="txt"><h3>Bonus for coders: sniffs failing tests</h3><p>For when I'm coding. A red line in your Terminal? He runs over, sniffs, and barks a line written by <b>Muse Spark 1.3</b>. Click him for a hint. Make it green and he rolls over: "You fixed it!"</p></div>
       </article>
     </div>
   </div>
@@ -777,7 +779,7 @@ footer a { color: var(--ink-2); }
 <footer>
   <div class="zzz" aria-hidden="true"><span>z</span><span>z</span><span>z</span></div>
   <img class="sleepy" src="img/pakkun/sleep.webp" alt="Pakkun napping" loading="lazy">
-  <p>Made for the Meta Global AI Developer Hackathon 2026 · <a href="https://github.com/BbekShr/pixypup">github.com/BbekShr/pixypup</a></p>
+  <p>Made for my wife, who misses Pakkun at the office · <a href="https://github.com/BbekShr/pixypup">github.com/BbekShr/pixypup</a></p>
   <p>Mochi and Kuma were made by PixyPup from CC BY-SA 4.0 Wikimedia photos. <a href="https://github.com/BbekShr/pixypup/blob/main/assets/pets/CREDITS.md">Photo credits</a></p>
 </footer>
 

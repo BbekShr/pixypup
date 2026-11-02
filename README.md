@@ -6,7 +6,7 @@
 
 ### Your pet, living on your Mac. Meet Pakkun! 🐶
 
-**One photo of your dog or cat becomes a 3D companion who trots along your desktop,<br>does tricks when you click, and sniffs out your failing tests.**
+**One photo of your dog or cat becomes a 3D companion who keeps you company<br>on your Mac all workday: walking, napping, and doing tricks when you click.**
 
 [![Meta Global AI Developer Hackathon 2026](https://img.shields.io/badge/Meta_Global_AI_Hackathon-2026-F4A6A0?style=for-the-badge)](https://bbekshr.github.io/pixypup/)
 [![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-3B2F2A?style=for-the-badge&logo=apple)](https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg)
@@ -18,13 +18,19 @@
 
 <sub>☝️ All fourteen poses (including the 8-frame walk), drawn by Meta's models from <b>one</b> photo. No 3D artist was harmed.</sub>
 
-**Try it in 30 seconds:** open the [live site](https://bbekshr.github.io/pixypup/), pick Pakkun, Mochi or Kuma under the desk demo, then break a test and watch them sniff it out. No download, no key.
+**Try it in 30 seconds:** open the [live site](https://bbekshr.github.io/pixypup/), pick Pakkun, Mochi or Kuma under the desk demo, then send them a message or ask for a trick. No download, no key.
 
 </div>
 
 ---
 
-## 💕 What is this?
+## 💕 Why I built it
+
+My wife goes to the office every day and misses our golden retriever, Pakkun. She obviously can't take him with her. So I built PixyPup: one photo of Pakkun, and now he lives on her screen at work.
+
+PixyPup is my entry in the **Meta Global AI Developer Hackathon 2026**, Indie Developer track, for the *Build for Your World* theme.
+
+## 🐶 What is this?
 
 PixyPup puts a tiny, very good pup on your Mac. Meet **Pakkun**: he lives along the bottom of your screen. He walks on a transparent, click-through layer, so he never gets in the way of your work. Pet him and he wiggles. Click him and he sits, barks, and rolls over. Leave him alone and he yawns, curls up, and naps.
 
@@ -39,15 +45,15 @@ Then the magic part: **give him a photo of _your_ pet**, and about a minute and 
 | | |
 |---|---|
 | 📸 **Photo → pet in about 90 seconds** | Drop a photo, type a name. **SAM 3.1** cuts your pet out, **Muse Image** draws a matching set of 3D poses, and you watch each one pop in. |
-| 🧪 **Sniffs your failing tests** | A red line in your Terminal? He runs over, sniffs, and barks a line written by **Muse Spark 1.3**. Click him for a hint about *why* it failed. Fix it and he rolls over and cheers. |
 | 💬 **Perks up at messages** | A new Dock badge from Slack, Mail, Messages or any app, and his ears go up. |
 | 🙈 **Hides on calls** | Zoom or Meet open? He tiptoes to the screen edge until your call ends. |
-| 🎙️ **Voice tricks** | Hold <kbd>⌥</kbd> <kbd>Space</kbd> and say *"Pakkun, sit"*, *"roll over"*, *"go to bed"*, *"come here"* or *"bark"*. Powered by **Meta Voice Transcribe**. |
 | 🫂 **Talk to Pakkun** | A desk buddy for rough days. Right-click him, choose *Talk to Pakkun…*, and tell him how your day is going. He answers in woofs and acts it out beside the chat. Nothing leaves your Mac until you press Send. |
+| 🎙️ **Voice tricks** | Hold <kbd>⌥</kbd> <kbd>Space</kbd> and say *"Pakkun, sit"*, *"roll over"*, *"go to bed"*, *"come here"* or *"bark"*. Powered by **Meta Voice Transcribe**. |
 | 🤲 **Little moments** | He turns to look at you, wiggles with hearts when you pet him, blinks, yawns before naps and stretches when he wakes. Every pet trots on a drawn 8-frame walk, with feet that never slide. |
 | 🐾 **Meet the pack** | Pakkun comes with two friends: **Mochi** the cat and **Kuma** the red Shiba. Open **Pet library** in the right-click or menu bar menu to add one; they stay after a restart. |
 | 🌪️ **PixyPup Overload!** | One menu item drops every pet you've got, up to 24, across your screen for 25 seconds of pure chaos. |
 | 😴 **Calm and in control** | Snooze, size, energy, launch at login, hide from screen shares. He never steals a click or your focus. |
+| 🧪 **Bonus, for when I'm coding** | A red line in your Terminal? He runs over, sniffs, and barks a line written by **Muse Spark 1.3**. Click him for a hint about *why* it failed. Fix it and he rolls over: *"You fixed it!"* |
 
 ## 🐾 Meet the pack
 
@@ -60,7 +66,7 @@ Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia p
 
 <div align="center">
 <img src="docs/sniff.png" alt="Pakkun next to a Terminal with a failing test highlighted, saying Found a bug!" width="80%">
-<br><sub>🐶 <i>"Found a bug!"</i></sub>
+<br><sub>🐶 The coder's bonus: <i>"Found a bug!"</i></sub>
 </div>
 
 ## 🦙 Five Meta models, one good boy
@@ -153,7 +159,7 @@ A desk buddy for rough days. Right-click him (or the menu-bar icon) and choose "
 
 <img src="assets/pets/Pakkun/sleep.png" width="110" alt="Pakkun napping">
 
-**Made with 🐾 for the Meta Global AI Developer Hackathon 2026.**<br>
+**Made with 🐾 for my wife, who misses Pakkun at the office.**<br>
 <sub>All code written from Oct 31 2026. Electron + TypeScript, with a tiny Swift helper.</sub>
 
 </div>
