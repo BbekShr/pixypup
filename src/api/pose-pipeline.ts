@@ -20,7 +20,8 @@ import { defaultProfile } from './profile-defaults.js';
 import { largest, maskAt, segment } from './sam.js';
 import { sliceComponents } from './slice-components.js';
 import { isStaticSheet } from './static-sheet.js';
-import { JUDGE_MODEL, pickWalk } from './walk-judge.js';
+import { POSE_MEANING, posePasses, poseScore, reviewPoses, type PoseVerdict } from './pose-review.js';
+import { JUDGE_MODEL, reviewWalks, walkPasses } from './walk-judge.js';
 
 export { validateManifest };
 
@@ -37,6 +38,7 @@ export const POSES = posesFor(defaultProfile('dog'));
 export const SIDE_FRAMES = Array.from({ length: 8 }, (_, i) => `side_${i}`);
 const WALK_ROWS = 2;
 const WALK_SHEETS = 3; // drawn at once; the judge picks one
+const POSE_REDRAWS = 2; // rounds of Muse Wonder review + redraw for a failing pose
 // Front, front 3/4, side, back 3/4, back: the identity turnaround, sliced from one sheet.
 export const TURN_FRAMES = ['turn_front', 'turn_front34', 'turn_side', 'turn_back34', 'turn_back'];
 // Side and turn frames each share one scale and one wider canvas; every other pose is sized on its own.
@@ -483,11 +485,13 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       clearTimeout(timer);
     }
   };
-  const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>, retry = true) => {
+  // `fix`: a reviewer's note for a redraw, appended so the model knows what to change.
+  const draw = async <T>(name: string, refs: string[], finish: (img: { buffer: Buffer; mime: string }, k: Keyed) => Promise<T>, retry = true, fix = '') => {
     const prompt =
-      name === 'idle_blink'
+      (name === 'idle_blink'
         ? poses[name]!
-        : `${style} ${poses[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '') + (refs.length > 2 ? ' The third image shows the same character from every angle; keep it consistent with those views.' : '');
+        : `${style} ${poses[name]}` + (refs.length > 1 ? ' Match the character design of the second image exactly.' : '') + (refs.length > 2 ? ' The third image shows the same character from every angle; keep it consistent with those views.' : '')) +
+      (fix ? ` A reviewer rejected the last drawing: ${fix} Fix that.` : '');
     try {
       return await attempt(prompt, refs, finish);
     } catch (first) {
@@ -554,13 +558,25 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
   // Other cycle kinds: their 4-frame sheet (2 tries), then the pair. Worst case WALK_SHEETS + 2 walk calls and one judge call.
   const walk = async () => {
     if (profile.cycle.kind === 'walk') {
-      const grids = (await Promise.allSettled(Array.from({ length: WALK_SHEETS }, () =>
-        draw('walk_sheet8', refs, async (img, k) => ({ frames: await sheet(8, WALK_ROWS)(img, k), raw: dataUrl(img.buffer, img.mime) }), false),
+      const drawGrids = async (fix = '') => (await Promise.allSettled(Array.from({ length: WALK_SHEETS }, () =>
+        draw('walk_sheet8', refs, async (img, k) => ({ frames: await sheet(8, WALK_ROWS)(img, k), raw: dataUrl(img.buffer, img.mime) }), false, fix),
       ))).flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+      const judge = (raws: string[]) => reviewWalks(o.client, idleRaw, raws, AbortSignal.any([spark.signal, AbortSignal.timeout(o.timing?.judgeMs ?? 30_000)]));
+      let grids = await drawGrids();
       if (grids.length) {
-        const pick = grids.length > 1 ? await pickWalk(o.client, idleRaw, grids.map((g) => g.raw), AbortSignal.any([spark.signal, AbortSignal.timeout(o.timing?.judgeMs ?? 30_000)])) : null;
-        if (pick !== null) walkJudge = JUDGE_MODEL;
-        return grids[pick ?? 0]!.frames;
+        let review = grids.length > 1 ? await judge(grids.map((g) => g.raw)) : null;
+        // A limping or popping best sheet gets one more batch, told what was wrong; the judge then picks from all of them.
+        const weak = review?.sheets.find((x) => x.index === review!.best);
+        if (review && !walkPasses(weak)) {
+          const more = await drawGrids(`${weak!.notes} Frames 5 to 8 must lead with the other side's legs, and every frame must be a distinct, evenly spaced step.`);
+          if (more.length) {
+            const all = [...grids, ...more];
+            const again = await judge(all.map((g) => g.raw));
+            if (again) [grids, review] = [all, again];
+          }
+        }
+        if (review) walkJudge = JUDGE_MODEL;
+        return grids[review?.best ?? 0]!.frames;
       }
     }
     const tries: (() => Promise<KeyedFrame[]>)[] =
@@ -586,6 +602,40 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       }),
     ]),
   ]);
+  // Muse Wonder checks the single poses (same pet, right pose, anatomy, one tail); a failing one is redrawn with its note,
+  // twice at most, and each pose keeps its best-scoring drawing. No verdict (judge down or late) ships them as drawn.
+  const drawBlink = (fix = '') =>
+    draw('idle_blink', [idleRaw, ...(turnRaw ? [turnRaw] : [])], async (img, k) => {
+      if (bboxIoU(k.box, idleDraw.k.box) < BLINK_MIN_IOU) throw new BadOutputError('blink moved');
+      return single(img, k);
+    }, false, fix);
+  const reviewed = Object.keys(POSE_MEANING).filter((n) => keyed[n] && keyed[n] !== idle);
+  const best = new Map<string, { frame: KeyedFrame; score: number }>();
+  for (let round = 0; round <= POSE_REDRAWS; round++) {
+    const names = reviewed.filter((n) => !best.has(n) || best.get(n)!.score < 7);
+    if (!names.length) break;
+    const shown = await Promise.all(names.map(async (n) => ({ name: n, image: dataUrl(await sharp(keyed[n]!.png).flatten({ background: MAGENTA }).png().toBuffer()) })));
+    const verdicts: Map<string, PoseVerdict> | null = await reviewPoses(o.client, idleRaw, shown, AbortSignal.any([spark.signal, AbortSignal.timeout(o.timing?.judgeMs ?? 30_000)]));
+    if (!verdicts) break;
+    const failing: [string, PoseVerdict][] = [];
+    for (const n of names) {
+      const v = verdicts.get(n);
+      if (!v) continue;
+      if (!best.has(n) || poseScore(v) > best.get(n)!.score) best.set(n, { frame: keyed[n]!, score: poseScore(v) });
+      if (!posePasses(v)) failing.push([n, v]);
+    }
+    if (!failing.length || round === POSE_REDRAWS) break;
+    await Promise.all(failing.map(async ([n, v]) => {
+      try {
+        const f = n === 'idle_blink' ? await drawBlink(v.issue) : await draw(n, refs, single, false, v.issue);
+        keyed[n] = f;
+        poseEvent(n, f.png);
+      } catch {
+        /* keep the drawing we have */
+      }
+    }));
+  }
+  for (const [n, b] of best) if (keyed[n] !== b.frame) { keyed[n] = b.frame; poseEvent(n, b.frame.png); }
   return keyed;
   })().catch((err) => {
     spark.abort(); // a failed pack must not leave Spark running and billing
