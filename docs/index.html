@@ -119,6 +119,21 @@ section { padding: 152px 0; position: relative; }
 .cta { display: flex; gap: 12px; flex-wrap: wrap; }
 .small-link { margin-top: 18px; font-size: 14px; color: var(--ink-3); }
 .small-link code { font-size: 13px; padding: 2px 7px; border-radius: 6px; background: var(--panel-2); color: var(--ink-2); }
+/* first-open help, shown while the .dmg downloads */
+.dl { width: min(520px, calc(100% - 32px)); max-height: calc(100% - 32px); margin: auto; padding: 32px; border-radius: var(--r-panel); border: 1px solid var(--line-2); background: var(--bg-2); color: var(--ink); box-shadow: var(--shadow); overflow: auto; }
+.dl::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); }
+.dl[open] { animation: dl-in .5s var(--land); }
+@keyframes dl-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+.dl h3 { font: 800 26px/1.15 var(--round); letter-spacing: -.02em; margin: 0 0 8px; }
+.dl > p { color: var(--ink-2); margin: 0 0 20px; }
+.dl ol { margin: 0 0 20px; padding-left: 22px; display: grid; gap: 10px; }
+.dl li { color: var(--ink-2); padding-left: 4px; }
+.dl li b { color: var(--ink); }
+.dl .alt { font-size: 14px; color: var(--ink-3); margin: 0 0 8px; }
+.dl pre { margin: 0 0 24px; padding: 12px 14px; border-radius: var(--r-sm); background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; color: var(--ink-2); white-space: pre-wrap; word-break: break-all; }
+.dl .x { position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 999px; border: 0; background: var(--panel-2); color: var(--ink-2); cursor: pointer; font-size: 18px; display: grid; place-items: center; }
+@media (max-width: 760px) { .dl { padding: 24px 20px; } }
+@media (prefers-reduced-motion: reduce) { .dl[open] { animation: none; } }
 
 /* nav */
 nav { position: fixed; top: 14px; left: 0; right: 0; z-index: 50; pointer-events: none; }
@@ -775,7 +790,7 @@ footer a { color: var(--ink-2); }
       <li class="peek" aria-hidden="true" style="right:10%; top:-63px; --y:6px"><img src="img/pakkun/idle_0.webp" alt=""></li>
       <li class="panel rv"><i class="ph ph-download-simple"></i><p>Download <code>PixyPup-0.1.0-arm64.dmg</code> and open it.</p></li>
       <li class="panel rv" style="--d:.06s"><i class="ph ph-hand-grabbing"></i><p>Drag Pakkun onto Applications. <b>"Drag me home."</b></p></li>
-      <li class="panel rv" style="--d:.12s"><i class="ph ph-cursor-click"></i><p>First open only: open it once, then click <b>Open Anyway</b> in System Settings → Privacy &amp; Security. It's an indie app, not notarised yet.</p></li>
+      <li class="panel rv" style="--d:.12s"><i class="ph ph-cursor-click"></i><p>First open only: macOS says it "could not verify" PixyPup. Click <b>Done</b>, then <b>Open Anyway</b> in System Settings → Privacy &amp; Security. It's an indie app, not notarised yet.</p></li>
     </ol>
     <div class="final rv">
       <div class="cta">
@@ -786,6 +801,21 @@ footer a { color: var(--ink-2); }
     </div>
   </div>
 </section>
+
+<dialog class="dl" id="dl" aria-labelledby="dlTitle">
+  <button class="x" type="button" aria-label="Close"><i class="ph ph-x"></i></button>
+  <h3 id="dlTitle">Pakkun is on his way.</h3>
+  <p>The first time you open PixyPup, macOS will say <b>"PixyPup" Not Opened</b>. That's expected: it's an indie app, self-signed and not notarised by Apple yet.</p>
+  <ol>
+    <li>Open the <code>.dmg</code> and drag Pakkun onto <b>Applications</b>.</li>
+    <li>Open PixyPup. When macOS warns you, click <b>Done</b>, not Move to Trash.</li>
+    <li>Go to <b>System Settings → Privacy &amp; Security</b>, scroll down to <i>"PixyPup" was blocked</i>, and click <b>Open Anyway</b>.</li>
+    <li>Open PixyPup again. From now on it opens normally.</li>
+  </ol>
+  <p class="alt">Prefer Terminal? This does the same thing:</p>
+  <pre><code>xattr -dr com.apple.quarantine /Applications/PixyPup.app</code></pre>
+  <button class="btn btn-primary" type="button" data-close>Got it</button>
+</dialog>
 
 <footer>
   <div class="zzz" aria-hidden="true"><span>z</span><span>z</span><span>z</span></div>
@@ -1209,6 +1239,12 @@ themeBtn.addEventListener('click', () => {
   mTabs.forEach(t => t.addEventListener('click', () => playMorph(t.dataset.m)));
   document.getElementById('mReplay').addEventListener('click', () => playMorph(mKey));
   new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); if (!mSeen) playMorph(mKey); } }, { threshold: .45 }).observe(morph);
+
+  // first-open help: the download still starts, the dialog explains the Gatekeeper warning
+  const dl = document.getElementById('dl');
+  document.querySelectorAll('a[href$=".dmg"]').forEach(a => a.addEventListener('click', () => { if (!dl.open) dl.showModal(); }));
+  dl.querySelectorAll('.x, [data-close]').forEach(b => b.addEventListener('click', () => dl.close()));
+  dl.addEventListener('click', e => { if (e.target === dl) dl.close(); });
 
   // cursor spotlight on panels
   document.querySelectorAll('.panel').forEach(el => el.addEventListener('pointermove', e => {
