@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -29,6 +29,32 @@ describe('motion', () => {
     expect(walkFrame(40, 2, 20)).toBe(0);
     expect(walkFrame(79, 4, 20)).toBe(3);
     expect(walkFrame(80, 4, 20)).toBe(0);
+  });
+  it('even timing: a near-duplicate step passes quickly and a big one holds longer, over the same cycle', () => {
+    const spans = walkSpans([10, 1, 10, 10]); // frame 1 barely differs from frame 2
+    expect(spans[0]).toBe(0);
+    expect(spans.at(-1)).toBe(4);
+    const share = spans.slice(1).map((v, i) => v - spans[i]!);
+    expect(share[1]).toBeLessThan(share[0]!); // the near-duplicate is on screen for less
+    expect(Math.min(...share) / Math.max(...share)).toBeGreaterThanOrEqual(0.5 / 1.6); // clamped: never a flash
+    // 1.7 strides is still the near-duplicate frame 1 with equal timing; it is short now, so frame 2 is already showing
+    expect(walkFrame(34, 4, 20)).toBe(1);
+    expect(walkFrame(34, 4, 20, spans)).toBe(2);
+    expect(walkFrame(80, 4, 20, spans)).toBe(0); // still wraps once per cycle
+  });
+  it('even timing falls back to equal shares when there is nothing to measure', () => {
+    expect(walkSpans([0, 0, 0])).toEqual([0, 1, 2, 3]);
+    expect(walkFrame(25, 2, 20, [0, 1])).toBe(walkFrame(25, 2, 20)); // a table of the wrong length is ignored
+  });
+  it('measures leg change in the bottom of the frame only, wrapping last to first', () => {
+    const w = 2;
+    const h = 10;
+    const blank = new Array(w * h).fill(0);
+    const legs = blank.map((_, i) => (i >= 8 * w ? 255 : 0)); // bottom rows filled
+    const head = blank.map((_, i) => (i < 2 * w ? 255 : 0)); // top rows filled: not legs
+    const c = legChange([blank, legs, head], w, h);
+    expect(c[0]).toBeGreaterThan(0); // blank -> legs
+    expect(c[2]).toBe(0); // head -> blank: no leg change
   });
   it('leans toward the travel direction and the transform keeps that sign when mirrored', () => {
     expect(lean(1)).toBe(2);

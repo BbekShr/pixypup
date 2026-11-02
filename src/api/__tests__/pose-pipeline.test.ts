@@ -81,6 +81,8 @@ interface FakeOpts {
   poses?: Record<string, string>;
   /** answers the walk judge (POST /responses with the judge model); absent = the judge fails */
   judge?: (body: Record<string, unknown>) => Promise<unknown>;
+  /** answers the pose review (the judge model, schema pose_review); absent = it fails and poses ship as drawn */
+  review?: (body: Record<string, unknown>) => Promise<unknown>;
 }
 
 function fakeClient(o: FakeOpts = {}) {
@@ -92,9 +94,11 @@ function fakeClient(o: FakeOpts = {}) {
     postStream: () => samEvents(o.sam ?? SAM_OUTPUT),
     postJson: async (path: string, body: { prompt: string }, signal?: AbortSignal) => {
       if (path === '/responses' && (body as unknown as { model?: string }).model === JUDGE_MODEL) {
-        requested.push('judge');
-        if (!o.judge) throw new Error('judge down');
-        return o.judge(body as unknown as Record<string, unknown>);
+        const isPoses = sparkName(body as unknown as Record<string, unknown>) === 'pose_review';
+        requested.push(isPoses ? 'review' : 'judge');
+        const answer = isPoses ? o.review : o.judge;
+        if (!answer) throw new Error('judge down');
+        return answer(body as unknown as Record<string, unknown>);
       }
       if (path === '/responses') {
         o.sparkLog?.push(`spark:${requested.length}`);
@@ -448,14 +452,73 @@ describe('generateSpritePack', () => {
     expect(await readdir(root)).toEqual(['pack']);
   });
 
-  it('draws idle, then the turnaround, then 3 walk sheets, sit, sleep, bark, roll and blink in parallel, then asks the judge (10 requests)', async () => {
+  it('draws idle, then the turnaround, then 3 walk sheets, sit, sleep, bark, roll and blink in parallel, then asks the judge and the pose review (11 requests)', async () => {
     const { p, requested, stats } = await run({ delayMs: 50 });
     await p;
     expect(requested[0]).toBe('idle_0');
     expect(requested[1]).toBe('turn_sheet');
-    expect(requested.slice(2).sort()).toEqual(['bark', 'idle_blink', 'judge', 'roll', 'sit', 'sleep', 'walk_sheet8', 'walk_sheet8', 'walk_sheet8']);
+    expect(requested.slice(2).sort()).toEqual(['bark', 'idle_blink', 'judge', 'review', 'roll', 'sit', 'sleep', 'walk_sheet8', 'walk_sheet8', 'walk_sheet8']);
     expect(requested.indexOf('judge')).toBeGreaterThan(requested.lastIndexOf('walk_sheet8'));
+    expect(requested.indexOf('review')).toBe(requested.length - 1); // after every pose is drawn
     expect(stats.maxInflight).toBe(8); // idle alone, then the other 8 image requests at once; serial would peak at 1
+  });
+
+  describe('Muse Wonder review', () => {
+    const answer = (o: unknown) => async () => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(o) }] }] });
+    const verdict = (name: string, tails = 1, score = 9, issue = '') => ({ name, same_pet: score, pose_matches: score, anatomy: score, tails, issue });
+    const go = async (o: FakeOpts) => {
+      const f = fakeClient(o);
+      const events: PipelineEvent[] = [];
+      const manifest = await generateSpritePack({ client: f.client, photo: await photo(), petName: 'Pakkun', species: 'dog', outDir: out, onProgress: (e) => events.push(e), timing: { backoffMs: 1 } });
+      return { ...f, manifest, events };
+    };
+
+    it('redraws a pose with a second tail, telling Muse Image what was wrong, and stops once it passes', async () => {
+      let n = 0;
+      const review = async () => answer({ poses: n++ === 0
+        ? [verdict('sit'), verdict('sleep', 2, 9, 'A second tail is wrapped across the face.'), verdict('bark'), verdict('roll'), verdict('idle_blink')]
+        : [verdict('sleep')] })();
+      const { requested, prompts } = await go({ review });
+      expect(requested.filter((r) => r === 'review')).toHaveLength(2);
+      expect(requested.filter((r) => r === 'sleep')).toHaveLength(2);
+      expect(prompts.filter((p) => p.includes('A second tail is wrapped across the face.'))).toHaveLength(1);
+    });
+
+    it('keeps the best-scoring drawing when the redraws do not pass', async () => {
+      let n = 0;
+      const review = async () => answer({ poses: [verdict('sit', 1, n++ === 0 ? 6 : 3, 'Not sitting.'), verdict('sleep'), verdict('bark'), verdict('roll'), verdict('idle_blink')].filter((v) => n === 1 || v.name === 'sit') })();
+      const sizes = [40, 70, 90];
+      let draws = 0;
+      const { requested, events } = await go({ review, image: async (pose) => (pose === 'sit' ? drawn(100, 100, sizes[draws++]!, 50) : defaultImage(pose)) });
+      expect(requested.filter((r) => r === 'sit')).toHaveLength(3); // the first drawing, then 2 redraws
+      const last = events.filter((e) => e.stage === 'pose' && e.name === 'sit').at(-1) as { png: Buffer };
+      expect((await sharp(last.png).metadata()).width).toBe(40); // the first (score 6) beat both redraws (score 3)
+    });
+
+    it('ships the poses as drawn when the review is down', async () => {
+      const { requested } = await go({});
+      expect(requested.filter((r) => r === 'review')).toHaveLength(1);
+      expect(requested.filter((r) => r === 'sleep')).toHaveLength(1);
+    });
+
+    it('draws one more batch of walk sheets when the best one limps, and lets the judge pick from all six', async () => {
+      let n = 0;
+      const judge = async () => answer(n++ === 0
+        ? { best: 0, reason: 'r', sheets: [{ index: 0, same_pet: 9, consistent: 8, cycle: 7, even: 4, legs: 8, notes: 'Frames 1 and 5 repeat.' }] }
+        : { best: 4, reason: 'r', sheets: [{ index: 4, same_pet: 9, consistent: 9, cycle: 9, even: 9, legs: 9, notes: '' }] })();
+      const { requested, prompts, manifest } = await go({ judge });
+      expect(requested.filter((r) => r === 'walk_sheet8')).toHaveLength(6);
+      expect(requested.filter((r) => r === 'judge')).toHaveLength(2);
+      expect(prompts.filter((p) => p.includes('Frames 1 and 5 repeat.') && p.includes('evenly spaced step'))).toHaveLength(3);
+      expect(manifest.poses.walk?.judge).toBe(JUDGE_MODEL);
+    });
+
+    it('asks for no second batch when the best walk is even', async () => {
+      const judge = answer({ best: 1, reason: 'r', sheets: [{ index: 1, same_pet: 9, consistent: 9, cycle: 8, even: 8, legs: 9, notes: '' }] });
+      const { requested } = await go({ judge });
+      expect(requested.filter((r) => r === 'walk_sheet8')).toHaveLength(3);
+      expect(requested.filter((r) => r === 'judge')).toHaveLength(1);
+    });
   });
 
   it('references: idle alone for blink, cutout+idle for the others', async () => {
@@ -937,6 +1000,12 @@ describe('profile-driven prompts', () => {
     expect(manifest.poses.walk?.frames).toHaveLength(4);
   });
 
+  it('asks a four-legged sleeper for exactly one tail, and nothing else for a butterfly', () => {
+    expect(posesFor(defaultProfile('dog')).sleep).toContain('exactly one tail');
+    expect(posesFor(defaultProfile('cat')).sleep).toContain('exactly one tail');
+    expect(posesFor(defaultProfile('butterfly')).sleep).not.toContain('tail');
+  });
+
   it('spells out the 8 walk phases on a 2 x 4 grid; other cycles keep 4 frames', () => {
     const w = posesFor(defaultProfile('dog')).walk_sheet8!;
     for (const part of ['exactly 8 frames', '2 rows of 4', 'Frame 1 contact', 'Frame 2 down', 'Frame 3 pass', 'Frame 4 up', 'Frames 5 to 8', 'one step behind', 'tail sways']) expect(w).toContain(part);
@@ -989,7 +1058,7 @@ describe('profile-driven prompts', () => {
     expect(events.at(-1)?.stage).toBe('done');
   });
 
-  it('makes SAM 1, Spark 3 (profile, personality, facts), Image 10 requests (7 + 2 more walk sheets + the turnaround) and 1 judge request', async () => {
+  it('makes SAM 1, Spark 3 (profile, personality, facts), Image 10 requests (7 + 2 more walk sheets + the turnaround), 1 judge and 1 pose review request', async () => {
     const paths: string[] = [];
     const f = fakeClient({ spark: spark(defaultProfile('dog')) });
     const post = f.client.postJson.bind(f.client) as (p: string, b: unknown, s?: AbortSignal) => Promise<unknown>;
@@ -999,7 +1068,7 @@ describe('profile-driven prompts', () => {
     (f.client as unknown as { postStream: typeof stream }).postStream = ((...a: Parameters<typeof stream>) => (streams++, stream(...a))) as typeof stream;
     await generateSpritePack({ client: f.client, photo: await photo(), petName: 'P', species: 'dog', outDir: join(root, 'pack'), timing: { backoffMs: 1, sparkGraceMs: 200 } });
     expect(streams).toBe(1);
-    expect(paths.filter((x) => x === '/responses')).toHaveLength(4);
+    expect(paths.filter((x) => x === '/responses')).toHaveLength(5);
     expect(paths.filter((x) => x !== '/responses')).toHaveLength(10);
   });
 });

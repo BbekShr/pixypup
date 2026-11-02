@@ -83,9 +83,49 @@ export function pickTarget(x: number, maxX: number, home: number, r1: number, r2
 
 export const LEAN_DEG = 2;
 
-/** Walk frame for the distance travelled: one frame per stride, so feet only move when the body does. */
-export const walkFrame = (distancePx: number, frames: number, stridePx: number): number =>
-  Math.floor(distancePx / stridePx) % frames;
+/**
+ * Walk frame for the distance travelled: one frame per stride, so feet only move when the body does. With `spans`
+ * (walkSpans) a frame holds for its own share of the cycle instead of an equal one.
+ */
+export const walkFrame = (distancePx: number, frames: number, stridePx: number, spans?: readonly number[]): number => {
+  if (!spans || spans.length !== frames + 1) return Math.floor(distancePx / stridePx) % frames;
+  const p = (distancePx / stridePx) % frames;
+  let i = 0;
+  while (i < frames - 1 && spans[i + 1]! <= p) i++;
+  return i;
+};
+
+/**
+ * Where each walk frame starts within one cycle, in frame units (frames + 1 entries, 0 to frames). A frame holds in
+ * proportion to how much the legs change before the next one, clamped to 0.5x-1.6x of an equal share: Muse Image often
+ * draws two near-identical steps then a big one, and equal timing turns that into a hold-then-lurch limp.
+ */
+export function walkSpans(change: readonly number[]): number[] {
+  const n = change.length;
+  const mean = change.reduce((a, b) => a + b, 0) / n;
+  if (!n || !(mean > 0)) return Array.from({ length: n + 1 }, (_, i) => i);
+  const w = change.map((c) => Math.min(1.6, Math.max(0.5, c / mean)));
+  const k = n / w.reduce((a, b) => a + b, 0);
+  const out = [0];
+  for (const x of w) out.push(out[out.length - 1]! + x * k);
+  out[n] = n;
+  return out;
+}
+
+/** How much the legs (bottom 45%) change from each frame to the next, the last wrapping to the first. Alpha masks of one size. */
+export function legChange(masks: readonly ArrayLike<number>[], w: number, h: number, stride = 1): number[] {
+  const top = Math.floor(h * 0.55);
+  return masks.map((a, i) => {
+    const b = masks[(i + 1) % masks.length]!;
+    let sum = 0;
+    for (let y = top; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const k = (y * w + x) * stride + (stride - 1);
+        sum += Math.abs((a[k] ?? 0) - (b[k] ?? 0));
+      }
+    return sum / ((h - top) * w);
+  });
+}
 
 
 /** Screen-space pitch (deg) in the direction of travel (rotate is applied outside the mirror): LEAN_DEG at steady speed, forward when speeding up, back when braking. speedFrac is v/vMax, accelFrac is a/WALK_ACCEL. */

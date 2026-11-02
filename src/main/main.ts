@@ -456,7 +456,7 @@ void app.whenReady().then(async () => {
   app.on('activate', () => { if (Date.now() - openedAt > ACTIVATE_GRACE_MS && wakeOnOpen(snoozed(), false)) run('wake'); });
   startScreenAwareLoop();
   powerMonitor.on('resume', sync); // timers pause while the Mac sleeps
-  // First launch only: Pakkun gets a moment to drop in before the welcome appears.
+  // First launch only: Kuma gets a moment to drop in before the welcome appears.
   const userPet = isPlainName(settings.petName) && (await loadPack(join(app.getPath('userData'), 'pets', settings.petName))) !== null;
   if (!app.isPackaged) process.on('SIGUSR2', () => onboarding.open(true)); // dev hook: the native menu can't be driven over CDP
   if (!settings.onboarded && !userPet) setTimeout(() => onboarding.open(false), 1500);

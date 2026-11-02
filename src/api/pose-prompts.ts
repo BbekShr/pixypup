@@ -99,6 +99,8 @@ function turnSheet(p: MotionProfile): string {
   );
 }
 
+const ONE_TAIL = ' The pet has exactly one tail: if it curls round to the front it is that same tail, never a second one, and nothing covers the face.';
+
 /** Muse Image prompts by pose name; the sheet is the scaffold for the profile's cycle kind plus the model's hint. */
 export function posesFor(p: MotionProfile): Record<string, string> {
   const base = p.cycle.kind === 'walk' ? SHEET : FAMILY[p.cycle.kind];
@@ -110,7 +112,8 @@ export function posesFor(p: MotionProfile): Record<string, string> {
     walk_pair: PAIR[p.cycle.kind],
     turn_sheet: turnSheet(p),
     sit: p.roles.rest.prompt,
-    sleep: p.roles.sleep.prompt,
+    // Curled-up sleep prompts ("tail over nose") made Muse Image draw a second tail across the face (Mochi, Kuma).
+    sleep: p.roles.sleep.prompt + (p.locomotion === 'quadruped' ? ONE_TAIL : ''),
     bark: p.roles.voice.prompt,
     roll: p.roles.trick.prompt,
     // A pure edit of the idle image: no style prefix, it would invite a redraw.

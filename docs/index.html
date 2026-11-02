@@ -4,16 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PixyPup · your pet, on your Mac</title>
-<meta name="description" content="One photo of your dog or cat becomes a 3D companion on your Mac with PixyPup. It walks, does tricks, sniffs your failing tests. Built with Meta SAM 3.1, Muse Image, Muse Spark and Voice Transcribe.">
+<meta name="description" content="PixyPup turns one photo of your dog or cat into a 3D companion that keeps you company on your Mac at work. Built for a wife who misses her golden retriever at the office, with Meta SAM 3.1, Muse Image, Muse Wonder, Muse Spark and Voice Transcribe.">
 <meta property="og:title" content="PixyPup · your pet, on your Mac">
-<meta property="og:description" content="One photo in. One very good pup out. He walks your desktop, does tricks, and sniffs out your failing tests.">
+<meta property="og:description" content="My wife misses our dog Pakkun at the office, so I put him on her screen. One photo in, one very good pup out, keeping you company all workday.">
 <meta property="og:image" content="https://bbekshr.github.io/pixypup/og.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://bbekshr.github.io/pixypup/og.png">
-<meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#0B0B0D" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F6F6F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0B0D">
+<script>
+// Theme: the visitor's saved choice, else the Mac's appearance. Set before paint so there's no flash.
+(function () {
+  let t = null; try { t = localStorage.getItem('pixypup-theme'); } catch (e) { /* no storage */ }
+  if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]').content = t === 'light' ? '#F6F6F4' : '#0B0B0D';
+})();
+</script>
 <link rel="icon" href="img/pakkun/idle_0.png">
 <link rel="preload" as="image" href="img/pakkun/idle_0.webp">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +30,7 @@
 <style>
 /* Tokens. One accent (blush), one radius rule: pills for anything you press, 24px for panels, 12px for small chrome. */
 :root {
+  color-scheme: dark;
   --bg: #110D10;
   --bg-2: #19141A;
   --panel: rgba(255, 255, 255, .035);
@@ -50,26 +58,25 @@
   --pop: cubic-bezier(.34, 1.56, .64, 1); /* overshoot, kept for the pets only */
   --round: ui-rounded, "SF Pro Rounded", "Nunito", "Geist", sans-serif;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #FBF5F3;
-    --bg-2: #FFFFFF;
-    --panel: rgba(255, 255, 255, .7);
-    --panel-2: #FFFFFF;
-    --line: rgba(19, 19, 21, .08);
-    --line-2: rgba(19, 19, 21, .14);
-    --ink: #131315;
-    --ink-2: rgba(19, 19, 21, .64);
-    --ink-3: rgba(19, 19, 21, .45);
-    --accent: #F2917F;
-    --accent-text: #B4473A;
-    --accent-glow: rgba(242, 145, 127, .28);
-    --on-accent: #1A0F0D;
-    --lit: radial-gradient(80% 70% at 50% 0%, rgba(255, 255, 255, .9), transparent 70%);
-    --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 30px 70px -24px rgba(40, 30, 40, .28);
-    --wall: radial-gradient(70% 60% at 15% 5%, #FBD9CF 0, transparent 60%), radial-gradient(80% 70% at 100% 100%, #D3E6F2 0, transparent 62%), linear-gradient(160deg, #FBEDE6, #EEF1F4);
-    --grain-o: .035;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #FBF5F3;
+  --bg-2: #FFFFFF;
+  --panel: rgba(255, 255, 255, .7);
+  --panel-2: #FFFFFF;
+  --line: rgba(19, 19, 21, .08);
+  --line-2: rgba(19, 19, 21, .14);
+  --ink: #131315;
+  --ink-2: rgba(19, 19, 21, .64);
+  --ink-3: rgba(19, 19, 21, .45);
+  --accent: #F2917F;
+  --accent-text: #B4473A;
+  --accent-glow: rgba(242, 145, 127, .28);
+  --on-accent: #1A0F0D;
+  --lit: radial-gradient(80% 70% at 50% 0%, rgba(255, 255, 255, .9), transparent 70%);
+  --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 30px 70px -24px rgba(40, 30, 40, .28);
+  --wall: radial-gradient(70% 60% at 15% 5%, #FBD9CF 0, transparent 60%), radial-gradient(80% 70% at 100% 100%, #D3E6F2 0, transparent 62%), linear-gradient(160deg, #FBEDE6, #EEF1F4);
+  --grain-o: .035;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: clip; }
@@ -124,6 +131,9 @@ nav ul a:hover { color: var(--ink); background: var(--panel-2); }
 nav .right { display: flex; align-items: center; gap: 6px; }
 nav .gh { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 999px; color: var(--ink-2); text-decoration: none; font-size: 20px; }
 nav .gh:hover { color: var(--ink); background: var(--panel-2); }
+nav .theme { border: 0; background: none; cursor: pointer; font: inherit; font-size: 20px; padding: 0; }
+nav .theme .ph-moon, [data-theme="light"] nav .theme .ph-sun { display: none; }
+[data-theme="light"] nav .theme .ph-moon { display: block; }
 @media (max-width: 860px) { nav ul { display: none; } }
 @media (prefers-reduced-transparency: reduce) { nav .bar { background: var(--bg-2); backdrop-filter: none; } }
 
@@ -140,6 +150,8 @@ nav .gh:hover { color: var(--ink); background: var(--panel-2); }
 @keyframes rise { to { transform: none; } }
 .hero-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; flex-wrap: wrap; margin-top: 32px; }
 .hero-row .lede { margin: 0; max-width: 40ch; }
+.lede .sig { display: block; margin-top: 10px; font-size: 15px; color: var(--ink-3); }
+.lede .sig::before { content: "— "; }
 .js .hero .tag, .js .hero-row > * { opacity: 0; transform: translateY(18px); animation: up .7s var(--land) forwards; }
 .js .hero .tag { animation-delay: 0s; }
 .js .hero-row > :first-child { animation-delay: .42s; }
@@ -158,7 +170,7 @@ nav .gh:hover { color: var(--ink); background: var(--panel-2); }
 }
 .desk { position: relative; height: 540px; border-radius: 20px; overflow: hidden; background: var(--wall); user-select: none; -webkit-user-select: none; isolation: isolate; }
 .menubar { position: relative; z-index: 2; height: 30px; white-space: nowrap; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, .9); background: rgba(20, 18, 24, .28); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-@media (prefers-color-scheme: light) { .menubar { color: #1d1d1f; background: rgba(255, 255, 255, .45); } }
+[data-theme="light"] .menubar { color: #1d1d1f; background: rgba(255, 255, 255, .45); }
 .menubar .spacer { flex: 1; }
 .menubar img { width: 18px; height: 19px; object-fit: contain; }
 .menubar i { font-size: 15px; }
@@ -184,7 +196,7 @@ nav .gh:hover { color: var(--ink); background: var(--panel-2); }
 .heart { position: absolute; pointer-events: none; font-size: 22px; color: var(--accent); z-index: 4; animation: float 1.2s var(--land) forwards; }
 @keyframes float { from { opacity: 1; transform: translateY(0) scale(.6); } to { opacity: 0; transform: translateY(-96px) scale(1.15); } }
 .desk-hint { position: absolute; right: 16px; bottom: 16px; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, .85); background: rgba(20, 18, 24, .4); backdrop-filter: blur(10px); padding: 6px 12px; border-radius: 99px; z-index: 2; }
-@media (prefers-color-scheme: light) { .desk-hint { color: #1d1d1f; background: rgba(255, 255, 255, .6); } }
+[data-theme="light"] .desk-hint { color: #1d1d1f; background: rgba(255, 255, 255, .6); }
 .controls { display: flex; justify-content: center; margin: 28px auto 0; padding: 0 16px; }
 .dock { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--shadow); }
 .dock .sep { width: 1px; height: 24px; background: var(--line-2); margin: 0 6px; }
@@ -398,7 +410,7 @@ nav .gh:hover { color: var(--ink); background: var(--panel-2); }
 .floor-pets img { height: 120px; width: auto; scale: var(--s, 1); transform-origin: 50% 100%; cursor: pointer; filter: drop-shadow(0 10px 8px rgba(0, 0, 0, .3)); transition: transform .45s var(--pop); }
 .floor-pets img:hover { transform: translateY(-16px); }
 @media (max-width: 760px) { .floor-pets img { height: 74px; } .floor-pets img:nth-child(n+6) { display: none; } .overload { padding-bottom: 150px; } }
-@media (max-width: 400px) { .floor-pets img { height: 62px; } .floor-pets img:nth-child(n+5) { display: none; } nav .gh { display: none; } }
+@media (max-width: 400px) { .floor-pets img { height: 62px; } .floor-pets img:nth-child(n+5) { display: none; } nav .gh:not(.theme) { display: none; } }
 
 /* pets peeking over edges: only the head shows until you hover the thing they sit on */
 .peek { position: absolute; width: var(--w, 110px); height: 64px; overflow: hidden; pointer-events: none; z-index: 2; }
@@ -488,6 +500,7 @@ footer a { color: var(--ink-2); }
       <li><a href="#privacy">Privacy</a></li>
     </ul>
     <div class="right">
+      <button class="gh theme" type="button" aria-label="Switch to light mode"><i class="ph ph-sun"></i><i class="ph ph-moon"></i></button>
       <a class="gh" href="https://github.com/BbekShr/pixypup" aria-label="PixyPup on GitHub"><i class="ph ph-github-logo"></i></a>
       <a class="btn btn-primary btn-sm" href="https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg"><i class="ph ph-download-simple"></i>Download</a>
     </div>
@@ -496,13 +509,13 @@ footer a { color: var(--ink-2); }
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="tag"><i class="ph ph-paw-print"></i>Meta Global AI Developer Hackathon 2026</span>
+    <span class="tag"><i class="ph ph-paw-print"></i>Meta Global AI Developer Hackathon 2026 · Indie Developer · Build for Your World</span>
     <h1 class="kin" aria-label="Your pet, on your Mac.">
       <span class="ln" aria-hidden="true"><span class="w" style="--i:0">Your</span> <span class="w" style="--i:1">pet,</span></span>
       <span class="ln mute" aria-hidden="true"><span class="w" style="--i:2">on</span> <span class="w" style="--i:3">your</span> <span class="w" style="--i:4">Mac.</span></span>
     </h1>
     <div class="hero-row">
-      <p class="lede">One photo of your dog or cat becomes a 3D companion who walks your desktop and sniffs out failing tests.</p>
+      <p class="lede">My wife goes to the office every day and misses our golden retriever, Pakkun. She can't take him with her, so I built PixyPup: one photo, and Pakkun lives on her screen. <span class="sig">Bek</span></p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg"><i class="ph ph-apple-logo"></i>Download for Mac</a>
         <a class="btn btn-ghost" href="https://github.com/BbekShr/pixypup"><i class="ph ph-star"></i>Star on GitHub</a>
@@ -538,10 +551,10 @@ footer a { color: var(--ink-2); }
         </div>
         <span class="sep" aria-hidden="true"></span>
         <div role="group" aria-label="Try a reaction" style="display:contents">
-          <button class="chip" data-act="fail"><i class="ph ph-flask"></i>Break a test</button>
-          <button class="chip" data-act="fix"><i class="ph ph-check-circle"></i>Fix it</button>
           <button class="chip" data-act="badge"><i class="ph ph-chat-circle-dots"></i>New message</button>
           <button class="chip" data-act="trick"><i class="ph ph-tennis-ball"></i>Do a trick</button>
+          <button class="chip" data-act="fail"><i class="ph ph-flask"></i>Break a test</button>
+          <button class="chip" data-act="fix"><i class="ph ph-check-circle"></i>Fix it</button>
         </div>
       </div>
     </div>
@@ -617,18 +630,10 @@ footer a { color: var(--ink-2); }
   <div class="wrap notices">
     <div class="stick">
       <h2 class="rv">A pet who gets your workday.</h2>
-      <p class="lede rv" style="--d:.06s">Turn on "Notice my screen" and Pakkun reacts to what is actually happening. Off by default, of course.</p>
+      <p class="lede rv" style="--d:.06s">Your own pet on your desk, all day at work. Turn on "Notice my screen" and he reacts to what is actually happening. Off by default, of course.</p>
       <p class="note rv" style="--d:.12s"><i class="ph ph-eye"></i><span>He reads only the front Terminal's text and the list of open windows. Secrets are blanked on your Mac first, and nothing is saved. "Show what Pakkun sees" opens a card with his every decision.</span></p>
     </div>
     <div class="rx-list">
-      <article class="panel rx rv">
-        <div class="vis">
-          <div class="mini-term"><span>~/app $ npm test</span>FAIL src/math.test.ts &gt; adds numbers</div>
-          <img class="petimg" src="img/pakkun/bark.webp" alt="" style="right:14%" loading="lazy">
-          <span class="mini-bub" style="right:9%; bottom:156px">Found a bug!</span>
-        </div>
-        <div class="txt"><h3>Sniffs failing tests</h3><p>A red line in your Terminal? He runs over, sniffs, and barks a line written by <b>Muse Spark 1.3</b>. Click him for a hint. Make it green and he rolls over and cheers.</p></div>
-      </article>
       <article class="panel rx rv">
         <div class="vis">
           <div class="app-ico on" style="left:28px; top:34px; right:auto"><i class="ph ph-chat-teardrop-dots"></i><b>3</b></div>
@@ -643,6 +648,14 @@ footer a { color: var(--ink-2); }
           <img class="petimg" src="img/pakkun/side_2.webp" alt="" style="right:-60px; height:130px" loading="lazy">
         </div>
         <div class="txt"><h3>Hides on calls</h3><p>Zoom or Meet window open? He tiptoes to the edge of the screen and waits until your call ends. A very professional pup.</p></div>
+      </article>
+      <article class="panel rx rv">
+        <div class="vis">
+          <div class="mini-term"><span>~/app $ npm test</span>FAIL src/math.test.ts &gt; adds numbers</div>
+          <img class="petimg" src="img/pakkun/bark.webp" alt="" style="right:14%" loading="lazy">
+          <span class="mini-bub" style="right:9%; bottom:156px">Found a bug!</span>
+        </div>
+        <div class="txt"><h3>Bonus for coders: sniffs failing tests</h3><p>For when I'm coding. A red line in your Terminal? He runs over, sniffs, and barks a line written by <b>Muse Spark 1.3</b>. Click him for a hint. Make it green and he rolls over: "You fixed it!"</p></div>
       </article>
     </div>
   </div>
@@ -696,7 +709,7 @@ footer a { color: var(--ink-2); }
     <article class="panel moment"><h3>Yawns before a nap, stretches after</h3><img src="img/pakkun/sleep.webp" alt="" loading="lazy"></article>
     <article class="panel moment"><h3>A drawn 8-frame walk. Feet never slide.</h3><img src="img/kuma/side_3.webp" alt="" loading="lazy"></article>
     <article class="panel moment"><h3>Blinks, sits, barks, rolls over</h3><img src="img/pakkun/roll.webp" alt="" loading="lazy"></article>
-    <article class="panel moment"><h3>Drag him anywhere. He never steals a click.</h3><img src="img/mochi/sit.webp" alt="" loading="lazy" style="--s:1.5"></article>
+    <article class="panel moment"><h3>Drag him anywhere. He never steals a click.</h3><img src="img/mochi/sit.webp" alt="" loading="lazy" style="--s:1.1"></article>
   </div>
   <div class="wrap rail-nav"><button type="button" id="railPrev" aria-label="Previous moments" disabled><i class="ph ph-arrow-left"></i></button><button type="button" id="railNext" aria-label="More moments"><i class="ph ph-arrow-right"></i></button></div>
 </section>
@@ -707,7 +720,7 @@ footer a { color: var(--ink-2); }
     <p class="lede rv" style="--d:.06s">Open <b>Pet library</b> from any pet's right-click menu and add Mochi or Kuma. They stick around after a restart, and they all join the Overload.</p>
     <div class="trio">
       <button class="who rv" data-who="img/pakkun/"><div class="spot"><img src="img/pakkun/sit.webp" alt="Pakkun the golden retriever, sitting proudly"></div><b>Pakkun</b><span>Good boy. Founding member.</span></button>
-      <button class="who rv" style="--d:.08s" data-who="img/mochi/"><div class="spot"><img src="img/mochi/sit.webp" alt="Mochi the cat, sitting with perfect posture" style="scale:1.45"></div><b>Mochi</b><span>Unbothered. Will still sit on your cursor.</span></button>
+      <button class="who rv" style="--d:.08s" data-who="img/mochi/"><div class="spot"><img src="img/mochi/sit.webp" alt="Mochi the cat, sitting with perfect posture" style="scale:1.1"></div><b>Mochi</b><span>Unbothered. Will still sit on your cursor.</span></button>
       <button class="who rv" style="--d:.16s" data-who="img/kuma/"><div class="spot"><img src="img/kuma/sit.webp" alt="Kuma the red Shiba Inu, sitting and smiling"></div><b>Kuma</b><span>Fox-faced, full of opinions.</span></button>
     </div>
   </div>
@@ -745,7 +758,7 @@ footer a { color: var(--ink-2); }
       <div class="model rv"><b>SAM 3.1</b><p>Cuts your pet cleanly out of the photo and tidies every pose.</p><code>sam-3.1</code></div>
       <div class="model rv"><b>Muse Image</b><p>Draws a consistent set of 3D poses from one photo, plus three candidate walk cycles of eight frames each.</p><code>muse-image-1.0</code></div>
       <div class="model rv"><b>Muse Spark 1.3</b><p>Reads the failing line, decides how to react and writes his speech bubble and hints.</p><code>muse-spark-1.3</code></div>
-      <div class="model rv"><b>Muse Wonder</b><p>Watches the drawn walk cycles and picks the most natural one, so he trots instead of shuffling.</p><code>muse-wonder-1.0</code></div>
+      <div class="model rv"><b>Muse Wonder</b><p>Checks every pose he's drawn in and sends misfits back for a redraw, then picks the walk where he trots evenly instead of limping.</p><code>muse-wonder-1.0</code></div>
       <div class="model rv"><b>Voice Transcribe</b><p>Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space.</p><code>muse-voice-transcribe-1.0</code></div>
     </div>
     <figure class="panel sheet" id="sheet" style="margin-inline:0">
@@ -777,7 +790,7 @@ footer a { color: var(--ink-2); }
 <footer>
   <div class="zzz" aria-hidden="true"><span>z</span><span>z</span><span>z</span></div>
   <img class="sleepy" src="img/pakkun/sleep.webp" alt="Pakkun napping" loading="lazy">
-  <p>Made for the Meta Global AI Developer Hackathon 2026 · <a href="https://github.com/BbekShr/pixypup">github.com/BbekShr/pixypup</a></p>
+  <p>Made for my wife, who misses Pakkun at the office · <a href="https://github.com/BbekShr/pixypup">github.com/BbekShr/pixypup</a></p>
   <p>Mochi and Kuma were made by PixyPup from CC BY-SA 4.0 Wikimedia photos. <a href="https://github.com/BbekShr/pixypup/blob/main/assets/pets/CREDITS.md">Photo credits</a></p>
 </footer>
 
@@ -786,6 +799,19 @@ footer a { color: var(--ink-2); }
 <script src="js/puppet.js"></script>
 <script>
 document.documentElement.classList.add("js");
+// Theme toggle: flip, remember, keep the browser chrome colour in step.
+const themeBtn = document.querySelector('nav .theme');
+const showTheme = (t) => {
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]').content = t === 'light' ? '#F6F6F4' : '#0B0B0D';
+  themeBtn.setAttribute('aria-label', t === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
+};
+showTheme(document.documentElement.dataset.theme);
+themeBtn.addEventListener('click', () => {
+  const t = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  showTheme(t);
+  try { localStorage.setItem('pixypup-theme', t); } catch (e) { /* private mode: fine */ }
+});
 (() => {
   const P = 'img/pakkun/';
   // every pet's manifest has all of these poses, so tricks need no fallback
@@ -801,7 +827,7 @@ document.documentElement.classList.add("js");
   PETS.forEach(q => all.forEach(n => { new Image().src = q.d + n + '.webp'; }));
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Mochi's standing art fills ~65% of its canvas and Kuma's ~88%, Pakkun's ~98%: scale so they read the same size
-  const boost = src => /mochi\/(idle|sit|bark|side)/.test(src) ? 1.5 : /kuma\/(idle|sit|bark|side)/.test(src) ? 1.1 : 1;
+  const boost = src => /mochi\/side/.test(src) ? 1.35 : /mochi\/(idle|sit|bark)/.test(src) ? 1.15 : 1;
 
   // the app's own walk maths (js/puppet.js, built from src/overlay/stride.ts + motion.ts): drawn frames, one per measured stride of distance walked
   const K = window.PixyPuppet;

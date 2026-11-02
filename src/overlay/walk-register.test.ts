@@ -11,8 +11,9 @@ describe('walk registration', () => {
     expect(registersByHead('sit', false)).toBe(true);
   });
 
-  it('is needed: head x of the real drawn Pakkun walk swings past the 15% clamp registration would apply', async () => {
-    const dir = join(__dirname, '../../assets/pets/Pakkun');
+  // Kuma: since the Nov 1 regens, Pakkun's and Mochi's drawn walks keep the head steady, so they no longer show the swing.
+  it('is needed: head x of the real drawn Kuma walk swings past the 15% clamp registration would apply', async () => {
+    const dir = join(__dirname, '../../assets/pets/Kuma');
     const xs: number[] = [];
     let w = 0;
     for (let k = 0; k < 8; k++) {

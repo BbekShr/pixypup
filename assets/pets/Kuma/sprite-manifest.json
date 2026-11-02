@@ -1,50 +1,49 @@
 {
   "pet": "Kuma",
-  "species": "shiba inu dog",
+  "species": "dog",
   "profile": {
     "locomotion": "quadruped",
-    "subject": "a shiba inu dog",
-    "styleHints": "red-tan coat with white chest, pricked ears, curled fluffy tail over back",
+    "subject": "a red shiba inu dog",
+    "styleHints": "red-tan coat with white chest and muzzle, erect ears, curled fluffy tail",
     "gait": {
-      "cadenceHz": 1.5,
-      "strideBody": 0.6,
+      "cadenceHz": 2,
+      "strideBody": 0.9,
       "bounce": 0.06,
-      "pitchDeg": 3,
-      "speedBody": 0.9
+      "pitchDeg": 5,
+      "speedBody": 0.6
     },
     "cycle": {
       "kind": "walk",
-      "prompt": "Horizontal sprite sheet of exactly 4 frames of the same red shiba inu dog walking, strict side profile facing right, one eye visible, same size in every frame, 4 equal columns with wide magenta gaps, legs in trot-walk sequence, curled fluffy tail, pricked ears"
+      "prompt": "horizontal sprite sheet of exactly 4 frames of the same red shiba inu dog trotting, strict side profile facing right, one eye visible, same size in every frame, 4 equal columns with wide magenta gaps, legs in walk sequence, curled fluffy tail, erect ears"
     },
-    "idlePrompt": "Pose: standing alert in side view facing right, head up, ears pricked, curled tail high, all four paws planted",
+    "idlePrompt": "Pose: standing alert in side view facing right, head up, erect ears, curled tail over back, four paws planted",
     "fidgets": [
       "groom",
-      "wave",
       "bob"
     ],
     "roles": {
       "rest": {
         "label": "Sit",
-        "prompt": "Pose: sitting upright with front legs straight, hind legs folded, curled tail around side, head up facing right",
-        "bubble": "phew"
+        "prompt": "Pose: sitting upright with front legs straight, curled fluffy tail around side, head facing right, calm",
+        "bubble": "sigh"
       },
       "sleep": {
-        "label": "Sleep curled",
-        "prompt": "Pose: curled on side with paws tucked, its one curled fluffy tail wrapped around the body with the tip over the nose (exactly one tail), eyes closed sleeping peacefully",
-        "bubble": "Zzz"
+        "label": "Nap time",
+        "prompt": "Pose: curled up lying on side, paws tucked in, fluffy tail over nose, eyes closed sleeping",
+        "bubble": "zzz"
       },
       "voice": {
         "label": "Bark",
-        "prompt": "Pose: standing facing right with mouth open barking, ears up, curled tail raised and wagging slightly",
+        "prompt": "Pose: standing facing right, mouth open barking, ears perked, curled tail up, chest forward",
         "bubble": "Woof!"
       },
       "trick": {
-        "label": "Shake paw",
-        "prompt": "Pose: sitting and lifting one front paw high to shake, head tilted, tail wagging, facing right",
-        "bubble": "Ta-da!"
+        "label": "Beg!",
+        "prompt": "Pose: sitting up begging on hind legs, front paws lifted, head tilted right, curled tail wagging",
+        "bubble": "Yip!"
       }
     },
-    "energy": "bold playful"
+    "energy": "loyal alert"
   },
   "poses": {
     "idle": {
@@ -52,7 +51,7 @@
         "idle_0.png"
       ],
       "fps": 2,
-      "footY": 0.9930795847750865
+      "footY": 0.9948586118251928
     },
     "walk": {
       "frames": [
@@ -66,7 +65,7 @@
         "side_7.png"
       ],
       "fps": 8,
-      "footY": 0.9930795847750865,
+      "footY": 0.9948586118251928,
       "judge": "muse-wonder-1.0"
     },
     "turn": {
@@ -78,70 +77,73 @@
         "turn_back.png"
       ],
       "fps": 1,
-      "footY": 0.9930795847750865
+      "footY": 0.9948586118251928
     },
     "sit": {
       "frames": [
         "sit.png"
       ],
       "fps": 1,
-      "footY": 0.9930795847750865
+      "footY": 0.9948586118251928
     },
     "sleep": {
       "frames": [
         "sleep.png"
       ],
       "fps": 1,
-      "footY": 0.9930795847750865
+      "footY": 0.9948586118251928
     },
     "bark": {
       "frames": [
         "bark.png"
       ],
       "fps": 4,
-      "footY": 0.9930795847750865
+      "footY": 0.9948586118251928
     },
     "roll": {
       "frames": [
         "roll.png"
       ],
       "fps": 2,
-      "footY": 0.9930795847750865
+      "footY": 0.9948586118251928
     },
     "blink": {
       "frames": [
         "idle_blink.png"
       ],
       "fps": 1,
-      "footY": 0.9930795847750865
+      "footY": 0.9948586118251928
     }
   },
   "personality": {
     "breed": "Shiba Inu",
-    "coat": "red tan with creamy white",
+    "coat": "Red tan with white markings",
     "traits": [
-      "loyal",
-      "alert",
-      "proud"
+      "Proud",
+      "Alert",
+      "Loyal"
     ],
     "energy": "normal",
     "lines": [
-      "Hi I'm Kuma, your best buddy!",
-      "Look at my fluffy curled tail!",
-      "I love running on soft green grass",
-      "Stay close, I will guard you!",
-      "Let's sniff and explore together!",
-      "Rub my tummy, I am so happy!"
+      "I'm Kuma, hear me roar",
+      "Look at my fluffy curled tail",
+      "I love my grass zoomies",
+      "I stand proud and strong",
+      "Let's explore the park together",
+      "Wanna be my best friend"
     ],
     "facts": [
       {
-        "text": "Shiba Inus come from Japan and hunted small game in mountains."
+        "text": "Shiba Inus come from Japan and are the smallest native Japanese dog.",
+        "source": "https://en.wikipedia.org/wiki/Shiba_Inu"
       },
       {
-        "text": "Shiba Inus look like tiny foxes with pointy upright ears."
+        "text": "Long ago in Japan, Shiba Inus hunted birds and small game in brush.",
+        "source": "https://www.purina.com/dogs/dog-breeds/shiba-inu"
       },
       {
-        "text": "Their fluffy tail curls up and over their back."
+        "text": "Shiba Inus have prick ears, curly tails, and soft fluffy coats.",
+        "source": "https://www.purina.com/dogs/dog-breeds/shiba-inu"
       }
     ]
   }

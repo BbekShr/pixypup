@@ -3,20 +3,20 @@
   "species": "cat",
   "profile": {
     "locomotion": "quadruped",
-    "subject": "a grey tabby cat",
-    "styleHints": "grey tabby coat with dark stripes, ringed black-tipped tail, green eyes, large upright ears",
+    "subject": "a slender grey tabby cat",
+    "styleHints": "Slender grey tabby with dark stripes, big upright ears, green eyes, long ringed tail",
     "gait": {
-      "cadenceHz": 1.8,
-      "strideBody": 0.8,
-      "bounce": 0.06,
-      "pitchDeg": 3,
-      "speedBody": 0.6
+      "cadenceHz": 1.2,
+      "strideBody": 0.7,
+      "bounce": 0.05,
+      "pitchDeg": 4,
+      "speedBody": 0.8
     },
     "cycle": {
       "kind": "walk",
-      "prompt": "Same grey tabby cat with dark stripes and ringed tail in strict side profile facing right, one green eye visible, walking quadruped gait, 4-frame sequence showing legs alternating, tail slightly swaying, same size in every frame, 4 equal columns with wide magenta gaps, horizontal sprite sheet"
+      "prompt": "Horizontal sprite sheet of exactly 4 frames in 4 equal columns with wide magenta gaps, same slender grey tabby cat in strict side profile facing right, one green eye visible, same size every frame, walking gait cycle with legs alternating, long striped tail extended, large upright ears"
     },
-    "idlePrompt": "Pose: standing alert in side view facing right, four paws grounded, tail extended back, head up with ears forward",
+    "idlePrompt": "Pose: Standing alert in side view facing right, body level, tail extended back, ears up, green eye looking forward",
     "fidgets": [
       "groom",
       "knead",
@@ -24,24 +24,24 @@
     ],
     "roles": {
       "rest": {
-        "label": "Sit & Rest",
-        "prompt": "Pose: sitting upright with front paws together, tail curled around side, head facing right, calm relaxed posture",
-        "bubble": "prrp"
+        "label": "Sit calmly",
+        "prompt": "Pose: Sitting upright with chest up, front paws together, long striped tail curled around paws, ears up",
+        "bubble": "purr"
       },
       "sleep": {
-        "label": "Curl Up",
-        "prompt": "Pose: curled in a tight loaf with tail over nose, eyes closed, paws tucked under chest",
-        "bubble": "Zzz"
+        "label": "Curl up nap",
+        "prompt": "Pose: Curled tightly on side with tail tucked over nose, eyes closed, ears relaxed, paws folded in",
+        "bubble": "zzz"
       },
       "voice": {
         "label": "Meow",
-        "prompt": "Pose: standing with head tilted up right, mouth open mid-meow, tail upright, ears forward",
+        "prompt": "Pose: Sitting with head tilted up, mouth open mid-meow, tail upright, ears forward",
         "bubble": "Meow!"
       },
       "trick": {
-        "label": "Knead Biscuits",
-        "prompt": "Pose: standing with front paws alternately kneading in air, head tilted, tail raised high with happy arch",
-        "bubble": "prrp!"
+        "label": "Wave paw",
+        "prompt": "Pose: Sitting up on haunches with one front paw raised high, head tilted, tail curled, playful look",
+        "bubble": "mrrp!"
       }
     },
     "energy": "curious"
@@ -52,7 +52,7 @@
         "idle_0.png"
       ],
       "fps": 2,
-      "footY": 0.9948717948717949
+      "footY": 0.9951456310679612
     },
     "walk": {
       "frames": [
@@ -66,85 +66,73 @@
         "side_7.png"
       ],
       "fps": 8,
-      "footY": 0.9948717948717949,
+      "footY": 0.9951456310679612,
       "judge": "muse-wonder-1.0"
-    },
-    "turn": {
-      "frames": [
-        "turn_front.png",
-        "turn_front34.png",
-        "turn_side.png",
-        "turn_back34.png",
-        "turn_back.png"
-      ],
-      "fps": 1,
-      "footY": 0.9948717948717949
     },
     "sit": {
       "frames": [
         "sit.png"
       ],
       "fps": 1,
-      "footY": 0.9948717948717949
+      "footY": 0.9951456310679612
     },
     "sleep": {
       "frames": [
         "sleep.png"
       ],
       "fps": 1,
-      "footY": 0.9948717948717949
+      "footY": 0.9951456310679612
     },
     "bark": {
       "frames": [
         "bark.png"
       ],
       "fps": 4,
-      "footY": 0.9948717948717949
+      "footY": 0.9951456310679612
     },
     "roll": {
       "frames": [
         "roll.png"
       ],
       "fps": 2,
-      "footY": 0.9948717948717949
+      "footY": 0.9951456310679612
     },
     "blink": {
       "frames": [
         "idle_blink.png"
       ],
       "fps": 1,
-      "footY": 0.9948717948717949
+      "footY": 0.9951456310679612
     }
   },
   "personality": {
-    "breed": "Egyptian Mau mix",
-    "coat": "Silver grey spotted tabby",
+    "breed": "Tabby Domestic Shorthair",
+    "coat": "silver grey with dark stripes",
     "traits": [
       "curious",
       "alert",
-      "sleek"
+      "speedy"
     ],
     "energy": "playful",
     "lines": [
-      "Hi hi! I'm Mochi, let's play!",
-      "Did you call my name? I'm here!",
-      "Look at my stripy tail, whee!",
-      "I'm curious, what's that over there?",
-      "Pick me up for zoomies time!",
-      "Stay with me, I'm your buddy!"
+      "Hi I'm Mochi, let's explore together!",
+      "Did you see that? I was so fast!",
+      "I have big eyes for spying fun!",
+      "Catch me if you can, hee hee!",
+      "My tail is stripey, isn't it cool?",
+      "Stay with me, I love you lots!"
     ],
     "facts": [
       {
-        "text": "Egyptian Maus are the only naturally spotted pet cats in the world.",
-        "source": "https://www.wisdompanel.com/en-us/cat-breeds/egyptian-mau"
+        "text": "Tabbies have a cute M shape on their foreheads.",
+        "source": "https://en.wikipedia.org/wiki/Tabby_cat"
       },
       {
-        "text": "They can run up to 30 miles per hour, the fastest pet cat.",
-        "source": "https://www.purina.com/cats/cat-breeds/egyptian-mau"
+        "text": "Tabby is a coat pattern, not a cat breed.",
+        "source": "https://en.wikipedia.org/wiki/Tabby_cat"
       },
       {
-        "text": "They can jump six feet high from a standstill.",
-        "source": "https://vcahospitals.com/east-anchorage/know-your-pet/cat-breeds/egyptian-mau"
+        "text": "Tabbies can be orange, gray, brown, and more colors."
       }
     ]
   }
