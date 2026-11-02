@@ -25,7 +25,7 @@ Official Rules / Event Waiver at https://cerebralvalley.ai/e/meta-ai-developer-h
 | Criterion | Weight | What they look for | Where PixyPup shows it |
 |---|---|---|---|
 | Impact | 30% | Real-world potential, who benefits, could people use it, fits a problem statement | The firsthand hook; one-photo setup anyone can do; privacy-first (screen and voice off by default) |
-| Use of Meta AI tooling | 25% | Creative use, beyond a basic integration, surfacing unexpected capabilities | Five models chained: SAM 3.1 cutout, Muse Image poses and walk cycles, Muse Wonder judging which walk looks most natural, Muse Spark reactions and fix hints, Voice Transcribe |
+| Use of Meta AI tooling | 25% | Creative use, beyond a basic integration, surfacing unexpected capabilities | Five models chained: SAM 3.1 cutout, Muse Image poses and walk cycles, Muse Wonder reviewing every pose (redrawing misfits) and judging which walk looks most natural, Muse Spark reactions and fix hints, Voice Transcribe |
 | Technical depth & execution | 20% | Sound, refined engineering, real craft | Click-through overlay, native helper, stride-matched walk, offline fallbacks, 675 tests |
 | Demo | 25% | Working and impressive, holds up live, video quality | The failing-test sniff, live; the debug card proves it is real |
 

@@ -30,7 +30,7 @@ PixyPup chains five Meta models through the Meta Model API:
 
 - **SAM 3.1** (`sam-3.1`) cuts the pet out of the user's photo, then cleans up every generated pose so each sprite has a crisp transparent edge.
 - **Muse Image** (`muse-image-1.0`) draws a consistent set of 3D-style poses from that single photo (stand, sit, sleep, bark, roll and others), plus three candidate 8-frame walk cycles.
-- **Muse Wonder** (`muse-wonder-1.0`) is used as a judge: it watches the three drawn walk cycles and picks the most natural one, so the pet trots instead of shuffling. This step needs no human review.
+- **Muse Wonder** (`muse-wonder-1.0`) is used as a judge: it reviews every drawn pose against the photo (same pet, right pose, one tail) and sends failures back to Muse Image with its notes, then watches the drawn walk cycles and picks the most natural, even one. This step needs no human review.
 - **Muse Spark 1.3** (`muse-spark-1.3`) is the pet's brain. It reads the failing test line (passed as quoted data, never as instructions), decides how to react, writes the speech bubble in the pet's voice, and explains what probably broke when you click for a hint. It also powers "Talk to Pakkun", a desk-buddy chat.
 - **Voice Transcribe** (`muse-voice-transcribe-1.0`) turns "Pakkun, sit" into a trick, and only listens while you hold ⌥ Space.
 
@@ -38,7 +38,7 @@ Everything around the models is local: an Electron overlay, a Swift helper that 
 
 ## Why are Meta's models important to your solution?
 
-Without them, the product can't exist. Turning one casual phone photo into a full, consistent set of animated poses of *your* pet used to need an illustrator or a 3D artist. SAM 3.1 and Muse Image do it in about 90 seconds, and Muse Wonder handles the quality check that would otherwise need a human: choosing which walk cycle looks alive.
+Without them, the product can't exist. Turning one casual phone photo into a full, consistent set of animated poses of *your* pet used to need an illustrator or a 3D artist. SAM 3.1 and Muse Image do it in about 90 seconds, and Muse Wonder handles the quality check that would otherwise need a human: catching a wrong pose or a second tail, and choosing which walk cycle looks alive.
 
 Muse Spark is what turns a cute sprite into a companion. It understands what's on screen well enough to tell a failing test from noise, reacts in character, and gives a useful hint about the bug. Fast, low-cost calls keep the reactions feeling live, and Voice Transcribe makes talking to your pet natural.
 

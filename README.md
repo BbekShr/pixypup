@@ -75,7 +75,7 @@ Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia p
 |---|---|
 | 🎯 **SAM 3.1** (`sam-3.1`) | Cuts your pet cleanly out of the photo and tidies every pose. |
 | 🎨 **Muse Image** (`muse-image-1.0`) | Draws a consistent set of 3D poses from one photo, plus three candidate walk cycles of eight frames each. |
-| 🔍 **Muse Wonder** (`muse-wonder-1.0`) | Watches the drawn walk cycles and picks the most natural one. |
+| 🔍 **Muse Wonder** (`muse-wonder-1.0`) | Reviews every drawn pose (same pet, right pose, one tail) and sends misfits back to be redrawn; picks the most natural, even walk cycle. |
 | ⚡ **Muse Spark 1.3** (`muse-spark-1.3`) | Reads the failing test line (as quoted data, never as instructions), decides how to react, and writes his speech bubble and hints. |
 | 🎙️ **Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space. |
 
@@ -135,7 +135,7 @@ npm run site-js         # rebuild docs/js/puppet.js (the site's walk)
 On first launch a small welcome window offers to turn a photo of your dog or cat into a pet (right-click the pet, "Make a new pet…", any time). While the pet is drawn the photo melts into the cutout and poses pop in; at the end the window shrinks to the floor, the old pet trots off, and the new one drops in and says hi. Rehearse without a key: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` (dev builds only).
 
 ### Little moments
-Every pet walks on a drawn 8-frame cycle, one frame per measured stride so the feet don't slide. For a new pet, Muse Image draws three candidate walk cycles and Meta's Muse Wonder (`muse-wonder-1.0`) picks the most natural one during creation. Hover over your pet and it turns to look at you. Move the cursor back and forth over it to pet it: a happy wiggle and a few hearts. It yawns before a nap and stretches when it wakes. All of this is off when macOS "Reduce motion" is on.
+Every pet walks on a drawn 8-frame cycle, one frame per measured stride so the feet don't slide. For a new pet, Muse Image draws three candidate walk cycles and Meta's Muse Wonder (`muse-wonder-1.0`) picks the most natural one during creation; if none walks evenly, Muse Image draws another batch with its notes. The walk is timed by how far the legs move between frames, so no step limps. Muse Wonder also checks every pose against the photo and has any that fail redrawn. Hover over your pet and it turns to look at you. Move the cursor back and forth over it to pet it: a happy wiggle and a few hearts. It yawns before a nap and stretches when it wakes. All of this is off when macOS "Reduce motion" is on.
 
 ### Calm and control
 Right-click the pet (or use the menu bar icon) to Snooze it (1 hour, or until 8:00 tomorrow), change its Size (110/140/180 px) and Energy (sleepy/normal/playful), keep it in place, hide it from screen sharing (off by default), or open it at login (off by default). Choices persist in settings.json; a snoozed pet does no animation work at all. "Pet library" (pet menu or menu bar icon) lists the bundled pets not already on screen (Pakkun, Mochi, Kuma); picking one adds it and it persists across restarts. "PixyPup Overload!" (pet menu or menu bar icon) drops every saved and bundled pet, duplicated up to 24, over the screen for 25 seconds of cute chaos: it never takes a click, ends by itself, and "End the overload" in the menu bar stops it early.
