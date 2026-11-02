@@ -7,7 +7,7 @@ export type MenuItem =
   | { label: string; quit: true }
   | { label: string; submenu: MenuItem[] };
 
-export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; library?: { slug: string; name: string }[]; name: string }
+export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; library?: { slug: string; name: string }[]; name: string; hasKey?: boolean }
 
 const SIZE_LABELS: Record<Size, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 const ENERGY_LABELS: [Energy, string][] = [['sleepy', 'Sleepy'], ['normal', 'Normal'], ['playful', 'Playful']];
@@ -25,6 +25,8 @@ const libraryMenu = (o: Pick<MenuState, 'pets' | 'library'>): MenuItem[] => {
   return [{ label: 'Pet library', submenu: items.length ? items : [{ label: "Everyone's here", command: 'library:none', enabled: false }] }];
 };
 const talkItem = (name: string): MenuItem => ({ label: `Talk to ${name}…`, command: 'talk' });
+/** Tucked near the bottom: the key is optional, but it unlocks talk, hints, voice and new pets. */
+const keyItem = (has?: boolean): MenuItem => ({ label: has ? 'Change Meta key…' : 'Add Meta key for the full experience…', command: 'key' });
 const LOCKED = ' (set by your organisation)';
 
 /** Plain descriptors so the menu is testable without Electron; main.ts maps them to native items. */
@@ -47,6 +49,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     o.voiceLocked ? { label: `Listen for my voice${LOCKED}`, command: 'voice:off', checked: false, enabled: false } : toggle('Listen for my voice', 'voice', o.voice),
     toggle(`Show what ${o.name} sees`, 'debug', o.debug ?? false),
     toggle('Open at login', 'login', o.openAtLogin),
+    keyItem(o.hasKey),
     { label: 'Add another pet…', command: 'new-pet' },
     ...libraryMenu(o),
     ...sendHome(o.pets),
@@ -56,13 +59,14 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
   ];
 }
 
-export const trayMenuTemplate = (o: Pick<MenuState, 'snoozed' | 'name' | 'overload' | 'pets' | 'library'>): MenuItem[] => [
+export const trayMenuTemplate = (o: Pick<MenuState, 'snoozed' | 'name' | 'overload' | 'pets' | 'library' | 'hasKey'>): MenuItem[] => [
   talkItem(o.name),
   o.snoozed ? { label: `Wake up ${o.name}`, command: 'wake' } : SNOOZE,
   overloadItem(o.overload),
   { label: 'Add another pet…', command: 'new-pet' },
   ...libraryMenu(o),
   ...sendHome(o.pets),
+  keyItem(o.hasKey),
   { type: 'separator' },
   { label: 'Quit PixyPup', quit: true },
 ];

@@ -143,6 +143,9 @@ npm run site-js         # rebuild docs/js/puppet.js (the site's walk)
 ### Make your own pet
 On first launch a small welcome window offers to turn a photo of your dog or cat into a pet (right-click the pet, "Make a new pet…", any time). While the pet is drawn the photo melts into the cutout and poses pop in; at the end the window shrinks to the floor, the old pet trots off, and the new one drops in and says hi. Rehearse without a key: `PIXY_FAKE_PIPELINE=1 PIXY_FAKE_FAST=1 npm run dev` (dev builds only).
 
+### Your Meta key
+The bundled pets, tricks and Overload need no key. Talk replies, test-failure hints, voice commands and new pets from a photo use your own Meta API key. Making a pet asks for it; to add it without making one, right-click the pet (or the menu-bar icon) and choose "Add Meta key for the full experience…" ("Change Meta key…" once one is saved). One tiny Muse Spark call checks the key first: a key Meta refuses is never stored, and a good one is encrypted with your Mac's Keychain.
+
 ### Little moments
 Every pet walks on a drawn 8-frame cycle, one frame per measured stride so the feet don't slide. For a new pet, Muse Image draws three candidate walk cycles and Meta's Muse Wonder (`muse-wonder-1.0`) picks the most natural one during creation; if none walks evenly, Muse Image draws another batch with its notes. The walk is timed by how far the legs move between frames, so no step limps. Muse Wonder also checks every pose against the photo and has any that fail redrawn. Hover over your pet and it turns to look at you. Move the cursor back and forth over it to pet it: a happy wiggle and a few hearts. It yawns before a nap and stretches when it wakes. All of this is off when macOS "Reduce motion" is on.
 
