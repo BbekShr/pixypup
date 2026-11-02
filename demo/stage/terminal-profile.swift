@@ -9,7 +9,7 @@ func rgb(_ hex: Int, _ a: CGFloat = 1) -> Data {
   let c = NSColor(srgbRed: CGFloat(hex >> 16 & 255) / 255, green: CGFloat(hex >> 8 & 255) / 255, blue: CGFloat(hex & 255) / 255, alpha: a)
   return try! NSKeyedArchiver.archivedData(withRootObject: c, requiringSecureCoding: false)
 }
-let font = NSFont(name: "SFMono-Regular", size: 15) ?? NSFont.monospacedSystemFont(ofSize: 15, weight: .regular)
+let font = NSFont(name: "SFMono-Regular", size: 14) ?? NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
 
 // No coral or orange anywhere but the ANSI reds: the pet finds the failing line by its red pixels.
 let profile: [String: Any] = [
@@ -24,7 +24,7 @@ let profile: [String: Any] = [
   "ANSIBrightCyanColor": rgb(0x93E2E6), "ANSIBrightWhiteColor": rgb(0xFFFFFF),
   "Font": try! NSKeyedArchiver.archivedData(withRootObject: font, requiringSecureCoding: false),
   "FontAntialias": true, "UseBrightBold": true, "CursorType": 1, "CursorBlink": false,
-  "columnCount": 84, "rowCount": 33,
+  "columnCount": 86, "rowCount": 40,
   "WindowTitle": args[2], "ShowWindowSettingsNameInTitle": false, "ShowActiveProcessInTitle": false,
   "ShowActiveProcessArgumentsInTitle": false, "ShowCommandKeyInTitle": false, "ShowDimensionsInTitle": false,
   "ShowRepresentedURLInTitle": false, "ShowRepresentedURLPathInTitle": false, "ShowShellCommandInTitle": false,

@@ -16,6 +16,8 @@ whole take. The staging details behind each beat are in [DEMO.md](DEMO.md).
    - **Microphone**: macOS asks the first time you hold ⌥ Space. Click Allow.
    - **Terminal Automation**: macOS asks on the first sniff (step 4). Click Allow.
 3. **Set up the screen for recording:**
+   - Run `scripts/stage-demo.sh props` once, then set `demo/bin/wallpaper-dark-1440.png` as the built-in display's wallpaper (right-click it in Finder > Set Desktop Picture). Dark makes the cream pup stand out; a light version is there too.
+   - Record on the built-in display only. The demo Terminal always opens there; drag the call window there if Chrome opens it on another monitor.
    - Turn on Do Not Disturb, quit Slack, Mail and Messages, and hide desktop icons.
    - Use the built-in display. Terminal must be front-most and tall enough to show the red assertion.
    - Right-click the pet and turn on **Show what Pakkun sees**, so the debug card is in shot.
@@ -26,17 +28,17 @@ whole take. The staging details behind each beat are in [DEMO.md](DEMO.md).
    ```bash
    scripts/stage-demo.sh fail
    ```
-   He runs to the red line, sniffs, and barks a Muse Spark line. Click him for the hint.
+   He runs to the red line, sniffs, and barks a Muse Spark line. Click him for the hint (it should name the cap of 5 in `demo/treats.ts`). Terminal must stay the front app.
 
    ```bash
    scripts/stage-demo.sh fix
    ```
-   He rolls over and cheers.
+   The window shows the one-line fix, the test goes green, and he rolls over and cheers.
 
    ```bash
    scripts/stage-demo.sh badge
    ```
-   His ears perk up when the Badge Demo count rises.
+   Pack Chat sits in the Dock and its badge climbs. His ears perk up.
 
    ```bash
    scripts/stage-demo.sh call
@@ -46,6 +48,7 @@ whole take. The staging details behind each beat are in [DEMO.md](DEMO.md).
    ```bash
    scripts/stage-demo.sh reset
    ```
+   `reset` puts the treats bug back for the next take.
    If a reaction doesn't fire, the debug card says why. See "If a reaction does not fire" in DEMO.md.
 
 ## Part 2: record the clips (about 1 hour)

@@ -5,8 +5,9 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 case "${1:-}" in
   props) bash "$root/demo/stage/build.sh" && bash "$root/demo/stage/render.sh" ;;
-  fail) open "$root/demo/fail.command" ;;
-  fix) open "$root/demo/pass.command" ;;
+  fail|fix)  # opening a Terminal settings file runs it in a styled window, with no Automation prompt
+    bash "$root/demo/stage/build.sh" >/dev/null
+    [ "$1" = fail ] && open "$root/demo/bin/PixyPup Fail.terminal" || open "$root/demo/bin/PixyPup Fix.terminal" ;;
   badge)
     [ -d "$root/demo/bin/Pack Chat.app" ] || bash "$root/demo/badge/build.sh"
     open -g "$root/demo/bin/Pack Chat.app" ;;  # -g: stays behind, the badge climbs while you work
