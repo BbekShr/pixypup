@@ -101,7 +101,16 @@ Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia p
 
 1. [Download `PixyPup-0.1.0-arm64.dmg`](https://github.com/BbekShr/pixypup/releases/latest/download/PixyPup-0.1.0-arm64.dmg) (all builds are on [Releases](https://github.com/BbekShr/pixypup/releases)) and open it. Or [build it yourself](#build): `npm run dist` writes it to `release/`.
 2. Drag Pakkun onto the Applications folder ("Drag me home").
-3. **First open only:** open PixyPup once (macOS refuses it), then go to System Settings → Privacy & Security and click **Open Anyway**. It's an indie app, self-signed and not notarised by Apple yet. After that it opens normally.
+3. **First open only:** macOS says *"PixyPup" Not Opened: Apple could not verify "PixyPup" is free of malware*. That's expected: it's an indie app, self-signed and not notarised by Apple yet.
+   - Click **Done** (not Move to Trash).
+   - Open System Settings → Privacy & Security, scroll down to *"PixyPup" was blocked*, click **Open Anyway**, and confirm with your password or Touch ID.
+   - Open PixyPup again. From now on it opens normally.
+
+   Prefer Terminal? This does the same thing:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/PixyPup.app
+   ```
 
 There's no Dock icon: look for your pet on the desktop floor and the menu bar icon.
 
