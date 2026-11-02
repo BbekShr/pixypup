@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'" />
+    <title>Meta key</title>
+  </head>
+  <body data-step="welcome">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="paw" viewBox="0 0 32 32">
+        <ellipse cx="16" cy="21" rx="8" ry="6.5" /><ellipse cx="6" cy="13" rx="3.2" ry="4.2" /><ellipse cx="12.5" cy="7.5" rx="3.2" ry="4.4" /><ellipse cx="19.5" cy="7.5" rx="3.2" ry="4.4" /><ellipse cx="26" cy="13" rx="3.2" ry="4.2" />
+      </symbol>
+    </svg>
+    <main class="card">
+      <header>
+        <span class="brand"><svg class="ico"><use href="#paw" /></svg>PixyPup</span>
+        <button class="x" id="close" aria-label="Close" title="Close">&times;</button>
+      </header>
+      <div class="stage">
+        <section class="step" data-step="welcome">
+          <img class="hero bob" id="hero" alt="" style="width: 104px" />
+          <h1 id="title">The full experience</h1>
+          <p class="lead" id="what"></p>
+          <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your API key" aria-label="Meta API key" />
+          <p class="note" id="msg" role="status" aria-live="polite"></p>
+          <p class="small soft">Encrypted with your Mac's Keychain, never stored in plain text. It goes only to Meta's API.</p>
+          <button class="link" id="getkey">Get a key at dev.meta.ai</button>
+          <div class="actions">
+            <button class="btn ghost" id="later">Not now</button>
+            <button class="btn primary" id="save" disabled>Save key</button>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./key.ts"></script>
+  </body>
+</html>

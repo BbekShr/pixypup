@@ -26,6 +26,7 @@ import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
 import { startScreenLoop } from './screen-loop';
 import { setupScreenExplainer } from './screen-explainer';
+import { setupKeyWindow } from './key-window';
 import { setupTalkWindow } from './talk-window';
 import { toOverlayPoint } from '../overlay/behavior';
 import { getApiKey } from './secrets';
@@ -149,6 +150,7 @@ function toNative(items: MenuItem[], run: (cmd: string) => void): MenuItemConstr
 
 let settings = loadSettings(); // TODO(F1): feed settings to feature gates
 /** What the user called their pet (manifest), not the folder slug in settings. */
+const hasKey = (): boolean => { try { return !!getApiKey(); } catch { return false; } };
 const displayName = (): string => petNames.get(primarySlug()) ?? settings.petName; // the primary's own name, boosted as a speech keyword
 const speciesOf = (): string | undefined => petSpecies.get(primarySlug()); // so Spark's lines suit the pet
 const nameOf = (slug: string): string => petNames.get(slug) ?? slug;
@@ -157,6 +159,7 @@ let onboarding: ReturnType<typeof setupOnboarding>;
 let overload: ReturnType<typeof setupOverload> | undefined;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
 let voiceExplainer: ReturnType<typeof setupScreenExplainer>;
+let keyWin: ReturnType<typeof setupKeyWindow> | undefined;
 let voice: ReturnType<typeof createVoiceSession>;
 let talk: ReturnType<typeof setupTalkWindow>;
 let micWin: ReturnType<typeof setupMic>;
@@ -189,6 +192,7 @@ function sync(): void {
   for (const [slug, w] of wins) if (!w.isDestroyed()) { w.webContents.send(IPC.prefs, prefs(s, slug)); w.setContentProtection(settings.hideInShares); }
   onboarding.applyProtection();
   talk?.applyProtection();
+  keyWin?.applyProtection();
   clearTimeout(wakeTimer);
   // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
   if (s) wakeTimer = setTimeout(sync, Math.min(MAX_TIMER, Math.max(0, (settings.snoozeUntil ?? 0) - Date.now()) + 50));
@@ -200,7 +204,7 @@ function sync(): void {
   const mine = petIcons.get(primarySlug());
   tray?.setImage((s ? (mine?.dim ?? trayIconDim) : (mine?.icon ?? trayIcon)) ?? nativeImage.createEmpty());
   tray?.setToolTip(`PixyPup \u00b7 ${nameOf(primarySlug())}`);
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets(), library }), run)));
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets(), library, hasKey: hasKey() }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
@@ -213,6 +217,7 @@ function run(cmd: string, from?: BrowserWindow): void {
     primary()?.webContents.send(IPC.debug, { on: debugOn, name: displayName() });
     return;
   }
+  if (cmd === 'key') { keyWin?.open(); return; }
   if (cmd === 'talk') {
     if (snoozed()) run('wake');
     talk.open();
@@ -374,6 +379,7 @@ void app.whenReady().then(async () => {
   overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
   voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });
+  keyWin = setupKeyWindow({ name: displayName, settings: loadSettings, getHideInShares: () => settings.hideInShares, onSaved: sync });
   talk = setupTalkWindow({
     name: displayName,
     species: speciesOf,
@@ -428,7 +434,7 @@ void app.whenReady().then(async () => {
   ipcMain.on(IPC.showMenu, (e) => {
     const win = winOf(e);
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library, name: displayName() }), (c) => run(c, win));
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library, name: displayName(), hasKey: hasKey() }), (c) => run(c, win));
     if (devRendererUrl()) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); } });
