@@ -1,7 +1,7 @@
 import '../ui/tokens.css';
 import './onboarding.css';
 import { copyLines, nextCopy, ribbonFraction } from './birth';
-import sitUrl from '../../assets/pets/Pakkun/sit.png';
+import sitUrl from '../../assets/pets/Kuma/sit.png';
 import type { CreateResult, FactView, Personality, PhotoResult, Progress } from '../main/onboarding-preload';
 import type { Run } from '../main/run-state';
 import { advance, initialFlow, speciesIssue, type Code, type Flow, type FlowEvent } from './flow';
@@ -238,7 +238,7 @@ window.pixyOb.onPersonality((p) => { if (flow.step === 'making') showPersonality
 window.pixyOb.onFacts((f) => { facts = f; });
 
 $('hero').setAttribute('src', sitUrl);
-// Closing the welcome is the same as "Keep Pakkun for now": the app never nags.
+// Closing the welcome is the same as "Keep Kuma for now": the app never nags.
 $('close').addEventListener('click', () => (flow.step === 'welcome' ? window.pixyOb.keep() : window.pixyOb.close()));
 $('start').addEventListener('click', () => go({ t: 'start' }));
 $('keep').addEventListener('click', () => window.pixyOb.keep());
