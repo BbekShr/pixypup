@@ -698,7 +698,7 @@ footer a { color: var(--ink-2); }
     <article class="panel moment"><h3>Yawns before a nap, stretches after</h3><img src="img/pakkun/sleep.webp" alt="" loading="lazy"></article>
     <article class="panel moment"><h3>A drawn 8-frame walk. Feet never slide.</h3><img src="img/kuma/side_3.webp" alt="" loading="lazy"></article>
     <article class="panel moment"><h3>Blinks, sits, barks, rolls over</h3><img src="img/pakkun/roll.webp" alt="" loading="lazy"></article>
-    <article class="panel moment"><h3>Drag him anywhere. He never steals a click.</h3><img src="img/mochi/sit.webp" alt="" loading="lazy" style="--s:1.5"></article>
+    <article class="panel moment"><h3>Drag him anywhere. He never steals a click.</h3><img src="img/mochi/sit.webp" alt="" loading="lazy" style="--s:1.1"></article>
   </div>
   <div class="wrap rail-nav"><button type="button" id="railPrev" aria-label="Previous moments" disabled><i class="ph ph-arrow-left"></i></button><button type="button" id="railNext" aria-label="More moments"><i class="ph ph-arrow-right"></i></button></div>
 </section>
@@ -709,7 +709,7 @@ footer a { color: var(--ink-2); }
     <p class="lede rv" style="--d:.06s">Open <b>Pet library</b> from any pet's right-click menu and add Mochi or Kuma. They stick around after a restart, and they all join the Overload.</p>
     <div class="trio">
       <button class="who rv" data-who="img/pakkun/"><div class="spot"><img src="img/pakkun/sit.webp" alt="Pakkun the golden retriever, sitting proudly"></div><b>Pakkun</b><span>Good boy. Founding member.</span></button>
-      <button class="who rv" style="--d:.08s" data-who="img/mochi/"><div class="spot"><img src="img/mochi/sit.webp" alt="Mochi the cat, sitting with perfect posture" style="scale:1.45"></div><b>Mochi</b><span>Unbothered. Will still sit on your cursor.</span></button>
+      <button class="who rv" style="--d:.08s" data-who="img/mochi/"><div class="spot"><img src="img/mochi/sit.webp" alt="Mochi the cat, sitting with perfect posture" style="scale:1.1"></div><b>Mochi</b><span>Unbothered. Will still sit on your cursor.</span></button>
       <button class="who rv" style="--d:.16s" data-who="img/kuma/"><div class="spot"><img src="img/kuma/sit.webp" alt="Kuma the red Shiba Inu, sitting and smiling"></div><b>Kuma</b><span>Fox-faced, full of opinions.</span></button>
     </div>
   </div>
@@ -803,7 +803,7 @@ document.documentElement.classList.add("js");
   PETS.forEach(q => all.forEach(n => { new Image().src = q.d + n + '.webp'; }));
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Mochi's standing art fills ~65% of its canvas and Kuma's ~88%, Pakkun's ~98%: scale so they read the same size
-  const boost = src => /mochi\/(idle|sit|bark|side)/.test(src) ? 1.5 : /kuma\/(idle|sit|bark|side)/.test(src) ? 1.1 : 1;
+  const boost = src => /mochi\/side/.test(src) ? 1.35 : /mochi\/(idle|sit|bark)/.test(src) ? 1.15 : 1;
 
   // the app's own walk maths (js/puppet.js, built from src/overlay/stride.ts + motion.ts): drawn frames, one per measured stride of distance walked
   const K = window.PixyPuppet;
