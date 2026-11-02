@@ -3,7 +3,7 @@
 ## Privacy
 - Screen awareness is off by default. When it is off, PixyPup makes zero network calls.
 - No telemetry, analytics, or crash reporting.
-- API keys are stored in the macOS Keychain via Electron `safeStorage`. They are never written in plaintext.
+- API keys are encrypted with Electron `safeStorage`, whose key is held in the macOS Keychain. They are never written in plaintext.
 - The full screen is never captured. Only a crop of a terminal window is grabbed, held in memory, and discarded.
 - Model access uses the Standard paid tier only. The `-contributor` models are never used because they allow training on your data.
 - Offline mode (`offline: true`, set by an admin) blocks all background model calls (screen awareness and voice) and Talk to <pet>. By default it is off, but with screen awareness and voice off (their defaults) PixyPup makes no background network calls anyway.
