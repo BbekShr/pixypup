@@ -11,9 +11,6 @@
 - Validating a policy file: a dropped invalid key is a failure, not a no-op. Never decide "missing" with `existsSync` (false on EACCES); read and treat only ENOENT as missing (B2/B3, `src/main/settings.ts`).
 - Fail-closed tests need an fs mock that can throw ENOENT and EACCES, or they only prove what the mock can express (B2/B3).
 - Muse Spark: use `strict: true` schemas (strict:false garbled keys live); with web_search on, extract the last JSON object from narrated text; JSON output carries no url_citation annotations, so ground sources against web_search_call results (F18).
-- Side tasks that must not outlive a pipeline share one AbortController aborted in a catch around the main stage; bound how long the main result waits for them (F18).
-- Live end-to-end runs with the real model find what unit tests can't (lost first word, name not boosted): every Meta-integrated feature gets one real-key run through the app path, not just the client (F8).
-- Reset per-session handles at the top of start(); attach abort listeners before awaiting a handshake (F8).
 - The CSS transform origin is also the `scale(flip)` mirror axis: never move it to pivot; keep it and add a translation (`pivotShift`). A hard clamp that zeroes velocity reads as a wall: soften the dynamics, keep the clamp as a safety stop (F21).
 - Click-through (`setIgnoreMouseEvents`) can't be observed over CDP; judge a first-frame jump by translate minus pointer motion, not the raw delta (F21).
 - Briefs for editors in a shared tree: commit by explicit path, never `git add -A`; the worktree-isolation hook blocks writes outside the session's own worktree, and `isolation: worktree` agents start from origin/main (cherry-pick their commits) (F25).
@@ -31,6 +28,8 @@
 - Electron has no CDP `Browser.getWindowForTarget/setWindowBounds`: window-resize behaviour needs a unit-tested clamp or a manual resize. After `Page.crash` the target keeps its id: poll by URL and reconnect (deep-stable 2026-11-02).
 - Normalise model JSON at the parse boundary (strings capped, numbers finite) before it is reused in a prompt or a threshold (deep-stable 2026-11-02, walk-judge/pose-review).
 - A key-shape check is ASCII-printable `[\x21-\x7e]`, never `\S`, and the renderer's copy must match main's (deep-stable 2026-11-02, pet-input/key.ts).
+- Verify launches use an isolated `--user-data-dir` with `{"onboarded": true}` and `MODEL_API_KEY` unset: the maintainer's real profile has screen-aware and voice on, which breaks the zero-network check (request 2026-11-03).
+- Native `Menu.popup()` and the OS cursor can't be seen over CDP: proof is the `[menu] popup` log + no exception, unit tests on the template, and a by-eye check you say is still owed (request 2026-11-03).
 
 ## Archive
 - Prefs that mirror OS settings (login item) write to the OS only on the explicit user action, never from a general sync (F16).
@@ -56,3 +55,6 @@
 - Reviewers stay read-only: never `git checkout`/`switch` in the shared tree, even detached (F5a reviewer slip).
 - A multi-phase sequence that owns the pet gates every input (menu, pointer) on a pure busy(phase) predicate and queues the last command (F5b `src/overlay/handoff.ts`).
 - Reduced motion: never `animation-duration:1ms` on infinite animations without `animation-iteration-count:1` (strobe); WAAPI loops need their own check.
+- Side tasks that must not outlive a pipeline share one AbortController aborted in a catch around the main stage; bound how long the main result waits for them (F18).
+- Live end-to-end runs with the real model find what unit tests can't (lost first word, name not boosted): every Meta-integrated feature gets one real-key run through the app path, not just the client (F8).
+- Reset per-session handles at the top of start(); attach abort listeners before awaiting a handshake (F8).

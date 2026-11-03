@@ -65,6 +65,16 @@ const STRIDE = FALLBACK_STRIDE; // of displayed (idle) width per walk frame when
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const img = document.getElementById('pup') as HTMLImageElement;
 const fx = document.getElementById('fx') as HTMLDivElement;
+// macOS only lets the frontmost app change the cursor, so a paw rides beside the pointer instead.
+const paw = document.getElementById('paw') as HTMLDivElement;
+// Near the floor or right edge the paw flips to the other side of the pointer so it never leaves the window.
+const pawAt = (e: MouseEvent): void => {
+  const px = e.clientX + 14 + 22 > innerWidth ? e.clientX - 14 - 22 : e.clientX + 14;
+  const py = e.clientY + 16 + 22 > innerHeight ? e.clientY - 8 - 22 : e.clientY + 16;
+  paw.style.transform = `translate(${px}px, ${py}px)`;
+};
+const pawHide = (): void => paw.classList.remove('on');
+const pawBounce = (): void => { if (!calm) paw.firstElementChild?.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35) rotate(-12deg)' }, { transform: 'scale(1)' }], 260); };
 
 const keep: HTMLImageElement[] = []; // decoded bitmaps live as long as the pack so swapping src never re-decodes
 
@@ -670,6 +680,8 @@ function frame(now: number): void {
 img.addEventListener('mouseenter', (e) => {
   if (resting) return; // snooze fade: click-through stays on until the img is hidden
   window.pixy.setClickThrough(false);
+  pawAt(e);
+  paw.classList.add('on');
   hoverSide = e.clientX >= x + W / 2 ? 1 : -1;
   if (!microOk()) return;
   hovering = true;
@@ -677,6 +689,7 @@ img.addEventListener('mouseenter', (e) => {
   perkAt = performance.now();
 });
 img.addEventListener('mouseleave', () => {
+  pawHide();
   hovering = false;
   samples = [];
   if (!dragging) window.pixy.setClickThrough(true);
@@ -702,11 +715,13 @@ function pet(now: number): void {
   samples = [];
   lastInteraction = now;
   wg = { at: now, dur: WIGGLE_MS, cycles: 3 };
+  pawBounce();
   const n = 2 + Math.floor(Math.random() * 2);
   for (let i = 0; i < n; i++) setTimeout(heart, i * 160);
   if (Math.random() < 0.3 && quiet(now, speakingUntil)) speakLine();
 }
 img.addEventListener('pointermove', (e) => {
+  if (!resting) { pawAt(e); paw.classList.add('on'); } // moves only arrive over the pet, so a missed mouseenter still shows the paw
   if (dragging || !microOk()) return;
   const now = performance.now();
   samples.push({ x: e.clientX, t: now });
@@ -754,6 +769,7 @@ img.addEventListener('pointerdown', (e) => {
   vx = 0;
   lastInteraction = downAt;
   img.setPointerCapture(e.pointerId);
+  pawBounce();
   setState('dragStart');
 });
 img.addEventListener('pointermove', (e) => {
@@ -796,7 +812,7 @@ function finish(e: PointerEvent): void {
   if (lift < 0 || Math.abs(t.vx) > 60) { falling = true; vx = t.vx; vy = t.vy; if (Math.abs(vx) > 200) dir = Math.sign(vx); }
   if (act?.kind === 'hide') { act.phase = 'go'; setState('walk', { target: act.spot }); } // poked out of hiding: go back
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
-  if (!img.matches(':hover')) window.pixy.setClickThrough(true);
+  if (!img.matches(':hover')) { window.pixy.setClickThrough(true); pawHide(); }
   applyRest();
   if (pendingSwap) { const q = pendingSwap; pendingSwap = null; swapPets(q.pack, q.cx); }
 }
@@ -875,6 +891,7 @@ function applyRest(): void {
   if (resting) {
     cancelAnimationFrame(raf);
     document.body.style.opacity = '0';
+    pawHide();
     window.pixy.setClickThrough(true);
     restTimer = setTimeout(() => {
       img.style.display = 'none'; // no hover target while snoozed
