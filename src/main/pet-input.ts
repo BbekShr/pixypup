@@ -66,6 +66,8 @@ export const checkKey = (k: unknown): k is string => typeof k === 'string' && /^
 export function errorCode(err: unknown): ErrorCode {
   if (err instanceof MetaApiError && (err.status === 401 || err.status === 403)) return 'bad-key';
   if (err instanceof NoPetFoundError) return 'no-pet-found';
+  // pose-pipeline marks its own per-attempt timeout; the network is fine then, the generation was just too slow (no timeout code exists).
+  if ((err as { timedOut?: boolean } | null)?.timedOut === true) return 'generation-failed';
   // fetch rejects with TypeError('fetch failed', {cause}) when offline; any other TypeError is our own bug.
   if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError' || (err instanceof TypeError && (err.cause != null || /fetch failed/i.test(err.message))))) return 'network';
   return 'generation-failed';

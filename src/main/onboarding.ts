@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { dataUrl, generateSpritePack, type PipelineEvent } from '../api/pose-pipeline';
 import { openClient } from '../api/gate';
+import { MetaApiError } from '../api/meta-client';
 import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
 import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, reuseOnboardingWindow, slugify, type ErrorCode } from './pet-input';
@@ -134,7 +135,10 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
 
   ipcMain.handle(IPC.createPet, async (e, args: unknown): Promise<{ ok: true; name: string } | { ok: false; code: ErrorCode | 'busy' }> => {
     const a = checkCreateArgs(args);
-    if (!ours(e) || !a || !photoBuf) return { ok: false, code: 'generation-failed' };
+    if (!ours(e) || !a || !photoBuf) {
+      console.warn('PixyPup: createPet rejected (bad sender, bad args, or no photo)');
+      return { ok: false, code: 'generation-failed' };
+    }
     const key = apiKey();
     if (!key || (fake && key.startsWith('bad'))) {
       pendingKey = undefined;
@@ -204,6 +208,8 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
       if (!win || win.isDestroyed()) sendHandoff();
       result = { ok: true, name: a.name, ...(idle ? { idle } : {}) };
     } catch (err) {
+      // Name and status only: messages and bodies can echo API content.
+      console.warn('PixyPup: createPet failed:', err instanceof Error ? err.name : typeof err, err instanceof MetaApiError ? err.status : '');
       if (errorCode(err) === 'bad-key') pendingKey = undefined;
       result = { ok: false, code: errorCode(err) };
     } finally {
