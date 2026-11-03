@@ -32,7 +32,7 @@ PixyPup is my entry in the **Meta Global AI Developer Hackathon 2026**, Indie De
 
 ## 🐶 What is this?
 
-PixyPup puts a tiny, very good pup on your Mac. Meet **Pakkun**: he lives along the bottom of your screen. He walks on a transparent, click-through layer, so he never gets in the way of your work. Pet him and he wiggles. Click him and he sits, barks, and rolls over. Hover him and a little pink paw rides beside your pointer. Right-click him for *🎾 Tricks → Do a trick* or *Zoomies!*, a sprint to the far edge of your screen and back. Leave him alone and he yawns, curls up, and naps.
+PixyPup puts a tiny, very good pup on your Mac. Meet **Pakkun**: he lives along the bottom of your screen. He walks on a transparent, click-through layer, so he never gets in the way of your work. Pet him and he wiggles. Click him and he sits, barks, and rolls over. Hover him and a little black paw rides beside your pointer. Right-click him for *🎾 Tricks → Do a trick* or *Zoomies!*, a sprint to the far edge of your screen and back. Leave him alone and he yawns, curls up, and naps.
 
 Then the magic part: **give him a photo of _your_ pet**, and a few minutes later your own dog or cat is the one trotting across your Mac.
 

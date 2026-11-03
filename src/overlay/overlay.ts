@@ -721,7 +721,7 @@ function pet(now: number): void {
   if (Math.random() < 0.3 && quiet(now, speakingUntil)) speakLine();
 }
 img.addEventListener('pointermove', (e) => {
-  if (!resting) pawAt(e);
+  if (!resting) { pawAt(e); paw.classList.add('on'); } // moves only arrive over the pet, so a missed mouseenter still shows the paw
   if (dragging || !microOk()) return;
   const now = performance.now();
   samples.push({ x: e.clientX, t: now });
