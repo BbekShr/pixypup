@@ -42,7 +42,7 @@ function parse(m: unknown): TalkReply | null {
 function fit(): void {
   input.style.height = 'auto';
   input.style.height = `${Math.min(input.scrollHeight + 4, 106)}px`; // +4: the 2px borders
-  input.classList.toggle('multi', input.scrollHeight > 24);
+  input.classList.toggle('multi', input.scrollHeight > 42);
   input.scrollTop = input.scrollHeight;
 }
 input.addEventListener('input', fit);
