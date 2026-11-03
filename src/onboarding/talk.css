@@ -21,9 +21,13 @@ header { cursor: default; }
 
 .help { align-self: stretch; padding: 12px 14px; border-radius: 16px; background: rgba(191, 227, 242, .6); box-shadow: 0 0 0 1.5px var(--sky) inset; font-weight: 600; font-size: 14px; animation: msg-in var(--slow) var(--pop) backwards; }
 
-.bar { display: flex; gap: 8px; padding: 6px 14px 0; flex: none; }
-.bar input[type="text"] { flex: 1; max-width: none; min-width: 0; text-align: left; font: 500 15px var(--font); padding: 11px 16px; }
-.send { padding: 0 20px; }
+.bar { display: flex; align-items: flex-end; gap: 8px; padding: 6px 14px 0; flex: none; }
+/* 1 line = 46px (pill), grows to 4 lines = 106px then scrolls; talk.ts sets the height. */
+.bar textarea { flex: 1; min-width: 0; box-sizing: border-box; height: 46px; max-height: 106px; resize: none; display: block; font: 500 15px/20px var(--font); color: var(--ink); text-align: left; background: #fff; border: 2px solid var(--cream-deep); border-radius: var(--pill); padding: 11px 16px; user-select: text; -webkit-user-select: text; transition: border-color var(--fast), box-shadow var(--fast); }
+.bar textarea.multi { border-radius: 20px; }
+.bar textarea:focus { outline: none; border-color: var(--blush); box-shadow: 0 0 0 4px rgba(244, 166, 160, .3); }
+.bar textarea::placeholder { color: rgba(59, 47, 42, .3); font-weight: 500; }
+.send { padding: 0 20px; height: 46px; }
 .fine { margin: 6px 0 0; text-align: center; font-size: 11px; color: var(--ink-soft); flex: none; }
 
 .banner { display: flex; align-items: center; gap: 8px; margin: 0 18px 6px; padding: 6px 10px; border-radius: 12px; background: rgba(255, 255, 255, .55); font-size: 12px; color: var(--ink-soft); flex: none; }

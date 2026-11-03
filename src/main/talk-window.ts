@@ -63,11 +63,12 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
       return false;
     }
   };
-  // 'usable' = ⌥ Space works now; 'can-enable' = the menu can turn it on; 'none' = admin-locked or offline.
-  const voiceState = (keyed: boolean): 'usable' | 'can-enable' | 'none' => {
+  // 'usable' = ⌥ Space works now; 'can-enable' = the menu can turn it on; 'needs-key' = voice is on but there is no key; 'none' = admin-locked or offline.
+  const voiceState = (keyed: boolean): 'usable' | 'can-enable' | 'needs-key' | 'none' => {
     const s = d.settings();
     if (s.voice && !s.offline && keyed) return 'usable';
-    return s.offline || voiceLockedByAdmin() ? 'none' : 'can-enable';
+    if (s.offline || voiceLockedByAdmin()) return 'none';
+    return s.voice ? 'needs-key' : 'can-enable';
   };
   ipcMain.handle(IPC.talkInfo, (e) => (mine(e) ? { name: d.name(), avatar: d.avatar() ?? null, hasKey: hasKey(), voice: voiceState(hasKey()) } : null));
   ipcMain.on(IPC.talkOpenKey, (e) => { if (mine(e)) d.openKey(); });
