@@ -94,6 +94,7 @@ describe('renaming a pet', () => {
     const n = withName(undefined, 'Kuma', 'Bear', 'Kuma');
     expect(n).toEqual({ kuma: 'Bear' });
     expect(nameFor(n, 'KUMA')).toBe('Bear');
+    for (const k of ['constructor', 'toString', '__proto__']) expect(nameFor(n, k)).toBeUndefined();
     expect(withName(n, 'Kuma', 'Kuma', 'Kuma')).toEqual({});
     expect(withName(n, 'milo', 'Biscuit', 'Milo')).toEqual({ kuma: 'Bear', milo: 'Biscuit' });
   });

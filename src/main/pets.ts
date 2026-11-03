@@ -50,7 +50,7 @@ export function routeReaction<B extends Reaction>(slugs: string[], b: B): [strin
  */
 export type PetNames = Record<string, string>;
 
-export const nameFor = (names: PetNames | undefined, slug: string): string | undefined => names?.[slug.toLowerCase()];
+export const nameFor = (names: PetNames | undefined, slug: string): string | undefined => names && Object.hasOwn(names, slug.toLowerCase()) ? names[slug.toLowerCase()] : undefined;
 
 /** The map with `slug` called `name`; giving a pet back its own manifest name drops the entry. */
 export function withName(names: PetNames | undefined, slug: string, name: string, original: string): PetNames {
