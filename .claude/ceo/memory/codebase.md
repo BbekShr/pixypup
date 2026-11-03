@@ -58,3 +58,8 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 
 ## Clean audits (so discovery skips these grounds)
 - 2026-11-01 (deep @c153195, security): network choke point (`openClient` + architecture test), key handling (header/WS first frame only; UI gets codes only), IPC sender checks and slug/path validation, preload surfaces, packaging `build.files`, subprocesses (execFile arg arrays) — all clean.
+- 2026-11-02 (deep-stable): pet-window crash → `load(false)` reload, max 3 per rolling 60 s, `clean-exit` ignored (`src/main/main.ts:96-101`); recovers in 114-272 ms on the SAME CDP target id. Aux windows (talk, key, screen-explainer, onboarding) destroy themselves on `render-process-gone` like `mic.ts:52`; their IPC guards reject a stale sender.
+- 2026-11-02 (deep-stable): `process.on('unhandledRejection')` in `src/main/main.ts` logs the error name only; no `uncaughtException` handler exists.
+- 2026-11-02 (deep-stable): `__pixyDebug.behave({action:'talk',mood:'listen'})` drives talk → stay (sit) with no target; `__pixyDebug.command(cmd)` is the same `command()` the menu IPC reaches (`src/overlay/overlay.ts`). Zoomies end = `act === null`, not a state.
+- 2026-11-02 (deep-stable): Spark never picks behaviours at runtime: rules in `src/screen/decide.ts` pick the action, Spark only writes bubbles/hints (doc drift vs RULES.md wording).
+- 2026-11-02 (deep-stable): `src/screen/reader.ts` is the only Dock-badge baseline owner; an empty map never replaces a non-empty baseline.

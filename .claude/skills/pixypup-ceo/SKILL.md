@@ -179,6 +179,7 @@ For each selected item, sequentially unless the items' files are disjoint:
    playbook if it's installed), the proving-test requirement, and the cheap gates.
    Hard item: dispatch the built-in `Plan` agent at `fable` (read-only) for a plan, check each acceptance criterion maps to a step and a verification, then hand the plan verbatim to the owning editor at `sonnet`. For F3 (pose pipeline) and F7 (behaviour + coordinate mapping), stop after the plan and put it in front of the maintainer before building.
 3. Parallel editors on disjoint items each get `isolation: "worktree"` and run only cheap gates.
+4. Editors can't stage hunks (`git add -p` is interactive): items that share a file may share a commit, and the message names every item.
 
 ### 4. Review ∥ QA (one message)
 Launch together: the built-in `/code-review` pass on the diff (correctness lens; this small org has no reviewer agent) plus `pixypup-security-engineer` on the diff whenever it touches the security surface (`src/main/**`, `src/api/**`, `src/screen/**`, `src/voice/**`, `native/**`, `package.json`) AND `pixypup-release-manager` with the feature-specific check

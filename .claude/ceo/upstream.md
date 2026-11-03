@@ -40,3 +40,12 @@ Entry format:
 - evidence: PixyPup deep 2026-11-02: RM GO at 9fff607; the maintainer's screenshots then showed clipping; the probe measured scrollHeight 483 > clientHeight 464 and a bottom of 585 > innerHeight 560.
 - proposed change: for any org whose kind has a UI, generate a "Window/UI changes" step: screenshot every touched view in each state for the CEO to open, plus an overflow probe (visible elements outside the viewport, overflow:auto containers with scrollHeight > clientHeight, truncated inputs, spare ≥ 12 px).
 - local workaround: added that step to .claude/skills/pixypup-verify/SKILL.md.
+
+## 2026-11-02 "one logical change per commit" collides with editors that cannot stage hunks
+- status: new
+- agent-org version: 0.1.0
+- template: skills/org-init/templates/skills/ceo/SKILL.md (Decide: "one logical change per commit"; Build step)
+- what happened: a deep run batched six items to one editor. Several items shared a file (main.ts, overlay.ts), and the editor has no interactive `git add -p`, so it fell back to one commit per file group and reported the deviation.
+- evidence: PixyPup deep-stable 2026-11-02, commits c19983b and 240fdee each carry 2-3 items.
+- proposed change: the Build step's brief template says "items sharing a file may share a commit; name every item in the message", or tells the CEO to dispatch shared-file items sequentially.
+- local workaround: line added to this skill's Build step.
