@@ -9,7 +9,6 @@ Status: `open` · `in-progress` · `in-review (PR #n)` · `blocked: <why>` · `d
 
 ## Needs a human
 <!-- decisions, deploys, migrations, secrets: with the exact command or question -->
-- Decide: should admin `offline` also block create-pet? Today `openClient('create-pet')` ignores `offline` by design (`src/api/gate.ts:26-28`, docs/ENTERPRISE.md:32) and the onboarding handler has no check; if intended, say so in ENTERPRISE.md (protected).
 - Demo note: a pet falls asleep 60 s after the last interaction (30 s on Sleepy energy) and never wakes on its own (`src/main/prefs.ts:31-33`, `src/overlay/state.ts`). Playful waits 3 min. Before going on stage, click the pet or set Energy to Playful.
 - B24 (protected `src/api/meta-client.ts:88-90`): replace `yield JSON.parse(data) as StreamEvent;` with `try { yield JSON.parse(data) as StreamEvent; } catch { /* keep-alive or non-JSON line: skip */ }`.
 - Backlog has two rows with ID F29 (cute walk, done; foot-slip check, open): renumber the open one.

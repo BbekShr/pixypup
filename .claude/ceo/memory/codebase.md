@@ -73,4 +73,4 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 - 2026-11-03 (deep-stable-2): helper `micApps()` on macOS < 14 reports `["unknown"]` (native/pixyhelper.swift:108-128); decide.ts treats that as "media can't attribute the mic".
 - 2026-11-03 (deep-stable-2): energy sleepAfterMs: sleepy 30 s, normal 60 s, playful 180 s; sleep has no dwell (src/main/prefs.ts:30-34).
 - 2026-11-03 (deep-stable-2): overlay renderer crash recovers in ~200-400 ms on the same CDP target id; JS heap flat over 12 command cycles; zero non-loopback sockets with screen-aware/voice off.
-
+- 2026-11-03 (maintainer decision, PR #59): admin `offline` does NOT block create-pet; it stays a user-initiated exception as docs/ENTERPRISE.md says. Don't "fix" `openClient('create-pet')` (src/api/gate.ts:26-28).
