@@ -13,7 +13,7 @@ const sub = (t: MenuItem[], label: string): MenuItem[] => {
 describe('petMenuTemplate', () => {
   it('has the agreed top level, short, with Quit last', () => {
     const t = petMenuTemplate(base);
-    expect(labels(t)).toEqual(['🎾 Tricks', '👋 Come here', '💬 Talk to Pakkun…', '-', '💤 Snooze', '📌 Stay here', '🐾 Pets', '⚙️ Settings', '-', 'Quit PixyPup']);
+    expect(labels(t)).toEqual(['🎾 Tricks', '👋 Come here', '💬 Talk to Pakkun…', '🎉 PixyPup Overload!', '-', '💤 Snooze', '📌 Stay here', '🐾 Pets', '⚙️ Settings', '-', 'Quit PixyPup']);
     expect(t.length).toBeLessThanOrEqual(11);
     expect(t.at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
   });
