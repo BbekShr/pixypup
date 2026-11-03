@@ -31,6 +31,7 @@ export interface TalkDeps {
 export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: string): void; applyProtection(): void } {
   let win: BrowserWindow | null = null;
   let history: Turn[] = [];
+  let localTurns = 0; // keyless replies given in this chat: they cycle instead of repeating
   let ctl = new AbortController(); // per window: closing the chat cancels what is still in flight
   const mine = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean => !!win && !win.isDestroyed() && e.sender === win.webContents;
 
@@ -47,7 +48,7 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
       } catch {
         r = null; // blocked by the gate or the call failed: the local line keeps the chat alive
       }
-      r ??= localReply(text, d.species());
+      r ??= localReply(text, d.species(), localTurns++);
     }
     const s = settleReply(session, win, history, text, r);
     history = s.history;
@@ -96,13 +97,14 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
     });
     win = w;
     history = [];
+    localTurns = 0;
     ctl = new AbortController();
     w.setAlwaysOnTop(true, 'floating');
     w.setContentProtection(d.getHideInShares());
     w.once('ready-to-show', () => { w.show(); w.focus(); });
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     w.webContents.on('will-navigate', (ev) => ev.preventDefault());
-    w.on('closed', () => { if (win === w) { win = null; history = []; ctl.abort(); } });
+    w.on('closed', () => { if (win === w) { win = null; history = []; localTurns = 0; ctl.abort(); } });
     const devUrl = devRendererUrl();
     if (devUrl) void w.loadURL(`${devUrl}/onboarding/talk.html`);
     else void w.loadFile(join(here, '../renderer/onboarding/talk.html'));
