@@ -99,9 +99,9 @@ describe('ruleDecide', () => {
     expect(hides(w('zoom.us', 'Zoom Meeting'))).toBe(true);
     expect(hides(w('zoom.us', 'Zoom Webinar'))).toBe(true);
     expect(hides(w('zoom.us', ''))).toBe(true); // media unknown
-    expect(hides({ ...w('zoom.us', ''), ...media(false, []) })).toBe(false); // media known: idle Zoom
-    expect(hides({ ...w('zoom.us', ''), ...media(false, ['us.zoom.xos']) })).toBe(true);
-    expect(hides({ ...w('zoom.us', ''), ...media(false, ['unknown']) })).toBe(true); // macOS < 14 mic, app unattributed
+    expect(hides({ ...w('zoom.us', ''), media: { camera: false, micApps: [] } })).toBe(false); // media known: idle Zoom
+    expect(hides({ ...w('zoom.us', ''), media: { camera: false, micApps: ['us.zoom.xos'] } })).toBe(true);
+    expect(hides({ ...w('zoom.us', ''), media: { camera: false, micApps: ['unknown'] } })).toBe(true); // macOS < 14 mic, app unattributed
   });
   it('Teams: mic, meeting title; chat without mic does not hide', () => {
     expect(hides(media(false, ['com.microsoft.teams2']))).toBe(true);
