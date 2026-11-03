@@ -20,8 +20,9 @@ import { defaultProfile } from './profile-defaults.js';
 import { largest, maskAt, segment } from './sam.js';
 import { sliceComponents } from './slice-components.js';
 import { isStaticSheet } from './static-sheet.js';
+import { hindLegBalance, MIN_HIND_BALANCE } from './hind-legs.js';
 import { POSE_MEANING, posePasses, poseScore, reviewPoses, type PoseVerdict } from './pose-review.js';
-import { JUDGE_MODEL, reviewWalks, walkPasses } from './walk-judge.js';
+import { JUDGE_MODEL, pickWalkSheet, reviewWalks, walkPasses } from './walk-judge.js';
 
 export { validateManifest };
 
@@ -567,18 +568,25 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
       let grids = await drawGrids();
       if (grids.length) {
         let review = grids.length > 1 ? await judge(grids.map((g) => g.raw)) : null;
-        // A limping or popping best sheet gets one more batch, told what was wrong; the judge then picks from all of them.
+        // Measured, not judged: the judge passed Milo's walk although its back legs barely moved.
+        const balanceOf = async (frames: KeyedFrame[]) => {
+          const laid = (await layoutFrames(Object.fromEntries([['idle_0', idle], ...frames.map((f, i) => [`f${i}`, f])]), 'idle_0')).frames;
+          return hindLegBalance(frames.map((_, i) => laid[`f${i}`]!));
+        };
+        let balance = await Promise.all(grids.map((g) => balanceOf(g.frames)));
+        const legsOk = (i: number) => (balance[i] ?? 1) >= MIN_HIND_BALANCE;
+        // A limping, popping or front-legs-only best sheet gets one more batch, told what was wrong; the judge then picks from all of them.
         const weak = review?.sheets.find((x) => x.index === review!.best);
-        if (review && !walkPasses(weak)) {
-          const more = await drawGrids(`${weak?.notes ?? ''} Frames 5 to 8 must lead with the other side's legs, and every frame must be a distinct, evenly spaced step.`);
+        if (review && (!walkPasses(weak) || !legsOk(review.best))) {
+          const more = await drawGrids(`${weak?.notes ?? ''}${legsOk(review.best) ? '' : ' The back legs barely move: each hind leg must swing as far forward and back as the front legs.'} Frames 5 to 8 must lead with the other side's legs, and every frame must be a distinct, evenly spaced step.`);
           if (more.length) {
             const all = [...grids, ...more];
             const again = await judge(all.map((g) => g.raw));
-            if (again) [grids, review] = [all, again];
+            if (again) [grids, review, balance] = [all, again, [...balance, ...(await Promise.all(more.map((g) => balanceOf(g.frames))))]];
           }
         }
         if (review) walkJudge = JUDGE_MODEL;
-        return grids[review?.best ?? 0]!.frames;
+        return grids[pickWalkSheet(review, balance)]!.frames;
       }
     }
     const tries: (() => Promise<KeyedFrame[]>)[] =
