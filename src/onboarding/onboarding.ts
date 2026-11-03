@@ -38,6 +38,7 @@ const SAY: Record<Code | 'type' | 'size' | 'missing' | 'unreadable', string> = {
   'bad-key': "Hmm, that key didn't work. Want to try another?",
   'no-pet-found': "I couldn't spot them in that photo. Try one where they're in full view?",
   network: "I couldn't reach the internet. Check your connection and we'll try again.",
+  limit: "Meta says this key has hit its limit for now. Give it a few minutes, or check your plan at dev.meta.ai.",
   'generation-failed': 'Something went sideways while drawing. Want to try again?',
   type: "That isn't a photo I can read. JPG, PNG, HEIC or WebP, please.",
   size: 'That photo is a bit big for me. 25 MB or less, please.',
@@ -56,6 +57,7 @@ let walkTimer = 0;
 const walk = new Map<string, string>(); // the stepping tile cycles whatever walk frames have arrived
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let photoMsg = '';
+let failDetail = ''; // endpoint + status from main, so a stuck failure can be reported
 let copyTimer = 0;
 let swapTimer = 0; // a queued swap must not overwrite the reveal subtitle
 let personality: Personality | null = null;
@@ -78,7 +80,10 @@ function render(): void {
   document.body.dataset['step'] = flow.step;
   if (flow.step === 'photo') $('photo-msg').textContent = flow.error ? SAY[flow.error] : photoMsg;
   if (flow.step === 'key') $('key-msg').textContent = flow.error ? SAY[flow.error] : '';
-  if (flow.step === 'failed') $('fail-msg').textContent = SAY[flow.error ?? 'generation-failed'];
+  if (flow.step === 'failed') {
+    $('fail-msg').textContent = SAY[flow.error ?? 'generation-failed'];
+    $('fail-detail').textContent = failDetail && `Details: ${failDetail}`;
+  }
   if (flow.step === 'done') {
     reveal();
   }
@@ -181,6 +186,7 @@ function finished(r: CreateResult): void {
   if (code === 'busy' || flow.step !== 'making') return; // busy: a run is already going, not a failure
   clearInterval(copyTimer);
   if (r.ok && r.idle) idleUrl = r.idle;
+  failDetail = r.ok ? '' : (r.detail ?? '');
   if (code !== 'bad-key') typedKey = '';
   else keyEl.value = typedKey; // a bad key comes back in the field so a typo is one edit away
   go(code === null ? { t: 'success' } : { t: 'fail', code });

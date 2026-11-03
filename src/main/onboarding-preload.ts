@@ -5,7 +5,7 @@ import type { FactView, Progress, Run } from './run-state';
 
 export type { FactView, Personality, Progress };
 export type PhotoResult = { ok: true; thumb: string } | { ok: false; code: 'missing' | 'type' | 'size' | 'unreadable' | 'cancelled' };
-export type CreateResult = { ok: true; name: string; idle?: string } | { ok: false; code: 'bad-key' | 'no-pet-found' | 'network' | 'generation-failed' | 'busy' };
+export type CreateResult = { ok: true; name: string; idle?: string } | { ok: false; code: 'bad-key' | 'no-pet-found' | 'network' | 'limit' | 'generation-failed' | 'busy'; detail?: string };
 
 // Narrow on purpose: no paths from the page except a dropped File (main re-validates), no raw errors back.
 contextBridge.exposeInMainWorld('pixyOb', {

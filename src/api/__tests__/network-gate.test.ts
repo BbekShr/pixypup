@@ -2,13 +2,18 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '../../main/settings';
-import { NetworkBlockedError, openClient, type Purpose } from '../gate.js';
+import { NetworkBlockedError, openClient, useFetch, type Purpose } from '../gate.js';
 
 const s = DEFAULT_SETTINGS;
 const on = { ...s, offline: false };
 const blocked = (p: Purpose, st: typeof s) => () => openClient(p, st, 'k');
 
 describe('openClient', () => {
+  it("uses the app's fetch (Electron net.fetch: system proxy + Keychain certs) once set", () => {
+    const f = (() => Promise.reject(new Error('unused'))) as unknown as typeof fetch;
+    useFetch(f);
+    expect(openClient('create-pet', s, 'k').fetchImpl).toBe(f);
+  });
   it('defaults: create-pet allowed, screen and voice blocked', () => {
     expect(() => openClient('create-pet', s, 'k')).not.toThrow();
     expect(blocked('screen', s)).toThrow(NetworkBlockedError);

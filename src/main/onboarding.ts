@@ -9,7 +9,7 @@ import { openClient } from '../api/gate';
 import { MetaApiError } from '../api/meta-client';
 import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
-import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, reuseOnboardingWindow, slugify, type ErrorCode } from './pet-input';
+import { checkCreateArgs, checkKey, errorCode, errorDetail, loadPhoto, PHOTO_EXTS, pickSlug, reuseOnboardingWindow, slugify, type ErrorCode } from './pet-input';
 import { storeKey } from './key-check';
 import { loadPack } from './pack';
 import { takenSlug } from './pets';
@@ -145,11 +145,11 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
     }, 16);
   });
 
-  ipcMain.handle(IPC.createPet, async (e, args: unknown): Promise<{ ok: true; name: string } | { ok: false; code: ErrorCode | 'busy' }> => {
+  ipcMain.handle(IPC.createPet, async (e, args: unknown): Promise<{ ok: true; name: string } | { ok: false; code: ErrorCode | 'busy'; detail?: string }> => {
     const a = checkCreateArgs(args);
     if (!ours(e) || !a || !photoBuf) {
       console.warn('PixyPup: createPet rejected (bad sender, bad args, or no photo)');
-      return { ok: false, code: 'generation-failed' };
+      return { ok: false, code: 'generation-failed', detail: !photoBuf ? 'no photo' : 'bad request' };
     }
     const key = apiKey();
     if (!key || (fake && key.startsWith('bad'))) {
@@ -193,7 +193,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
         toWin(IPC.obProgress, p);
       }, thumbFailed));
     };
-    let result: { ok: true; name: string; idle?: string } | { ok: false; code: ErrorCode };
+    let result: { ok: true; name: string; idle?: string } | { ok: false; code: ErrorCode; detail: string };
     try {
       const slug = await pickSlug(slugify(a.name), adding ? '' : o.getPetName(), // adding never overwrites a pet that is already here
          (s) => takenSlug(o.getPets(), s) ? Promise.resolve(true) : stat(join(app.getPath('userData'), 'pets', s)).then(() => true, () => false));
@@ -223,7 +223,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
       // Name and status only: messages and bodies can echo API content.
       console.warn('PixyPup: createPet failed:', err instanceof Error ? err.name : typeof err, err instanceof MetaApiError ? err.status : '');
       if (errorCode(err) === 'bad-key') pendingKey = undefined;
-      result = { ok: false, code: errorCode(err) };
+      result = { ok: false, code: errorCode(err), detail: errorDetail(err) };
     } finally {
       runs = finishRun(runs, id);
     }
