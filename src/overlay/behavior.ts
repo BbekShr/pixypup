@@ -8,6 +8,7 @@ export type Behavior = {
   target?: { x: number; y: number }; // overlay coordinates
   bubble?: string;
   on?: boolean; // hide only: level-triggered
+  mode?: 'hide' | 'corner'; // hide only: out of sight, or lying quietly in a bottom corner
   hint?: boolean; // sniff only: a fix hint can be asked for by clicking the pet
   mood?: TalkAction; // talk only
   crisis?: boolean; // talk only: the help card is up, so no cheering
@@ -26,6 +27,7 @@ export function parseBehavior(raw: unknown): Behavior | null {
   if (t && num(t['x']) && num(t['y'])) b.target = { x: t['x'], y: t['y'] };
   if (typeof r['bubble'] === 'string' && r['bubble'].trim()) b.bubble = r['bubble'].trim().slice(0, 40);
   if (typeof r['on'] === 'boolean') b.on = r['on'];
+  if (b.action === 'hide') b.mode = r['mode'] === 'corner' ? 'corner' : 'hide';
   if (r['hint'] === true && b.action === 'sniff') b.hint = true;
   if (b.action === 'talk') {
     if (!(TALK_ACTIONS as readonly unknown[]).includes(r['mood'])) return null;
@@ -59,9 +61,16 @@ export function routeBehavior(b: Behavior, o: { busy: boolean; acting: 'hide' | 
 export const PEEK_PX = 15;
 
 /** x (left edge) that leaves only PEEK_PX of the sprite on screen, at the nearer edge; side -1 = left. */
-export function hideSpot(x: number, w: number, screenW: number): { side: -1 | 1; spot: number } {
+export function hideSpot(x: number, w: number, screenW: number, peek = PEEK_PX): { side: -1 | 1; spot: number } {
   const side = x + w / 2 < screenW / 2 ? -1 : 1;
-  return { side, spot: side < 0 ? PEEK_PX - w : screenW - PEEK_PX };
+  return { side, spot: side < 0 ? peek - w : screenW - peek };
+}
+
+export const CORNER_MARGIN = 12;
+/** x (left edge) of the nearer bottom corner, fully visible and inside the window. */
+export function cornerSpot(x: number, w: number, screenW: number): { side: -1 | 1; spot: number } {
+  const side = x + w / 2 < screenW / 2 ? -1 : 1;
+  return { side, spot: side < 0 ? Math.min(CORNER_MARGIN, Math.max(0, screenW - w)) : Math.max(0, screenW - w - CORNER_MARGIN) };
 }
 
 /** Where the pet leans out when the call ends: well past the peek, still half hidden. */

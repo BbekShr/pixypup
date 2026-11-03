@@ -12,7 +12,7 @@ const CLEAR_TICKS = 2; // consecutive call-free reads before the pet comes out
 const EMPTY_CLEAR_TICKS = 10; // 10 x LOOP_MS = 50 s of failed (empty) reads: stop waiting, the overlay's hide has no timeout of its own
 
 export type LoopDeps = {
-  getSettings: () => Pick<Settings, 'screenAware' | 'adminDisableScreenAware' | 'offline'>;
+  getSettings: () => Pick<Settings, 'screenAware' | 'adminDisableScreenAware' | 'offline' | 'callMode'>;
   isSnoozed: () => boolean;
   overlay: { bounds: () => { x: number; y: number; width: number; height: number } | null; send: (b: Behavior) => void };
   reader: { tick: () => Promise<{ observation: Observation; debug: { terminalKey: string; windowCount?: number } }> };
@@ -76,7 +76,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
         hideOn = true;
         clear = 0;
         empty = 0;
-        send({ action: 'hide', on: true, reason: decision.reason }); // every tick: a reloaded overlay or swapped pet must not stay visible during a call
+        send({ action: 'hide', on: true, mode: d.getSettings().callMode, reason: decision.reason }); // every tick: a reloaded overlay or swapped pet must not stay visible during a call
       } else if (hideOn) {
         // An empty window list is a failed read (unknown), not "the call ended": one never clears, a long run gives up.
         if (debug.windowCount === 0) empty++;

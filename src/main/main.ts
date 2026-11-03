@@ -456,7 +456,7 @@ void app.whenReady().then(async () => {
   ipcMain.on(IPC.showMenu, (e) => {
     const win = winOf(e);
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library, name: displayName(), hasKey: hasKey() }), (c) => run(c, win));
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), callMode: settings.callMode, screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library, name: displayName(), hasKey: hasKey() }), (c) => run(c, win));
     if (devRendererUrl()) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); } });

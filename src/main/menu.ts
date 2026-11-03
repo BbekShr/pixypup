@@ -1,5 +1,5 @@
 import { MAX_PETS, takenSlug } from './pets';
-import { SIZES, type Energy, type Size } from './prefs';
+import { SIZES, type CallMode, type Energy, type Size } from './prefs';
 
 export type MenuItem =
   | { type: 'separator' }
@@ -7,7 +7,7 @@ export type MenuItem =
   | { label: string; quit: true }
   | { label: string; submenu: MenuItem[] };
 
-export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; library?: { slug: string; name: string }[]; name: string; hasKey?: boolean }
+export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; callMode: CallMode; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; library?: { slug: string; name: string }[]; name: string; hasKey?: boolean }
 
 const SIZE_LABELS: Record<Size, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 const ENERGY_LABELS: [Energy, string][] = [['sleepy', 'Sleepy'], ['normal', 'Normal'], ['playful', 'Playful']];
@@ -59,6 +59,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
       { label: 'Energy', submenu: ENERGY_LABELS.map(([e, label]) => ({ label, command: `energy:${e}`, checked: o.energy === e, radio: true })) },
       { type: 'separator' },
       o.screenLocked ? lock('Notice my screen', 'screen:off', false) : toggle('Notice my screen', 'screen', o.screenAware),
+      { label: 'During calls', submenu: [{ label: 'Hide', command: 'call:hide', checked: o.callMode === 'hide', radio: true }, { label: 'Stay in the corner', command: 'call:corner', checked: o.callMode === 'corner', radio: true }] },
       o.voiceLocked ? lock('Listen for my voice', 'voice:off', false) : toggle('Listen for my voice', 'voice', o.voice),
       o.hideLocked ? lock('Hide during screen sharing', 'hide:off', true) : toggle('Hide during screen sharing', 'hide', o.hideInShares),
       toggle(`Show what ${o.name} sees`, 'debug', o.debug ?? false),

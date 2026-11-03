@@ -59,6 +59,9 @@ describe('sizeScale / parsePrefs / commandToPatch', () => {
   it('maps commands to settings patches and rejects the rest', () => {
     const n = new Date(2026, 10, 3, 14, 0);
     expect(commandToPatch('size:large', n)).toEqual({ size: 'large' });
+    expect(commandToPatch('call:corner', n)).toEqual({ callMode: 'corner' });
+    expect(commandToPatch('call:hide', n)).toEqual({ callMode: 'hide' });
+    expect(commandToPatch('call:x', n)).toBeNull();
     expect(commandToPatch('energy:playful', n)).toEqual({ energy: 'playful' });
     expect(commandToPatch('hide:on', n)).toEqual({ hideInShares: true });
     expect(commandToPatch('screen:yes', n)).toEqual({ screenAware: true });

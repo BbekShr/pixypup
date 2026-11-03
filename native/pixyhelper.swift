@@ -1,4 +1,6 @@
 import AppKit
+import CoreAudio
+import CoreMediaIO
 import ApplicationServices
 import ImageIO
 import ScreenCaptureKit
@@ -77,16 +79,70 @@ func capture(_ id: UInt32) async {
     exit(0)
 }
 
+// Camera/mic "in use somewhere" flags are readable without Camera/Mic permission; nothing is recorded or opened.
+func cameraInUse() -> Bool {
+    var addr = CMIOObjectPropertyAddress(mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyDevices), mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal), mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+    var size: UInt32 = 0
+    guard CMIOObjectGetPropertyDataSize(CMIOObjectID(kCMIOObjectSystemObject), &addr, 0, nil, &size) == 0, size > 0 else { return false }
+    var ids = [CMIOObjectID](repeating: 0, count: Int(size) / MemoryLayout<CMIOObjectID>.size)
+    guard CMIOObjectGetPropertyData(CMIOObjectID(kCMIOObjectSystemObject), &addr, 0, nil, size, &size, &ids) == 0 else { return false }
+    return ids.contains { id in
+        var a = CMIOObjectPropertyAddress(mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere), mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal), mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+        var v: UInt32 = 0
+        var n = UInt32(MemoryLayout<UInt32>.size)
+        return CMIOObjectGetPropertyData(id, &a, 0, nil, n, &n, &v) == 0 && v != 0
+    }
+}
+
+func audioAddr(_ sel: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress(mSelector: sel, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+}
+
+func audioUInt32(_ id: AudioObjectID, _ sel: AudioObjectPropertySelector) -> UInt32 {
+    var a = audioAddr(sel)
+    var v: UInt32 = 0
+    var n = UInt32(MemoryLayout<UInt32>.size)
+    return AudioObjectGetPropertyData(id, &a, 0, nil, &n, &v) == 0 ? v : 0
+}
+
+func micApps() -> [String] {
+    if #available(macOS 14.0, *) {
+        var a = audioAddr(kAudioHardwarePropertyProcessObjectList)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &a, 0, nil, &size) == 0, size > 0 else { return [] }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &a, 0, nil, &size, &ids) == 0 else { return [] }
+        return ids.compactMap { id in
+            guard audioUInt32(id, kAudioProcessPropertyIsRunningInput) != 0 else { return nil }
+            var b = audioAddr(kAudioProcessPropertyBundleID)
+            var s: Unmanaged<CFString>?
+            var n = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            guard AudioObjectGetPropertyData(id, &b, 0, nil, &n, &s) == 0, let str = s?.takeRetainedValue() else { return nil }
+            return str as String
+        }
+    }
+    var a = audioAddr(kAudioHardwarePropertyDefaultInputDevice)
+    var dev = AudioObjectID(0)
+    var n = UInt32(MemoryLayout<AudioObjectID>.size)
+    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &a, 0, nil, &n, &dev) == 0, dev != 0 else { return [] }
+    return audioUInt32(dev, kAudioDevicePropertyDeviceIsRunningSomewhere) != 0 ? ["unknown"] : []
+}
+
+func media() {
+    emit(["camera": cameraInUse(), "micApps": micApps()])
+}
+
 let args = CommandLine.arguments
 switch args.count > 1 ? args[1] : "" {
 case "windows": windows()
 case "badges": badges()
+case "media": media()
 case "capture":
     guard args.count > 2, let id = UInt32(args[2]) else { exit(2) }
     Task { await capture(id) }
     DispatchQueue.global().asyncAfter(deadline: .now() + 4) { fail("timeout") }
     dispatchMain()
 default:
-    FileHandle.standardError.write(Data("usage: pixyhelper windows|badges|capture <windowId>\n".utf8))
+    FileHandle.standardError.write(Data("usage: pixyhelper windows|badges|media|capture <windowId>\n".utf8))
     exit(2)
 }

@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isPlainName } from './pack';
 import { MAX_PETS } from './pets';
-import { isEnergy, isSize, type Energy, type Size } from './prefs';
+import { isCallMode, isEnergy, isSize, type CallMode, type Energy, type Size } from './prefs';
 
 
 export interface Settings {
@@ -17,6 +17,7 @@ export interface Settings {
   size: Size;
   energy?: Energy; // only an explicit choice is stored; absent = the pet's own personality.energy
   hideInShares: boolean;
+  callMode: CallMode; // what the pet does during a video call
   openAtLogin: boolean;
   snoozeUntil: number | null; // epoch ms
 }
@@ -30,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   size: 'medium',
   hideInShares: false,
+  callMode: 'hide',
   openAtLogin: false,
   snoozeUntil: null,
 };
@@ -97,6 +99,10 @@ export function parseSettingsFile(text: string | null | Error): {
   if ('energy' in obj) {
     if (isEnergy(obj.energy)) values.energy = obj.energy;
     else invalid.push('energy');
+  }
+  if ('callMode' in obj) {
+    if (isCallMode(obj.callMode)) values.callMode = obj.callMode;
+    else invalid.push('callMode');
   }
   if ('snoozeUntil' in obj) {
     const t = obj.snoozeUntil;

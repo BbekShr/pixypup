@@ -23,6 +23,7 @@ const defaults: Settings = {
   onboarded: false,
   size: 'medium',
   hideInShares: false,
+  callMode: 'hide',
   openAtLogin: false,
   snoozeUntil: null,
 };
