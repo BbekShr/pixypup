@@ -5,3 +5,9 @@ export const footOffset = (displayH: number, footY: number): number => displayH 
 
 export const displayWidth = (naturalW: number, naturalH: number, displayH = DISPLAY_H): number =>
   (naturalW * displayH) / naturalH;
+
+/** Headroom so antialiased paws and sub-pixel rounding never clip at the window bottom. */
+export const FLOOR_PAD = 1;
+
+/** How far the far paw drops below the pivot's floor line when the sprite (half-width halfW) rotates about its foot. */
+export const rotDrop = (halfW: number, rotDeg: number): number => halfW * Math.sin((Math.abs(rotDeg) * Math.PI) / 180);

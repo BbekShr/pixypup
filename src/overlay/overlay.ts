@@ -11,7 +11,7 @@ import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } fro
 import { alphaPlane as alpha, cleanFrame, walkTiming } from './frames';
 import { GAITS, bakeWalk, barkWord, legBand, rigFor } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
-import { displayWidth, footOffset } from './layout';
+import { displayWidth, FLOOR_PAD, footOffset, rotDrop } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
 import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, registersByHead, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL, zoomLegs } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
@@ -278,7 +278,7 @@ void readPack().then((p) => {
 }).catch(shown);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
-const floorY = (): number => window.innerHeight - footOffset(H, footY);
+const floorY = (): number => window.innerHeight - footOffset(H, footY) - FLOOR_PAD;
 let state: PetState = 'walk';
 let x = 100 + ([...(query.get('pet') ?? '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 600, 0)); // pets sharing the screen don't start on top of each other
 let lift = 0; // offset from the floor line (negative = above); only non-zero while dragged or falling
@@ -650,6 +650,7 @@ function frame(now: number): void {
   const swing = dang.angle ? -dang.angle : 0;
   if (dang.angle) { rot += swing; sy *= 1.03; }
   dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
+  if (!swing && state !== 'roll') dy -= rotDrop(fw / 2, rot); // the far paw swings below the floor line otherwise
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
   if (swing && state !== 'roll') { // rotate about the grab point: shift by what the origin-pivot rotation moved it

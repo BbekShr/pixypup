@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG, zoomLegs, ZOOM_SPEEDUP } from './motion';
 import { energyParams } from '../main/prefs';
-import { displayWidth, footOffset } from './layout';
+import { displayWidth, FLOOR_PAD, footOffset, rotDrop } from './layout';
 
 describe('layout', () => {
   it('puts the foot line at footY of the displayed height and keeps aspect', () => {
@@ -555,5 +555,18 @@ describe('zoomies', () => {
     expect(gaitParams('zoom').speed).toBe(ZOOM_SPEEDUP);
     const play = energyParams('playful').speed;
     expect(gaitParams('zoom').speed * play).toBeGreaterThan(gaitParams('trot').speed * play * 1.4);
+  });
+});
+
+describe('rotDrop', () => {
+  it('lifting by it keeps the rotated far paw at or above the floor line', () => {
+    const halfW = 65;
+    const bad: number[] = [];
+    for (let deg = -12; deg <= 12; deg += 0.5) {
+      const paw = halfW * Math.sin((Math.abs(deg) * Math.PI) / 180) - rotDrop(halfW, deg);
+      if (paw > 1e-9) bad.push(deg);
+    }
+    expect(bad).toEqual([]);
+    expect(FLOOR_PAD).toBeGreaterThan(0);
   });
 });
