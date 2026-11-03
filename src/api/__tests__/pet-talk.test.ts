@@ -82,6 +82,14 @@ describe('isCrisis / localReply', () => {
     expect(localReply('I want to die', 'cat')).toMatchObject({ action: 'comfort', woof: 'Mrrp~ purr', crisis: true });
     expect(localReply('I want to die')).toMatchObject({ woof: 'Woof!', caption: 'leans against you', crisis: true });
   });
+  it('turn cycles all lines in order; crisis ignores it', () => {
+    for (const sp of [undefined, 'cat']) {
+      const ws = [0, 1, 2, 3].map((n) => localReply('same text', sp, n).woof);
+      expect(new Set(ws).size).toBe(4);
+      expect(localReply('same text', sp, 4)).toEqual(localReply('other', sp, 0));
+      expect(localReply('I want to die', sp, 2)).toEqual(localReply('I want to die', sp));
+    }
+  });
   it('offline replies are valid, stable and varied', () => {
     const texts = ['hi', 'rough day', 'I got the job!', 'bored', 'tired', 'ok', 'thanks buddy', 'long meeting'];
     for (const sp of [undefined, 'cat']) {

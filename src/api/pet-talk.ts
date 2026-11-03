@@ -55,11 +55,11 @@ const LOCAL = {
   ],
 } as const;
 
-// Offline: no network, no model. Same text always picks the same line; crisis always gets the plain comfort line.
-export const localReply = (text: string, species?: string): TalkReply => {
+// Offline: no network, no model. Without `turn` the same text picks the same line; with `turn` (replies so far in this chat) lines cycle in order so none repeats back to back; crisis always gets the plain comfort line.
+export const localReply = (text: string, species?: string, turn?: number): TalkReply => {
   const crisis = isCrisis(text);
   const lines = LOCAL[isCat(species) ? 'cat' : 'dog'];
-  const i = crisis ? 0 : [...text].reduce((h, c) => h + c.charCodeAt(0), 0) % lines.length;
+  const i = crisis ? 0 : turn !== undefined ? turn % lines.length : [...text].reduce((h, c) => h + c.charCodeAt(0), 0) % lines.length;
   return { ...lines[i], crisis };
 };
 
