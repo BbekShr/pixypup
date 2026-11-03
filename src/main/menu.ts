@@ -7,7 +7,7 @@ export type MenuItem =
   | { label: string; quit: true }
   | { label: string; submenu: MenuItem[] };
 
-export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; callMode: CallMode; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; library?: { slug: string; name: string }[]; name: string; hasKey?: boolean }
+export interface MenuState { stay: boolean; snoozed: boolean; size: Size; energy: Energy; hideInShares: boolean; hideLocked?: boolean; callMode: CallMode; screenAware: boolean; screenLocked?: boolean; voice: boolean; voiceLocked?: boolean; openAtLogin: boolean; debug?: boolean; overload?: boolean; pets?: { slug: string; name: string }[]; library?: { slug: string; name: string }[]; name: string; hasKey?: boolean; self?: { slug: string; name: string } }
 
 const SIZE_LABELS: Record<Size, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 const ENERGY_LABELS: [Energy, string][] = [['sleepy', 'Sleepy'], ['normal', 'Normal'], ['playful', 'Playful']];
@@ -49,6 +49,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     { label: '📌 Stay here', command: o.stay ? 'wander' : 'stay', checked: o.stay },
     { label: '🐾 Pets', submenu: [
       { label: 'Add another pet…', command: 'new-pet' },
+      ...(o.self ? [{ label: `Rename ${o.self.name}…`, command: `rename:${o.self.slug}` }] : []),
       ...libraryMenu(o),
       ...sendHome(o.pets),
       { type: 'separator' },

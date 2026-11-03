@@ -20,13 +20,14 @@ import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, listLibrary, loadPack, packCandidates, pickPackDir } from './pack';
 import { comeCommand } from '../overlay/call';
 import { headCrop } from './head-crop';
-import { addPet, MAX_PETS, petList, pickWindow, removePet, rekeyWins, routeReaction } from './pets';
+import { addPet, MAX_PETS, nameFor, petList, pickWindow, removePet, rekeyWins, renamed, routeReaction, withName } from './pets';
 import { setupOnboarding } from './onboarding';
 import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
 import { startScreenLoop } from './screen-loop';
 import { setupScreenExplainer } from './screen-explainer';
 import { setupKeyWindow } from './key-window';
+import { setupRenameWindow } from './rename-window';
 import { setupTalkWindow } from './talk-window';
 import { toOverlayPoint } from '../overlay/behavior';
 import { getApiKey } from './secrets';
@@ -36,7 +37,8 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const wins = new Map<string, BrowserWindow>(); // one transparent overlay window per pet, keyed by folder slug
 const senderSlug = new WeakMap<Electron.WebContents, string>();
 const petSpecies = new Map<string, string>();
-const petNames = new Map<string, string>(); // slug -> display name, learnt as each pack loads
+const petNames = new Map<string, string>(); // slug -> display name, learnt as each pack loads (the user's rename wins)
+const petOriginals = new Map<string, string>(); // slug -> the manifest's own name, so a rename back to it clears the override
 const packEnergies = new Map<string, Energy>();
 const primarySlug = (): string => petList(settings)[0]!;
 /** The primary pet's window: screen reactions, voice and the debug panel go here. */
@@ -174,6 +176,7 @@ let overload: ReturnType<typeof setupOverload> | undefined;
 let screenExplainer: ReturnType<typeof setupScreenExplainer>;
 let voiceExplainer: ReturnType<typeof setupScreenExplainer>;
 let keyWin: ReturnType<typeof setupKeyWindow> | undefined;
+let renameWin: ReturnType<typeof setupRenameWindow> | undefined;
 let voice: ReturnType<typeof createVoiceSession>;
 let talk: ReturnType<typeof setupTalkWindow>;
 let micWin: ReturnType<typeof setupMic>;
@@ -182,6 +185,7 @@ let fakeTranscript: string | undefined; // dev only: stands in for Meta's speech
 const snoozed = (): boolean => isSnoozed(settings.snoozeUntil, Date.now());
 const prefs = (s = snoozed(), slug = primarySlug()): Prefs => ({ size: settings.size, energy: settings.energy ?? packEnergies.get(slug) ?? 'normal', snoozed: s });
 let library: { slug: string; name: string }[] = [];
+const shownLibrary = (): { slug: string; name: string }[] => library.map((l) => ({ slug: l.slug, name: nameFor(settings.names, l.slug) ?? l.name }));
 const menuPets = (): { slug: string; name: string }[] => petList(settings).map((slug) => ({ slug, name: nameOf(slug) }));
 const ACTIVATE_GRACE_MS = 2000;
 const MAX_TIMER = 2 ** 31 - 1; // setTimeout wraps to 1 ms above this
@@ -196,7 +200,7 @@ function rekeyPrimary(): void {
     wins.delete(from);
     wins.set(to, w);
     senderSlug.set(w.webContents, to);
-    for (const m of [petNames, petSpecies, petIcons, packEnergies] as Map<string, unknown>[]) m.delete(from);
+    for (const m of [petNames, petOriginals, petSpecies, petIcons, packEnergies] as Map<string, unknown>[]) m.delete(from);
   }
 }
 
@@ -207,6 +211,7 @@ function sync(): void {
   onboarding.applyProtection();
   talk?.applyProtection();
   keyWin?.applyProtection();
+  renameWin?.applyProtection();
   clearTimeout(wakeTimer);
   // Expiry is computed (snoozed() turns false by itself), so the timer only re-syncs; nothing to write.
   if (s) wakeTimer = setTimeout(sync, Math.min(MAX_TIMER, Math.max(0, (settings.snoozeUntil ?? 0) - Date.now()) + 50));
@@ -218,7 +223,7 @@ function sync(): void {
   const mine = petIcons.get(primarySlug());
   tray?.setImage((s ? (mine?.dim ?? trayIconDim) : (mine?.icon ?? trayIcon)) ?? nativeImage.createEmpty());
   tray?.setToolTip(`PixyPup \u00b7 ${nameOf(primarySlug())}`);
-  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets(), library, hasKey: hasKey() }), run)));
+  tray?.setContextMenu(Menu.buildFromTemplate(toNative(trayMenuTemplate({ snoozed: s, name: displayName(), overload: overload?.active(), pets: menuPets(), library: shownLibrary(), hasKey: hasKey() }), run)));
 }
 
 /** Menu, tray and the dev hook all land here; only main writes settings. */
@@ -252,6 +257,11 @@ function run(cmd: string, from?: BrowserWindow): void {
     return;
   }
   if (cmd.startsWith('home:')) return sendHome(cmd.slice(5));
+  if (cmd.startsWith('rename:')) {
+    const slug = cmd.slice(7);
+    if (petList(settings).includes(slug)) renameWin?.open({ slug, name: nameOf(slug), original: petOriginals.get(slug) ?? nameOf(slug), avatar: petIcons.get(slug)?.avatar });
+    return;
+  }
   if (cmd === 'screen:on') {
     // The explainer is the consent: nothing reads the screen (or asks macOS for Terminal access) before "Turn it on".
     if (!settings.adminDisableScreenAware) void screenExplainer.ask(displayName()).then((yes) => { if (yes) run('screen:yes'); });
@@ -305,6 +315,28 @@ function joinPet(slug: string): void {
   sync();
 }
 
+/** The pet whose own menu is open, so "Rename" names that pet and not the primary. */
+function selfOf(sender: Electron.WebContents): { slug: string; name: string } | undefined {
+  const slug = senderSlug.get(sender);
+  return slug === undefined ? undefined : { slug, name: nameOf(slug) };
+}
+
+/** Display name only: the folder and the slugs in `pets`/`petName` stay as they are. */
+function renamePet(slug: string, name: string): boolean {
+  if (!petList(settings).includes(slug)) return false;
+  try {
+    saveSettings({ names: withName(settings.names, slug, name, petOriginals.get(slug) ?? nameOf(slug)) });
+  } catch {
+    console.warn('PixyPup: could not save the new name');
+    return false;
+  }
+  settings = loadSettings();
+  petNames.set(slug, name);
+  wins.get(slug)?.webContents.send(IPC.packChanged, { renamed: true });
+  sync();
+  return true;
+}
+
 function sendHome(slug: string): void {
   const next = removePet(petList(settings), slug);
   if (!next) return;
@@ -318,6 +350,7 @@ function sendHome(slug: string): void {
   wins.delete(slug);
   petIcons.delete(slug);
   petNames.delete(slug);
+  petOriginals.delete(slug);
   petSpecies.delete(slug);
   w?.destroy();
   sync();
@@ -398,9 +431,10 @@ process.on('unhandledRejection', (err) => { console.warn('PixyPup: unhandled rej
 void app.whenReady().then(async () => {
   useFetch(net.fetch as typeof fetch);
   onboarding = setupOnboarding({ getOverlay: primary, addPet: joinPet, getPets: () => petList(settings), onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
-  overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
+  overload = setupOverload({ hideInShares: () => settings.hideInShares, names: () => settings.names, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });
   voiceExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares, kind: 'voice' });
+  renameWin = setupRenameWindow({ getHideInShares: () => settings.hideInShares, save: renamePet });
   keyWin = setupKeyWindow({ name: displayName, settings: loadSettings, getHideInShares: () => settings.hideInShares, onSaved: sync });
   talk = setupTalkWindow({
     name: displayName,
@@ -425,7 +459,10 @@ void app.whenReady().then(async () => {
     if (dev) return loadPack(isAbsolute(dev) ? dev : resolve(dev));
     const candidates = packCandidates(slug, join(app.getPath('userData'), 'pets'), join(app.getAppPath(), 'assets/pets'));
     const dir = await pickPackDir(candidates, async (d) => (await loadPack(d)) !== null);
-    const pack = dir && (await loadPack(dir));
+    const raw = dir && (await loadPack(dir));
+    const pack = raw ? { ...raw, manifest: renamed(raw.manifest, nameFor(settings.names, slug)) } : null;
+    if (raw) petOriginals.set(slug, raw.manifest.pet);
+    else petOriginals.delete(slug);
     if (!pack) { // a reload that finds nothing must not leave the old name, species or face behind
       petNames.delete(slug);
       petSpecies.delete(slug);
@@ -457,7 +494,7 @@ void app.whenReady().then(async () => {
   ipcMain.on(IPC.showMenu, (e) => {
     const win = winOf(e);
     if (!win) return;
-    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), callMode: settings.callMode, screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library, name: displayName(), hasKey: hasKey() }), (c) => run(c, win));
+    const items = toNative(petMenuTemplate({ stay, snoozed: snoozed(), size: settings.size, energy: prefs().energy, hideInShares: settings.hideInShares, hideLocked: hideLockedByAdmin(), callMode: settings.callMode, screenAware: settings.screenAware, screenLocked: settings.adminDisableScreenAware, voice: settings.voice, voiceLocked: voiceLockedByAdmin(), openAtLogin: loginOn(), debug: debugOn, overload: overload?.active(), pets: menuPets(), library: shownLibrary(), name: displayName(), hasKey: hasKey(), self: selfOf(e.sender) }), (c) => run(c, win));
     if (devRendererUrl()) console.log('[menu] popup');
     // Whatever the menu did to hover state, the next mouseenter on the pet turns click-through off again.
     Menu.buildFromTemplate(items).popup({ window: win, callback: () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); } });

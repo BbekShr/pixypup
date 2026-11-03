@@ -23,6 +23,11 @@ describe('petMenuTemplate', () => {
     for (const c of ['sit', 'bark', 'roll', 'bed', 'come', 'trick', 'zoomies', 'talk', 'snooze:1h', 'snooze:tomorrow', 'stay', 'size:small', 'size:medium', 'size:large', 'energy:sleepy', 'energy:normal', 'energy:playful', 'hide:on', 'screen:on', 'voice:on', 'debug:on', 'login:on', 'call:hide', 'call:corner', 'key', 'new-pet', 'library:Mochi', 'home:a', 'home:b', 'overload']) expect(cmds).toContain(c);
     expect(flat(petMenuTemplate({ ...base, snoozed: true })).some((i) => 'command' in i && i.command === 'wake')).toBe(true);
   });
+  it('Rename names the pet whose menu it is, inside 🐾 Pets, and only when main says which pet', () => {
+    const t = petMenuTemplate({ ...base, self: { slug: 'milo', name: 'Biscuit' } });
+    expect(sub(t, '🐾 Pets')).toContainEqual({ label: 'Rename Biscuit…', command: 'rename:milo' });
+    expect(flat(petMenuTemplate(base)).some((i) => 'command' in i && i.command.startsWith('rename:'))).toBe(false);
+  });
   it('During calls radio follows callMode', () => {
     const radio = (m: 'hide' | 'corner') => sub(petMenuTemplate({ ...base, callMode: m }).flatMap((i) => ('submenu' in i && i.label === '⚙️ Settings' ? i.submenu : [])), 'During calls').flatMap((i) => ('checked' in i && i.checked ? [i.label] : []));
     expect(radio('hide')).toEqual(['Hide']);

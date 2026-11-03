@@ -35,4 +35,11 @@ describe('saveSettings', () => {
     expect(() => saveSettings(bad)).toThrow();
     expect(() => readFileSync(file(), 'utf8')).toThrow();
   });
+  it('a rename survives a restart, and only valid names under plain lowercase slugs are kept', () => {
+    saveSettings({ names: { kuma: 'Bear', milo: 'Biscuit' } });
+    expect(loadSettings().names).toEqual({ kuma: 'Bear', milo: 'Biscuit' }); // loadSettings is what a restart runs
+    writeFileSync(file(), JSON.stringify({ names: { pakkun: 'Paws', Kuma: 'Upper', '../x': 'Bad', mochi: '', bao: 'x'.repeat(25), ok: '  Trim  ' } }));
+    expect(loadSettings().names).toEqual({ pakkun: 'Paws', ok: 'Trim' });
+    expect(() => saveSettings({ names: ['Bear'] })).toThrow();
+  });
 });

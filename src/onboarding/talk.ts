@@ -103,7 +103,7 @@ function refresh(): void {
     if (typeof o.name === 'string' && o.name) name = o.name;
     if (typeof o.avatar === 'string' && o.avatar.startsWith('data:image/')) $('face').setAttribute('src', o.avatar);
     $('title').textContent = `Talk to ${name}`;
-    input.placeholder = `Tell ${name} about your day…`;
+    input.placeholder = name.length > 8 ? "How's your day going?" : `Tell ${name} about your day…`; // a long name would wrap the one-line box
     if (!log.childElementCount) log.append(tag('p', 'hello', `${name} is here. Say anything.`));
     $('how').textContent = o.voice === 'usable'
       ? "Type and press Enter, or press ⌥ Space and say it; it's typed here for you to send."

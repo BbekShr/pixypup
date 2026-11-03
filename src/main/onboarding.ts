@@ -205,7 +205,9 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
       // The pack exists: from here the outcome is ok, whatever settings or the overlay do (a "failure" would invite a paid retry).
       try {
         if (adding) pendingAdd = slug;
-        saveSettings(adding ? { onboarded: true } : { petName: slug, onboarded: true });
+        const names = { ...loadSettings().names }; // a new pet in a reused folder starts with its own name, not an old rename
+        delete names[slug.toLowerCase()];
+        saveSettings(adding ? { onboarded: true, names } : { petName: slug, onboarded: true, names });
         o.onSettingsChanged();
       } catch {
         console.warn('PixyPup: pet created but settings could not be saved');

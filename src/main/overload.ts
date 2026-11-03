@@ -1,18 +1,19 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import { devRendererUrl } from './dev-url';
 import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_CAST, SHOW_MS } from '../overlay/overload-choreo';
 import { IPC } from './ipc';
 import { isPlainName, listLibrary, loadPack, type Pack } from './pack';
+import { nameFor, renamed, type PetNames } from './pets';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const CURSOR_HZ_MS = 33;
 const START_CAP_MS = 15_000;
 
 /** Every saved pet plus the bundled ones, one per name. */
-async function gatherPacks(): Promise<Pack[]> {
+async function gatherPacks(renames: PetNames | undefined): Promise<Pack[]> {
   const root = join(app.getPath('userData'), 'pets');
   const names = (await readdir(root).catch(() => [] as string[])).filter(isPlainName);
   const lib = join(app.getAppPath(), 'assets/pets');
@@ -20,17 +21,17 @@ async function gatherPacks(): Promise<Pack[]> {
   const dirs = [...names.map((n) => join(root, n)), ...(await listLibrary(lib)).map((l) => join(lib, l.slug))];
   const seen = new Set<string>();
   const out: Pack[] = [];
-  for (const p of await Promise.all(dirs.map(loadPack))) {
+  for (const [i, p] of (await Promise.all(dirs.map(loadPack))).entries()) {
     const key = p?.manifest.pet.toLowerCase();
     if (!p || !key || seen.has(key)) continue;
     seen.add(key);
-    out.push(p);
+    out.push({ ...p, manifest: renamed(p.manifest, nameFor(renames, basename(dirs[i]!))) });
   }
   return out.slice(0, MAX_CAST);
 }
 
 /** The overload window: click-through for its whole life. Main owns every timer, so a closed window can't leave work behind. */
-export function setupOverload(o: { hideInShares: () => boolean; onChange: () => void }): { start(): Promise<void>; stop(): void; active(): boolean } {
+export function setupOverload(o: { hideInShares: () => boolean; names: () => PetNames | undefined; onChange: () => void }): { start(): Promise<void>; stop(): void; active(): boolean } {
   let on = false;
   let gen = 0;
   let win: BrowserWindow | null = null;
@@ -69,7 +70,7 @@ export function setupOverload(o: { hideInShares: () => boolean; onChange: () => 
   }
 
   async function open(mine: number): Promise<void> {
-    const packs = await gatherPacks();
+    const packs = await gatherPacks(o.names());
     if (gen !== mine || packs.length === 0) { if (gen === mine) stop(); return; }
     const b = screen.getPrimaryDisplay().workArea;
     const w = new BrowserWindow({
