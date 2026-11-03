@@ -3,7 +3,7 @@ import { devRendererUrl } from './dev-url';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC } from './ipc';
-import { tryKey } from './key-check';
+import { storeKey } from './key-check';
 import { checkKey } from './pet-input';
 import { getApiKey, setApiKey } from './secrets';
 import type { Settings } from './settings';
@@ -25,13 +25,8 @@ export function setupKeyWindow(o: { name: () => string; settings: () => Settings
   ipcMain.handle(IPC.keyInfo, (e) => (ours(e) ? { name: o.name(), hasKey: hasKey() } : null));
   ipcMain.handle(IPC.keySave, async (e, key: unknown): Promise<'ok' | 'bad-key' | 'network' | 'unsafe'> => {
     if (!ours(e) || !checkKey(key)) return 'bad-key';
-    const v = await tryKey(key, o.settings());
+    const v = await storeKey(key, o.settings(), setApiKey);
     if (v !== 'ok') return v;
-    try {
-      setApiKey(key);
-    } catch {
-      return 'unsafe'; // no Keychain encryption: never fall back to plain text
-    }
     o.onSaved();
     return 'ok';
   });
