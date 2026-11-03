@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG, zoomLegs, ZOOM_SPEEDUP } from './motion';
 import { energyParams } from '../main/prefs';
-import { displayWidth, FLOOR_PAD, footOffset, rotDrop } from './layout';
+import { displayWidth, contactDrop, contactExtents, FLOOR_PAD, footOffset } from './layout';
 
 describe('layout', () => {
   it('puts the foot line at footY of the displayed height and keeps aspect', () => {
@@ -558,15 +558,28 @@ describe('zoomies', () => {
   });
 });
 
-describe('rotDrop', () => {
-  it('lifting by it keeps the rotated far paw at or above the floor line', () => {
-    const halfW = 65;
-    const bad: number[] = [];
-    for (let deg = -12; deg <= 12; deg += 0.5) {
-      const paw = halfW * Math.sin((Math.abs(deg) * Math.PI) / 180) - rotDrop(halfW, deg);
-      if (paw > 1e-9) bad.push(deg);
-    }
-    expect(bad).toEqual([]);
+describe('contactDrop', () => {
+  it('paws under the pivot do not lift when tilted', () => {
+    expect(contactDrop(-2, 2, 1, 4)).toBeCloseTo(2 * Math.sin((4 * Math.PI) / 180));
+    expect(contactDrop(-2, 2, 1, 4)).toBeLessThan(0.2);
+  });
+  it('wide contact points with stretch drop by u*sx*sin(rot) on the low side', () => {
+    const d = (70 * 1.2 * Math.sin((3.8 * Math.PI) / 180));
+    expect(contactDrop(-50, 70, 1.2, 3.8)).toBeCloseTo(d);
+    expect(contactDrop(-50, 70, 1.2, -3.8)).toBeCloseTo(50 * 1.2 * Math.sin((3.8 * Math.PI) / 180));
+  });
+  it('flip swaps which paw is low and a level sprite never lifts', () => {
+    expect(contactDrop(-50, 70, -1, 3.8)).toBeCloseTo(50 * Math.sin((3.8 * Math.PI) / 180));
+    expect(contactDrop(-50, 70, 1, 0)).toBe(0);
     expect(FLOOR_PAD).toBeGreaterThan(0);
+  });
+});
+
+describe('contactExtents', () => {
+  it('reads the leftmost/rightmost opaque x in the rows just above footY, as centre-relative fractions', () => {
+    const w = 10, h = 10;
+    const a = new Uint8Array(w * h * 4);
+    for (const [x, y] of [[2, 9], [7, 9], [0, 3]] as const) a[(y * w + x) * 4] = 255; // (0,3) is above the band
+    expect(contactExtents(a, w, h, 1)).toEqual([-0.3, 0.3]);
   });
 });
