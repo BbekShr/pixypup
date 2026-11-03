@@ -27,7 +27,8 @@ export function createScreenReader(deps: ScreenReaderDeps) {
       ]);
       // The first read only seeds; a failed read keeps the last good one.
       const badge = badges && prevBadges ? badgeBump(prevBadges, badges) : null;
-      if (badges) prevBadges = badges;
+      // An empty map after a non-empty one is the helper failing to read the Dock (AX children nil), not every badge clearing.
+      if (badges && (Object.keys(badges).length || !prevBadges)) prevBadges = badges;
       // Titles/bounds of unrelated windows (a browser tab) stay out of the observation.
       const call = windows.filter(
         (w) => ruleDecide({ windows: [w], badge: null, terminalError: null })?.action === 'hide',

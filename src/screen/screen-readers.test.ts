@@ -378,6 +378,21 @@ describe('createScreenReader', () => {
     expect((await rd.tick()).observation.badge).toEqual({ app: 'Mail', label: '2' });
     expect((await rd.tick()).observation.badge).toBeNull();
   });
+  it('an empty badge read (Dock unreadable) does not reset the baseline', async () => {
+    let badges: Record<string, string> = { Slack: '1', Mail: '2' };
+    const run: Run = async (args) => {
+      const o = args[0] === 'windows' ? { windows: [], titlesRedacted: false } : { badges };
+      return { code: 0, stdout: Buffer.from(JSON.stringify(o)), stderr: '' };
+    };
+    const rd = createScreenReader({ run, osa });
+    await rd.tick();
+    badges = {};
+    expect((await rd.tick()).observation.badge).toBeNull();
+    badges = { Slack: '1', Mail: '2' };
+    expect((await rd.tick()).observation.badge).toBeNull();
+    badges = { Slack: '1', Mail: '2', Zoom: '1' };
+    expect((await rd.tick()).observation.badge).toEqual({ app: 'Zoom', label: '1' });
+  });
   it('leaves unrelated window titles out; keeps call windows', async () => {
     const wins = [win('Terminal'), { ...win('Safari', 5), title: 'secret doc' }, { ...win('zoom.us', 6), title: 'x' }];
     const a = await createScreenReader({ run: mkRun(wins), osa }).tick();
