@@ -82,14 +82,14 @@ describe('ruleDecide', () => {
   });
 
   const w = (owner: string, title: string) => ({ ...base, windows: [{ owner, title, bounds: b }] });
-  const media = (camera: boolean, micApps: string[]) => ({ ...base, media: { camera, micApps } });
+  const media = (camera: boolean, micApps: string[], obs: Observation = base): Observation => ({ ...obs, media: { camera, micApps } });
   const hides = (o: Observation) => ruleDecide(o)?.action === 'hide';
 
   it('hides for Meet with hyphen, en dash or em dash', () => {
     for (const t of ['Meet - abc-defg-hij', 'Meet \u2013 abc-defg-hij', 'Meet \u2014 abc-defg-hij']) expect(hides(w('Google Chrome', t))).toBe(true);
   });
   it('hides when Chrome holds the mic even if the Meet tab is in the background', () => {
-    expect(hides({ ...w('Google Chrome', 'Inbox - Gmail'), ...media(false, ['com.google.Chrome.helper']) })).toBe(true);
+    expect(hides(media(false, ['com.google.Chrome.helper'], w('Google Chrome', 'Inbox - Gmail')))).toBe(true);
   });
   it('hides when a camera is in use with no call titles', () => {
     expect(hides(media(true, []))).toBe(true);
@@ -107,7 +107,7 @@ describe('ruleDecide', () => {
     expect(hides(media(false, ['com.microsoft.teams2']))).toBe(true);
     expect(hides(w('Microsoft Teams', 'Meeting with Alice | Microsoft Teams'))).toBe(true);
     expect(hides(w('Google Chrome', 'Call with Bob | Microsoft Teams'))).toBe(true);
-    expect(hides({ ...w('Microsoft Teams', 'Chat | Microsoft Teams'), ...media(false, []) })).toBe(false);
+    expect(hides(media(false, [], w('Microsoft Teams', 'Chat | Microsoft Teams')))).toBe(false);
   });
   it('PixyPup/Electron mic and look-alike bundle ids never count', () => {
     expect(hides(media(false, ['dev.pixypup.app', 'dev.pixypup.app.helper', 'com.github.Electron', 'us.zoomer.app', 'com.google.Chromey']))).toBe(false);
