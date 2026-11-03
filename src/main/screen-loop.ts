@@ -9,6 +9,7 @@ import type { Settings } from './settings';
 
 export const LOOP_MS = 5000;
 const CLEAR_TICKS = 2; // consecutive call-free reads before the pet comes out
+const EMPTY_CLEAR_TICKS = 10; // 10 x LOOP_MS = 50 s of failed (empty) reads: stop waiting, the overlay's hide has no timeout of its own
 
 export type LoopDeps = {
   getSettings: () => Pick<Settings, 'screenAware' | 'adminDisableScreenAware' | 'offline'>;
@@ -34,6 +35,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
   let seq = 0;
   let hideOn = false;
   let clear = 0;
+  let empty = 0;
   let lastKey = '';
   let lastBadge: Observation['badge'] = null;
   let sniffed = false; // a failure he ran to and has not seen fixed yet
@@ -53,6 +55,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
     if (on === hideOn) return;
     hideOn = on;
     clear = 0;
+    empty = 0;
     send({ action: 'hide', on, reason });
   };
 
@@ -72,9 +75,16 @@ export function startScreenLoop(d: LoopDeps): () => void {
       if (decision?.action === 'hide') {
         hideOn = true;
         clear = 0;
+        empty = 0;
         send({ action: 'hide', on: true, reason: decision.reason }); // every tick: a reloaded overlay or swapped pet must not stay visible during a call
-      } else if (hideOn && debug.windowCount !== 0 && ++clear >= CLEAR_TICKS) {
-        setHide(false, 'call ended'); // an empty window list is a failed read (unknown), not "the call ended"
+      } else if (hideOn) {
+        // An empty window list is a failed read (unknown), not "the call ended": one never clears, a long run gives up.
+        if (debug.windowCount === 0) empty++;
+        else {
+          empty = 0;
+          clear++;
+        }
+        if (clear >= CLEAR_TICKS || empty >= EMPTY_CLEAR_TICKS) setHide(false, 'call ended');
       }
       if (debug.terminalKey === '') lastKey = '';
       const badge = observation.badge;

@@ -164,6 +164,20 @@ describe('startScreenLoop', () => {
     t.stop();
   });
 
+  it('a long run of empty window reads clears the hide, a single one does not', async () => {
+    let cur = call;
+    let wins = 5;
+    const t = setup({ reader: { tick: async () => ({ observation: cur, debug: { terminalKey: '', windowCount: wins } }) } });
+    await tick(1);
+    cur = obs();
+    wins = 0;
+    await tick(9);
+    expect(t.sent.every((b) => b.on === true)).toBe(true);
+    await tick(1);
+    expect(t.sent.at(-1)).toMatchObject({ action: 'hide', on: false });
+    t.stop();
+  });
+
   it('snoozing during a call lifts the hide, and the call re-hides on wake', async () => {
     const t = setup();
     t.set(call, '');
