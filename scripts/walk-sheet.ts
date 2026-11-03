@@ -2,7 +2,7 @@
 // Muse Image at once, and Meta's judge model picks the most consistent one (src/api/walk-judge.ts).
 //
 //   export MODEL_API_KEY=...            (never put the key in a file)
-//   npm run walk-sheet -- <packDir> [--n 4] [--judge muse-wonder-1.0] [--out <dir>]
+//   npm run walk-sheet -- <packDir> [--n 4] [--judge muse-wonder-1.0] [--out <dir>] [--fix "what was wrong"]
 //
 // n Muse Image calls plus one judge call. Writes the frames and the manifest (walk.judge set) to <out> (default
 // out/walk-sheet/<pet>/pack, a copy of the pack, so the pack is untouched until you copy it over), and every sheet
@@ -18,9 +18,9 @@ import { extractJson, parseResponseText, sparkRequestBody, type SparkResponse } 
 import { chromaKey, dataUrl, layoutFrames, MAGENTA, POSES, sheetFrames, SIDE_FRAMES, STYLE, validateManifest } from '../src/api/pose-pipeline.js';
 import { isStaticSheet } from '../src/api/static-sheet.js';
 import { hindLegBalance } from '../src/api/hind-legs.js';
-import { JUDGE_MODEL, pickWalkSheet, WALK_JUDGE, WALK_REVIEW, type WalkReview } from '../src/api/walk-judge.js';
+import { JUDGE_MODEL, pickWalkSheet, WALK_JUDGE, WALK_REVIEW, walkPasses, type WalkReview } from '../src/api/walk-judge.js';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { n: { type: 'string', default: '4' }, judge: { type: 'string', default: JUDGE_MODEL }, out: { type: 'string' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { fix: { type: 'string' }, n: { type: 'string', default: '4' }, judge: { type: 'string', default: JUDGE_MODEL }, out: { type: 'string' } } });
 const dir = positionals[0];
 if (!dir) throw new Error('usage: npm run walk-sheet -- <packDir> [--n 4] [--judge <model>] [--out <dir>]');
 
@@ -33,7 +33,8 @@ async function main(): Promise<void> {
   const { height: packH } = await sharp(idleFile).metadata();
   const idle = await sharp(idleFile).trim({ threshold: 0 }).png().toBuffer();
   const refs = [dataUrl(await sharp(idle).flatten({ background: MAGENTA }).extend({ top: 40, bottom: 40, left: 80, right: 80, background: MAGENTA }).png().toBuffer())];
-  const prompt = `${STYLE} ${POSES['walk_sheet8']}`;
+  // --fix: a note on what the last batch got wrong, appended as the pipeline does for its second batch.
+  const prompt = `${STYLE} ${POSES['walk_sheet8']}` + (values.fix ? ` A reviewer rejected the last drawing: ${values.fix} Fix that.` : '');
   const client = clientForScripts();
   const log = `out/walk-sheet/${manifest.pet}`;
   await mkdir(log, { recursive: true });
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
   }));
   const best = pickWalkSheet({ ...review, best: judged, sheets: Array.isArray(review.sheets) ? review.sheets : [] }, balance);
   await writeFile(`${log}/review.json`, JSON.stringify({ judge: values.judge, sheetFiles: ok.map((s) => `sheet-${s.i}.png`), hindLegBalance: balance, ...review }, null, 2));
+  console.log(`passes (even, cycle, consistent >= 7): ${ok.map((s, k) => `sheet-${s.i} ${walkPasses(review.sheets?.find((x) => x.index === k)) ? 'yes' : 'no'}`).join(', ')}`);
   console.log(`back/front leg balance: ${ok.map((s, k) => `sheet-${s.i} ${balance[k]?.toFixed(2) ?? '?'}`).join(', ')}`);
   console.log(`${values.judge} picked sheet-${ok[judged]!.i} in ${((Date.now() - t1) / 1000).toFixed(1)} s: ${review.reason}; shipping sheet-${ok[best]!.i}`);
 
