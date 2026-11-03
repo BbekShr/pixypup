@@ -8,7 +8,7 @@ export const SILENCE_MS = 900;
 export const SPEECH_RMS = 0.015; // of full scale; room noise after noiseSuppression sits well below
 export const MAX_PENDING_BYTES = 288_000; // 6 s of 24 kHz 16-bit
 export const MAX_CHUNK_BYTES = 64 * 1024;
-export const NEEDS_KEY = 'Needs a key (Make a new pet… to add one)';
+export const NEEDS_KEY = 'Needs a key (right-click → Add Meta key…)';
 
 export type ListenState = 'idle' | 'listening' | 'thinking';
 export type ListenEvent = 'press' | 'silence' | 'timeout' | 'done' | 'error' | 'abort';

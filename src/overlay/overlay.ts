@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx, type Handoff } from './handoff';
-import { actAfterCommand, behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
+import { actAfterCommand, actNeedsWalk, behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
@@ -11,9 +11,9 @@ import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } fro
 import { alphaPlane as alpha, cleanFrame, walkTiming } from './frames';
 import { GAITS, bakeWalk, barkWord, legBand, rigFor } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
-import { displayWidth, footOffset } from './layout';
+import { displayWidth, FLOOR_PAD, floorLift, footPoints, type FootPoint, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
-import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, registersByHead, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL } from './motion';
+import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, registersByHead, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL, zoomLegs } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
 
 declare global {
@@ -43,9 +43,12 @@ type Act =
   | { kind: 'perk'; until: number }
   | { kind: 'celebrate'; until: number }
   | { kind: 'talk'; phase: 'go' | 'stay'; until: number; plan: TalkPlan; bubble: string }
+  | { kind: 'zoom'; phase: 'out' | 'back' | 'bark'; until: number; back: number }
   | { kind: 'hide'; phase: 'go' | 'away' | 'peek' | 'peeking'; until: number; side: -1 | 1; spot: number };
 const LONG = 1e9; // a state dwell that never fires; the act ends it
 const BARK_MS = 3500;
+const ZOOM_BARK_MS = 1500;
+const TRICKS = ['sit', 'bark', 'roll', 'zoomies']; // no nap: sleep has no timeout exit
 const PERK_MS = 1000;
 const CELEBRATE_MS = 2600;
 const TALK_MS = 6000;
@@ -74,6 +77,7 @@ let prefs: Prefs = { size: 'medium', energy: 'normal', snoozed: false };
 let footY = 1;
 let reg = new Map<string, number>(); // src -> natural px its head sits right of idle's
 let wagOk = false;
+let contact = new Map<string, FootPoint[]>(); // src -> underside points of the painted silhouette
 let widths = new Map<string, number>(); // src -> natural width; the profile walk is drawn wider than idle
 let strideFrac = STRIDE; // of the idle width the body advances per walk frame, measured from the pack's art
 type Rig = { kind: string; frames: number; bellyY: number; splitX: number; strideFrac: number; centroids: number[] } | { reason: string } | null;
@@ -85,6 +89,7 @@ let lines: string[] = []; // the pet's own catchphrases (model text: textContent
 let sayAt = Infinity;
 let speakingUntil = 0;
 let lastLine: string | null = null;
+let lastTrick: string | null = null;
 let lineOnBark = false;
 let bark = 'Woof!'; // "Meow!" for a cat
 let woofs = false; // this bark shows "Woof!" bubbles
@@ -92,7 +97,7 @@ let woofShown = -1; // the last burst that got one
 const query = new URLSearchParams(location.search);
 const chatty = import.meta.env.DEV && query.get('chatty') === '1';
 
-interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; bark: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number>; rig: Rig }
+interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; bark: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number>; contact: Map<string, FootPoint[]>; rig: Rig }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
 const STATIC_WALK_OVERLAP = 0.98;
@@ -222,7 +227,7 @@ async function readPack(): Promise<Prepared | null> {
     } else rig = { reason: 'no leg band found in idle' };
   }
   const { reg, wag } = register(poses, bitmaps, first);
-  return { name: pack.manifest.pet, strideFrac: strideFrac ?? walkStride(poses['walk'], bitmaps, first), bodyScale: body ?? profileScale(pack.manifest.profile?.gait), rig, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', bark: barkWord(pack.manifest.species), lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])) };
+  return { name: pack.manifest.pet, strideFrac: strideFrac ?? walkStride(poses['walk'], bitmaps, first), bodyScale: body ?? profileScale(pack.manifest.profile?.gait), rig, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', bark: barkWord(pack.manifest.species), lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])), contact: new Map(bitmaps.flatMap((b) => { const a = alpha(b); return a ? [[b.src, footPoints(a, b.naturalWidth, b.naturalHeight, pack.manifest.poses['idle']?.footY ?? 1)] as [string, FootPoint[]]] : []; })) };
 }
 
 function applyPack(p: Prepared): void {
@@ -236,6 +241,7 @@ function applyPack(p: Prepared): void {
   reg = p.reg;
   wagOk = p.wag;
   widths = p.widths;
+  contact = p.contact;
   lines = p.lines;
   comeBubble = p.comeBubble;
   strideFrac = p.strideFrac;
@@ -274,7 +280,7 @@ void readPack().then((p) => {
 }).catch(shown);
 void window.pixy.getStay().then((v) => { stay = v; }).catch(() => undefined); // main owns it, so a reload can't desync the menu checkbox
 
-const floorY = (): number => window.innerHeight - footOffset(H, footY);
+const floorY = (): number => window.innerHeight - footOffset(H, footY) - FLOOR_PAD;
 let state: PetState = 'walk';
 let x = 100 + ([...(query.get('pet') ?? '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 600, 0)); // pets sharing the screen don't start on top of each other
 let lift = 0; // offset from the floor line (negative = above); only non-zero while dragged or falling
@@ -443,7 +449,7 @@ function frame(now: number): void {
   if (queuedBehavior && !busyNow() && (!act || queuedBehavior.action === 'hide')) { const q = queuedBehavior; queuedBehavior = null; start(q); }
   if (queuedCmd && !act && !handoffBusy(handoff) && handoff !== 'greet') { const q = queuedCmd; queuedCmd = null; command(q); }
   if (act && act.until && now >= act.until) actTimeout(now);
-  if (act?.kind === 'talk' && act.phase === 'go' && state !== 'walk') act = null; // the walk to the chat was cut short: its only exit is arrival
+  if (actNeedsWalk(act) && state !== 'walk') act = null; // the walk was cut short: its only exit is arrival
   if (falling) {
     const r = airStep({ x, lift, vx, vy }, dt, window.innerWidth - W, floorY());
     ({ x, lift, vx, vy } = r);
@@ -482,7 +488,7 @@ function frame(now: number): void {
       turnUntil = now + (calm ? 0 : TURN_MS);
       stopWalk(); // speeds up again from the end of the turn, no lurch
     } else {
-      const vMax = MAX_SPEED * (act?.kind === 'sniff' ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size) * gaitParams(gaitKind()).speed;
+      const vMax = MAX_SPEED * ((act?.kind === 'sniff' || act?.kind === 'zoom') ? energyParams('playful').speed : en().speed) * sizeScale(prefs.size) * gaitParams(gaitKind()).speed;
       const v0 = walkV;
       walkV = walkStep(v0, rem, vMax, dt);
       walkAcc = (walkV - v0) / dt / (WALK_ACCEL * vMax / MAX_SPEED);
@@ -646,6 +652,7 @@ function frame(now: number): void {
   const swing = dang.angle ? -dang.angle : 0;
   if (dang.angle) { rot += swing; sy *= 1.03; }
   dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
+  if (!swing && state !== 'roll') { const c = contact.get(src); if (c) dy -= floorLift(c, fw, H, sx * flip, sy, rot, dy); } // the low paw (tilt) or a downward bob would sink below the floor line otherwise
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
   if (swing && state !== 'roll') { // rotate about the grab point: shift by what the origin-pivot rotation moved it
@@ -796,8 +803,14 @@ img.addEventListener('pointercancel', finish);
 img.addEventListener('lostpointercapture', finish);
 
 /** Which way of moving the pet's context calls for: a sneak up on a sniff, a trot when called or leaving. */
-const gaitKind = (): GaitKind => (act?.kind === 'sniff' && act.phase === 'run' ? 'sniff' : handoff === 'trotOff' || calling || ((act?.kind === 'hide' || act?.kind === 'talk') && act.phase === 'go') ? 'trot' : 'walk');
+const gaitKind = (): GaitKind => (act?.kind === 'zoom' && act.phase !== 'bark' ? 'zoom' : act?.kind === 'sniff' && act.phase === 'run' ? 'sniff' : handoff === 'trotOff' || calling || ((act?.kind === 'hide' || act?.kind === 'talk') && act.phase === 'go') ? 'trot' : 'walk');
 
+function zoomies(): void {
+  const { far, back } = zoomLegs(x, W, window.innerWidth);
+  act = { kind: 'zoom', phase: 'out', until: 0, back };
+  setState('walk', { target: far });
+  say('Zoomies!', 1200);
+}
 function come(pointerX: number | null): void {
   if (alreadyHere(x, W, pointerX, window.innerWidth)) return greetCaller(performance.now());
   setState('walk', { target: comeTarget(pointerX, W, window.innerWidth) });
@@ -830,6 +843,13 @@ function command(raw: string): void {
   } else if (cmd === 'roll' || cmd === 'bark') setState(cmd);
   else if (cmd === 'bed') setState('sleep');
   else if (isCome(cmd)) come(comeX(cmd));
+  else if (cmd === 'zoomies') zoomies();
+  else if (cmd === 'trick') {
+    const t = pickLine(TRICKS, lastTrick, Math.random());
+    lastTrick = t;
+    if (t === 'zoomies') zoomies();
+    else if (t === 'sit' || t === 'roll' || t === 'bark') setState(t);
+  }
   else if (cmd === 'stay') {
     stay = true;
     if (state === 'walk') setState('idle');
@@ -972,6 +992,12 @@ function actArrive(now: number): void {
     else setState(act.plan.pose === 'sleep' ? 'sleep' : 'sit', { ms: LONG });
     if (act.plan.hearts && !calm) for (let i = 0; i < 4; i++) setTimeout(heart, i * 200);
     if (act.bubble) say(act.bubble, TALK_MS);
+  } else if (act.kind === 'zoom' && act.phase !== 'bark') {
+    if (act.phase === 'out') { act.phase = 'back'; setState('walk', { target: act.back }); return; }
+    act.phase = 'bark';
+    act.until = now + ZOOM_BARK_MS;
+    say('Again?', ZOOM_BARK_MS);
+    setState('bark', { ms: ZOOM_BARK_MS }); // finite: a command nulls the act, and actTimeout would never end the bark
   } else if (act.kind === 'hide' && act.phase === 'go') {
     act.phase = 'away';
     face(-act.side); // looks in from the edge
@@ -1176,5 +1202,5 @@ raf = requestAnimationFrame(frame);
 import.meta.hot?.dispose(() => cancelAnimationFrame(raf));
 
 if (import.meta.env.DEV) {
-  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, wag: wagOk, reg: [...reg.values()].map(Math.round), pose: poseKey, menuCalls, lift, falling, handoff, command, yawn: startYawn, rig, walkIdx, shownW: img.style.width }) });
+  Object.defineProperty(window, '__pixyDebug', { configurable: true, get: () => ({ pref: (cmd: string) => window.pixy.devCommand(cmd), behave: (b: unknown) => onBehavior(b), lastBehavior, lastTrick, act: act && { ...act }, size: [W, H], energy: prefs.energy, snoozed: prefs.snoozed, resting, deadline, state, x, dir, facing, walked, stay, wag: wagOk, reg: [...reg.values()].map(Math.round), pose: poseKey, menuCalls, lift, falling, handoff, command, yawn: startYawn, rig, walkIdx, shownW: img.style.width }) });
 }

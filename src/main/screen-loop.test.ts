@@ -128,6 +128,56 @@ describe('startScreenLoop', () => {
     t.stop();
   });
 
+  it('sniffs a failure whose line is flush with the display left edge (maximized terminal)', async () => {
+    const flush = obs({ terminalError: { text: 'FAIL a.test.ts', box: { x: 4, y: 300, w: 200, h: 16 } } });
+    const decide = async () => ({ decision: { action: 'sniff' as const, target: { x: -12, y: 308 }, durationMs: 1, reason: 'err', bubble: 'b' } });
+    const t = setup({ reader: { tick: async () => ({ observation: flush, debug: { terminalKey: 'k1' } }) }, decider: { decide }, overlay: { bounds: () => ({ x: 0, y: 25, width: 1440, height: 875 }), send: (b) => t.sent.push(b) } });
+    await tick();
+    expect(t.sent).toEqual([{ seq: 1, action: 'sniff', target: { x: 0, y: 283 }, bubble: 'b', reason: 'err' }]);
+    t.stop();
+  });
+
+
+  it('still skips a flush-left-looking failure that is on the second display', async () => {
+    const other = obs({ terminalError: { text: 'FAIL', box: { x: 1500, y: 300, w: 200, h: 16 } } });
+    const decide = async () => ({ decision: { action: 'sniff' as const, target: { x: 1484, y: 308 }, durationMs: 1, reason: 'err', bubble: 'b' } });
+    const sent: Behavior[] = [];
+    const t = setup({ reader: { tick: async () => ({ observation: other, debug: { terminalKey: 'k1' } }) }, decider: { decide }, overlay: { bounds: () => ({ x: 0, y: 0, width: 1440, height: 900 }), send: (b) => sent.push(b) } });
+    await tick(2);
+    expect(sent).toEqual([]);
+    t.stop();
+  });
+
+  it('keeps the Spark bubble for a failure whose sniff was held back by a call', async () => {
+    let step = 0;
+    const decide = async () => {
+      step++;
+      if (step === 1) return { decision: { action: 'hide' as const, durationMs: 1, reason: 'call' } };
+      const bubble = step === 2 ? 'Spark words' : undefined;
+      return { decision: { action: 'sniff' as const, target: { x: 700, y: 308 }, durationMs: 1, reason: 'err', ...(bubble ? { bubble } : {}) } };
+    };
+    const t = setup({ decider: { decide } });
+    await tick(3);
+    const sniff = t.sent.filter((b) => b.action === 'sniff');
+    expect(sniff).toHaveLength(1);
+    expect(sniff[0]!.bubble).toBe('Spark words');
+    t.stop();
+  });
+
+  it('a long run of empty window reads clears the hide, a single one does not', async () => {
+    let cur = call;
+    let wins = 5;
+    const t = setup({ reader: { tick: async () => ({ observation: cur, debug: { terminalKey: '', windowCount: wins } }) } });
+    await tick(1);
+    cur = obs();
+    wins = 0;
+    await tick(9);
+    expect(t.sent.every((b) => b.on === true)).toBe(true);
+    await tick(1);
+    expect(t.sent.at(-1)).toMatchObject({ action: 'hide', on: false });
+    t.stop();
+  });
+
   it('snoozing during a call lifts the hide, and the call re-hides on wake', async () => {
     const t = setup();
     t.set(call, '');

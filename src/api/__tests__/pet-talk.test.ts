@@ -79,9 +79,28 @@ describe('isCrisis / localReply', () => {
     for (const t of ['killing it at work', 'rough day', 'ran 5 kms', 'kms per hour', 'I am dying to see it', 'this bug is killing me', 'this bug will kill me', 'suicide squad was bad?'.replace('suicide', 'sui')]) expect(isCrisis(t)).toBe(false);
   });
   it('falls back per species', () => {
-    expect(localReply('hi')).toEqual({ action: 'comfort', woof: 'Woof!', caption: 'leans against you', crisis: false });
-    expect(localReply('I want to die', 'cat')).toMatchObject({ woof: 'Mrrp~ purr', crisis: true });
-    expect(() => validateTalk(localReply('hi', 'cat'), 'cat')).not.toThrow();
-    expect(() => validateTalk(localReply('hi'))).not.toThrow();
+    expect(localReply('I want to die', 'cat')).toMatchObject({ action: 'comfort', woof: 'Mrrp~ purr', crisis: true });
+    expect(localReply('I want to die')).toMatchObject({ woof: 'Woof!', caption: 'leans against you', crisis: true });
+  });
+  it('turn cycles all lines in order; crisis ignores it', () => {
+    for (const sp of [undefined, 'cat']) {
+      const ws = [0, 1, 2, 3].map((n) => localReply('same text', sp, n).woof);
+      expect(new Set(ws).size).toBe(4);
+      expect(localReply('same text', sp, 4)).toEqual(localReply('other', sp, 0));
+      expect(localReply('I want to die', sp, 2)).toEqual(localReply('I want to die', sp));
+    }
+  });
+  it('offline replies are valid, stable and varied', () => {
+    const texts = ['hi', 'rough day', 'I got the job!', 'bored', 'tired', 'ok', 'thanks buddy', 'long meeting'];
+    for (const sp of [undefined, 'cat']) {
+      const rs = texts.map((t) => localReply(t, sp));
+      for (const [i, r] of rs.entries()) {
+        expect(() => validateTalk(r, sp)).not.toThrow();
+        expect(r.crisis).toBe(false);
+        expect(localReply(texts[i], sp)).toEqual(r);
+      }
+      expect(new Set(rs.map((r) => r.woof)).size).toBeGreaterThanOrEqual(3);
+    }
+    expect(() => validateTalk(localReply('hi', 'cat'))).toThrow();
   });
 });

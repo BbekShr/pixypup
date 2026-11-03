@@ -19,7 +19,7 @@ const defaults: Settings = {
   voice: false,
   offline: false,
   adminDisableScreenAware: false,
-  petName: 'Kuma',
+  petName: 'Pakkun',
   onboarded: false,
   size: 'medium',
   hideInShares: false,
@@ -87,7 +87,7 @@ describe('loadSettings (real read/merge path)', () => {
     expect(hideLockedByAdmin()).toBe(true);
   });
   it('rejects petName over 40 chars, accepts valid one', async () => {
-    expect((await load({ [USER]: JSON.stringify({ petName: 'x'.repeat(41) }) })).petName).toBe('Kuma');
+    expect((await load({ [USER]: JSON.stringify({ petName: 'x'.repeat(41) }) })).petName).toBe('Pakkun');
     expect((await load({ [USER]: '{"petName":"Rex"}' })).petName).toBe('Rex');
   });
   it('corrupt admin file forces screenAware and voice off despite user enabling them', async () => {

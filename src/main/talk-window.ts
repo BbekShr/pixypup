@@ -7,6 +7,7 @@ import { isCrisis, localReply, MAX_USER, petTalk, type TalkReply, type Turn } fr
 import type { Settings } from './settings';
 import { IPC } from './ipc';
 import { settleReply } from './talk-history';
+import { voiceLockedByAdmin } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const W = 380;
@@ -20,6 +21,7 @@ export interface TalkDeps {
   getHideInShares(): boolean;
   avatar(): string | undefined;
   act(reply: TalkReply, bounds: Electron.Rectangle): void;
+  openKey(): void;
 }
 
 /**
@@ -29,6 +31,7 @@ export interface TalkDeps {
 export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: string): void; applyProtection(): void } {
   let win: BrowserWindow | null = null;
   let history: Turn[] = [];
+  let localTurns = 0; // keyless replies given in this chat: they cycle instead of repeating
   let ctl = new AbortController(); // per window: closing the chat cancels what is still in flight
   const mine = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean => !!win && !win.isDestroyed() && e.sender === win.webContents;
 
@@ -45,7 +48,7 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
       } catch {
         r = null; // blocked by the gate or the call failed: the local line keeps the chat alive
       }
-      r ??= localReply(text, d.species());
+      r ??= localReply(text, d.species(), localTurns++);
     }
     const s = settleReply(session, win, history, text, r);
     history = s.history;
@@ -54,7 +57,22 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
   }
 
   ipcMain.handle(IPC.talkSend, (e, raw: unknown) => (mine(e) && typeof raw === 'string' && raw.trim() ? reply(raw) : null));
-  ipcMain.handle(IPC.talkInfo, (e) => (mine(e) ? { name: d.name(), avatar: d.avatar() ?? null } : null));
+  const hasKey = (): boolean => {
+    try {
+      return !!d.key();
+    } catch {
+      return false;
+    }
+  };
+  // 'usable' = ⌥ Space works now; 'can-enable' = the menu can turn it on; 'needs-key' = voice is on but there is no key; 'none' = admin-locked or offline.
+  const voiceState = (keyed: boolean): 'usable' | 'can-enable' | 'needs-key' | 'none' => {
+    const s = d.settings();
+    if (s.voice && !s.offline && keyed) return 'usable';
+    if (s.offline || voiceLockedByAdmin()) return 'none';
+    return s.voice ? 'needs-key' : 'can-enable';
+  };
+  ipcMain.handle(IPC.talkInfo, (e) => (mine(e) ? { name: d.name(), avatar: d.avatar() ?? null, hasKey: hasKey(), voice: voiceState(hasKey()) } : null));
+  ipcMain.on(IPC.talkOpenKey, (e) => { if (mine(e)) d.openKey(); });
   ipcMain.on(IPC.talkClose, (e) => { if (mine(e)) win?.close(); });
 
   function open(): void {
@@ -79,13 +97,14 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
     });
     win = w;
     history = [];
+    localTurns = 0;
     ctl = new AbortController();
     w.setAlwaysOnTop(true, 'floating');
     w.setContentProtection(d.getHideInShares());
     w.once('ready-to-show', () => { w.show(); w.focus(); });
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     w.webContents.on('will-navigate', (ev) => ev.preventDefault());
-    w.on('closed', () => { if (win === w) { win = null; history = []; ctl.abort(); } });
+    w.on('closed', () => { if (win === w) { win = null; history = []; localTurns = 0; ctl.abort(); } });
     const devUrl = devRendererUrl();
     if (devUrl) void w.loadURL(`${devUrl}/onboarding/talk.html`);
     else void w.loadFile(join(here, '../renderer/onboarding/talk.html'));

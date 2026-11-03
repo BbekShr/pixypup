@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { matchCommand } from './commands';
 
 describe('matchCommand', () => {
+  it('hears do a trick and zoomies; the last command still wins', () => {
+    expect(matchCommand('Pakkun, do a trick', 'Pakkun')).toBe('trick');
+    expect(matchCommand('pakkun trick!', 'Pakkun')).toBe('trick');
+    expect(matchCommand('Pakkun zoomies', 'Pakkun')).toBe('zoomies');
+    expect(matchCommand('pakkun, zoomie', 'Pakkun')).toBe('zoomies');
+    expect(matchCommand('Pakkun sit, no, zoomies', 'Pakkun')).toBe('zoomies');
+    expect(matchCommand('Pakkun zoomies then sit', 'Pakkun')).toBe('sit');
+    expect(matchCommand('zoomies', 'Pakkun')).toBeNull();
+  });
+  it('a sentence that merely contains "trick" is not a command', () => {
+    expect(matchCommand("what's the trick to rebasing", 'Pakkun', { requireName: false })).toBeNull();
+    expect(matchCommand("that's a neat trick", 'Pakkun', { requireName: false })).toBeNull();
+    expect(matchCommand('Pakkun, trick!', 'Pakkun')).toBe('trick');
+  });
   it('requires the pet name', () => {
     expect(matchCommand('sit', 'Pakkun')).toBeNull();
   });

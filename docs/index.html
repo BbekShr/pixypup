@@ -678,14 +678,14 @@ footer a { color: var(--ink-2); }
 
 <section class="voice">
   <div class="wrap">
-    <h2 class="rv">Hold the keys. Say the word.</h2>
+    <h2 class="rv">Press the keys. Say the word.</h2>
     <div class="keys" id="keys" aria-hidden="true"><span class="key">⌥</span><span class="plus">+</span><span class="key wide">space</span></div>
     <div class="heard" aria-hidden="true">
       <img id="voicePet" src="img/pakkun/sit.webp" alt="">
       <div class="said" id="said"><span>"Pakkun, sit"</span></div>
       <span class="mic" id="mic"><i class="ph ph-microphone"></i>Mic off</span>
     </div>
-    <p class="lede rv">Meta Voice Transcribe hears you for up to four seconds, only while you hold ⌥ Space. Try "roll over", "go to bed", "come here" or "bark".</p>
+    <p class="lede rv">Meta Voice Transcribe hears you for up to four seconds, after you press ⌥ Space (press, don't hold). Try "roll over", "go to bed", "come here", "bark", "do a trick" or "zoomies". To turn it on: choose "Listen for my voice" in his right-click menu, allow the mic once, and add a Meta key. A sentence that isn't a command opens Talk with it typed in, ready to send.</p>
   </div>
 </section>
 
@@ -693,7 +693,7 @@ footer a { color: var(--ink-2); }
   <div class="wrap split">
     <div>
       <h2 class="rv">A desk buddy for rough days.</h2>
-      <p class="lede rv" style="--d:.06s">Right-click him, choose "Talk to Pakkun…" and say how your day is going. He answers in woofs, with a small action like <i>leans against you</i>.</p>
+      <p class="lede rv" style="--d:.06s">Right-click him, choose "Talk to Pakkun…" and say how your day is going. He answers in woofs, with a small action like <i>leans against you</i>. With no Meta key he sticks to a few basic woofs; a key is what lets him really understand you.</p>
       <p class="fine rv" style="--d:.12s">Your words go to Meta's model only when you press Send, and nothing is saved. If you mention hurting yourself, nothing is sent: a help card with 988 and findahelpline.com appears instead. This demo is scripted and fully offline.</p>
     </div>
     <div class="chatdemo rv" style="--d:.1s">
@@ -774,7 +774,7 @@ footer a { color: var(--ink-2); }
       <div class="model rv"><b>Muse Image</b><p>Draws a consistent set of 3D poses from one photo, plus three candidate walk cycles of eight frames each.</p><code>muse-image-1.0</code></div>
       <div class="model rv"><b>Muse Spark 1.3</b><p>Reads the failing line, decides how to react and writes his speech bubble and hints.</p><code>muse-spark-1.3</code></div>
       <div class="model rv"><b>Muse Wonder</b><p>Checks every pose he's drawn in and sends misfits back for a redraw, then picks the walk where he trots evenly instead of limping.</p><code>muse-wonder-1.0</code></div>
-      <div class="model rv"><b>Voice Transcribe</b><p>Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space.</p><code>muse-voice-transcribe-1.0</code></div>
+      <div class="model rv"><b>Voice Transcribe</b><p>Turns "Pakkun, sit" into a trick, only after you press ⌥ Space.</p><code>muse-voice-transcribe-1.0</code></div>
     </div>
     <figure class="panel sheet" id="sheet" style="margin-inline:0">
       <div class="grid" id="sheetGrid" role="img" aria-label="Fourteen Pakkun poses generated from one photo: standing, blinking, an 8-frame walk, sitting, sleeping, barking, rolling"></div>
@@ -932,11 +932,9 @@ themeBtn.addEventListener('click', () => {
     pet.classList.remove('wiggle'); void pet.offsetWidth; pet.classList.add('wiggle');
     // while a test is failing, a click is a hint (in the app Muse Spark writes it from the failing line)
     if (bug) { hold('bark', 3200); say('Hint: add(2, 3) gave 4, not 5. Check the + in add()', 3200); return; }
-    const t = randomTrick(['sit', 'bark', 'roll', 'nap', 'hop', 'zoomies']);
+    const t = randomTrick(['sit', 'bark', 'roll', 'zoomies']);
     say(LINES()[t]); hearts(2);
-    if (t === 'nap') hold('sleep', 2400);
-    else if (t === 'hop') { hold('idle', 1100); hop(img); }
-    else if (t === 'zoomies') walkTo(x > W() / 2 ? 0 : W(), () => { hold('bark', 1200); say('Again?', 1200); }, 380);
+    if (t === 'zoomies') walkTo(x > W() / 2 ? 0 : W(), () => { hold('bark', 1200); say('Again?', 1200); }, 380);
     else hold(t, 1700);
   }
   function hearts(n) {

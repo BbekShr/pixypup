@@ -308,7 +308,9 @@ export function boundGait(distancePx: number, stridePx: number, h: number): Pose
   return { dx: 0, dy: -0.07 * h * air, rot: 6 * air * (1 - q), sx: 1 / sy, sy };
 }
 
-export type GaitKind = 'walk' | 'trot' | 'sniff';
+export const ZOOM_SPEEDUP = 3;
+
+export type GaitKind = 'walk' | 'trot' | 'sniff' | 'zoom';
 
 export interface GaitParams {
   speed: number; // x the walking speed
@@ -323,6 +325,7 @@ const GAITS: Record<GaitKind, GaitParams> = {
   walk: { speed: 1, reach: 1, bounce: 1, sy: 1, pitchDeg: 0, suspension: 0 },
   trot: { speed: TROT_SPEEDUP, reach: 1.3, bounce: 1.8, sy: 1, pitchDeg: 0, suspension: 0.008 },
   sniff: { speed: 0.6, reach: 1, bounce: 0.5, sy: 0.95, pitchDeg: 4, suspension: 0 },
+  zoom: { speed: ZOOM_SPEEDUP, reach: 1.4, bounce: 2.2, sy: 1, pitchDeg: 0, suspension: 0.012 },
 };
 export const gaitParams = (kind: GaitKind): GaitParams => GAITS[kind];
 
@@ -384,3 +387,10 @@ export const settle = (tMs: number): number =>
 /** 0 -> 1 -> 0 over durMs with eased ends, for fidgets that lean in and back out instead of snapping. */
 export const envelope = (tMs: number, durMs: number): number =>
   tMs <= 0 || tMs >= durMs ? 0 : Math.sin((Math.PI * tMs) / durMs) ** 2;
+
+/** Zoomies: sprint to the screen edge farther from the pet, then dash back most of the way (never past the screen). */
+export function zoomLegs(x: number, w: number, screenW: number): { far: number; back: number } {
+  const maxX = Math.max(0, screenW - w);
+  const far = x + w / 2 < screenW / 2 ? maxX : 0;
+  return { far, back: Math.min(maxX, Math.max(0, far + (x - far) * 0.6)) };
+}

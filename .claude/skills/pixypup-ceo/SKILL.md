@@ -199,6 +199,18 @@ derived from the item's acceptance criteria.
   you've traced the disagreement to file:line.
 - A gate still red after one retry → revert that item (`git revert` its commits), log it to the
   backlog, continue with the next. Never ship on red.
+- **Look at it yourself.** For any diff that touches a window (onboarding, Talk, key, explainers,
+  overlay bubbles or floor), the release manager's brief requires the "Window/UI changes" step of
+  `/pixypup-verify`: screenshots of every touched window in every state, including long-content
+  cases, plus the overflow probe. You open every PNG before calling GO, and you fix what you see in
+  this run. A behaviour-only GO is not a GO for a UI diff (the maintainer found three clipped
+  windows by eye on 2026-11-02).
+- **Docs ship with the change.** Any user-visible change (a feature, a menu item, copy, a default,
+  a flow) updates `README.md` and the site (`docs/index.html`; regenerate `docs/js/puppet.js` with
+  `npm run site-js` when its sources changed, never hand-port) in the same PR. Grep both for stale
+  facts first. Dispatch the docs owner (`pixypup-app-engineer`) alongside the build, verify every
+  claimed edit against `git show --stat`, and open the site in the browser yourself (preview it,
+  read the changed sections, check the console) before shipping.
 
 ### 5. Records (same branch, after the board has reported)
 - Backlog: update item status; append new items found this run (with failure scenario and

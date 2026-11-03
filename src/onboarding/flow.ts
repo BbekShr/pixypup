@@ -21,7 +21,7 @@ export type FlowEvent =
 
 /** Cute copy for a species the main process would refuse, or null when it is fine. Same rule as SPECIES_RE, on the trimmed text. */
 export const speciesIssue = (raw: string): string | null =>
-  SPECIES_RE.test(raw.trim()) ? null : raw.trim() === '' ? 'Tell me what they are, even just "pup"!' : 'Just letters, please: like "husky" or "monarch butterfly" (30 or fewer).';
+  SPECIES_RE.test(raw.trim()) ? null : raw.trim() === '' ? 'Tell me what they are, even just "pup"!' : 'Letters only, 30 max: like "husky" or "monarch butterfly".';
 
 export const initialFlow = (needsKey: boolean, fromMenu: boolean): Flow => ({ step: fromMenu ? 'photo' : 'welcome', needsKey });
 

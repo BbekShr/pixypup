@@ -26,7 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voice: false,
   offline: false, // admin restriction only: an admin sets true to block all background network (screen, voice)
   adminDisableScreenAware: false,
-  petName: 'Kuma', // greets you on first launch, so making your own pet visibly swaps him out
+  petName: 'Pakkun', // greets you on first launch, so making your own pet visibly swaps him out
   onboarded: false,
   size: 'medium',
   hideInShares: false,

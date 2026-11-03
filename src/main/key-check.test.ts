@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tryKey } from './key-check';
+import { storeKey, tryKey } from './key-check';
 
 const s = { screenAware: false, voice: false, adminDisableScreenAware: false, offline: false };
 const answer = (status: number): typeof fetch => (async () => new Response('{}', { status })) as typeof fetch;
@@ -24,5 +24,30 @@ describe('tryKey', () => {
     const spy = (async () => { called = true; return new Response('{}'); }) as typeof fetch;
     expect(await tryKey('sk-any-key', { ...s, offline: true }, { fetchImpl: spy })).toBe('ok');
     expect(called).toBe(false);
+  });
+});
+
+describe('storeKey', () => {
+  it('stores only a key Meta accepts', async () => {
+    const saved: string[] = [];
+    expect(await storeKey('sk-good-key', s, (k) => saved.push(k), { fetchImpl: answer(200) })).toBe('ok');
+    expect(saved).toEqual(['sk-good-key']);
+  });
+  it('does not store a rejected key', async () => {
+    const saved: string[] = [];
+    expect(await storeKey('sk-bad-key', s, (k) => saved.push(k), { fetchImpl: answer(401) })).toBe('bad-key');
+    expect(saved).toEqual([]);
+  });
+  it('reports unsafe when the Keychain store throws', async () => {
+    const boom = () => { throw new Error('no encryption'); };
+    expect(await storeKey('sk-good-key', s, boom, { fetchImpl: answer(200) })).toBe('unsafe');
+  });
+  it('makes no call when offline and keeps the key as typed', async () => {
+    let called = false;
+    const spy = (async () => { called = true; return new Response('{}'); }) as typeof fetch;
+    const saved: string[] = [];
+    expect(await storeKey('sk-any-key', { ...s, offline: true }, (k) => saved.push(k), { fetchImpl: spy })).toBe('ok');
+    expect(called).toBe(false);
+    expect(saved).toEqual(['sk-any-key']);
   });
 });

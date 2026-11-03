@@ -37,6 +37,8 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     { label: 'Roll over', command: 'roll' },
     { label: 'Nap', command: 'bed' },
     { label: 'Come here', command: 'come' },
+    { label: 'Do a trick', command: 'trick' },
+    { label: 'Zoomies!', command: 'zoomies' },
     talkItem(o.name),
     { type: 'separator' },
     o.snoozed ? { label: 'Wake up', command: 'wake' } : SNOOZE,

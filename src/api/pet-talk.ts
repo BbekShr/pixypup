@@ -40,12 +40,28 @@ export function validateTalk(v: unknown, species?: string): TalkReply {
   return { action: o.action as TalkAction, woof, caption, crisis: o.crisis };
 }
 
-export const localReply = (text: string, species?: string): TalkReply => ({
-  action: 'comfort',
-  woof: isCat(species) ? 'Mrrp~ purr' : 'Woof!',
-  caption: 'leans against you',
-  crisis: isCrisis(text),
-});
+const LOCAL = {
+  dog: [
+    { action: 'comfort', woof: 'Woof!', caption: 'leans against you' },
+    { action: 'listen', woof: 'Ruff~', caption: 'tilts head and listens' },
+    { action: 'comfort', woof: 'Awoo~', caption: 'rests chin on your hand' },
+    { action: 'cheer', woof: 'Arf arf!', caption: 'wags tail slowly' },
+  ],
+  cat: [
+    { action: 'comfort', woof: 'Mrrp~ purr', caption: 'leans against you' },
+    { action: 'listen', woof: 'Mew~', caption: 'blinks slowly at you' },
+    { action: 'comfort', woof: 'Prr prr', caption: 'curls up close' },
+    { action: 'cheer', woof: 'Mrow!', caption: 'headbutts your hand' },
+  ],
+} as const;
+
+// Offline: no network, no model. Without `turn` the same text picks the same line; with `turn` (replies so far in this chat) lines cycle in order so none repeats back to back; crisis always gets the plain comfort line.
+export const localReply = (text: string, species?: string, turn?: number): TalkReply => {
+  const crisis = isCrisis(text);
+  const lines = LOCAL[isCat(species) ? 'cat' : 'dog'];
+  const i = crisis ? 0 : turn !== undefined ? turn % lines.length : [...text].reduce((h, c) => h + c.charCodeAt(0), 0) % lines.length;
+  return { ...lines[i], crisis };
+};
 
 export const talkInstructions = (name: string, species?: string): string => {
   const kind = promptSpecies(species);

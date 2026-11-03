@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
-import { displayWidth, footOffset } from './layout';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG, zoomLegs, ZOOM_SPEEDUP } from './motion';
+import { energyParams } from '../main/prefs';
+import { displayWidth, floorLift, footPoints, footOffset, type FootPoint } from './layout';
 
 describe('layout', () => {
   it('puts the foot line at footY of the displayed height and keeps aspect', () => {
@@ -533,5 +534,78 @@ describe('gaits', () => {
     expect(profileScale(undefined)).toEqual({ bounce: 1, pitch: 1 });
     expect(profileScale({ bounce: 0.15, pitchDeg: 40 })).toEqual({ bounce: 1.5, pitch: 1.5 });
     expect(profileScale({ bounce: 0, pitchDeg: 0 })).toEqual({ bounce: 0.3, pitch: 0 });
+  });
+});
+
+describe('zoomies', () => {
+  it('sprints to the edge farther from the pet, then back part of the way, always on screen', () => {
+    expect(zoomLegs(100, 200, 1000).far).toBe(800);
+    expect(zoomLegs(700, 200, 1000).far).toBe(0);
+    for (const x of [0, 100, 400, 800]) {
+      const { far, back } = zoomLegs(x, 200, 1000);
+      expect(back).toBeGreaterThanOrEqual(Math.min(far, x));
+      expect(back).toBeLessThanOrEqual(Math.max(far, x));
+    }
+    expect(zoomLegs(100, 200, 1000).back).toBeCloseTo(800 + (100 - 800) * 0.6);
+  });
+  it('a pet wider than the screen stays at 0', () => {
+    expect(zoomLegs(0, 1200, 1000)).toEqual({ far: 0, back: 0 });
+  });
+  it('the zoom gait is clearly faster than a trot, even at playful energy', () => {
+    expect(gaitParams('zoom').speed).toBe(ZOOM_SPEEDUP);
+    const play = energyParams('playful').speed;
+    expect(gaitParams('zoom').speed * play).toBeGreaterThan(gaitParams('trot').speed * play * 1.4);
+  });
+});
+
+describe('floorLift', () => {
+  const H = 140, FW = 100;
+  const pts: FootPoint[] = [[-0.4, 0], [-0.1, -0.03], [0.1, -0.02], [0.4, -0.008]]; // paws at different heights, as in a real silhouette
+  // The browser's math: translate(O) * the petTransform string * translate(-O), applied to a point of the frame box.
+  const paint = (t: string, [u, v]: FootPoint): number => {
+    const n = (re: RegExp): number[] => t.match(re)!.slice(1).map(Number);
+    const [, ty] = n(/translate\(([-\d.e]+)px, ([-\d.e]+)px\)/);
+    const [deg] = n(/rotate\(([-\d.e]+)deg\)/);
+    const [sx, sy] = n(/scale\(([-\d.e]+), ([-\d.e]+)\)/);
+    const a = (deg! * Math.PI) / 180;
+    return ty! + Math.sin(a) * u * FW * sx! + Math.cos(a) * v * H * sy!;
+  };
+  const lowest = (rot: number, flip: number, sx: number, sy: number, dy: number): number => {
+    const lift = floorLift(pts, FW, H, sx * flip, sy, rot, dy);
+    const t = petTransform(0, dy - lift, rot, flip, sx, sy);
+    return Math.max(...pts.map((p) => paint(t, p))) - Math.max(...pts.map((p) => p[1] * H)); // 0 = where the level pet rests
+  };
+  it('a tilted sit keeps the lowest paw on the rest line, both tilts and both facings', () => {
+    for (const rot of [-4, -3, -1, 0, 1, 3, 4]) for (const flip of [1, -1]) {
+      const g = lowest(rot, flip, 1, 1.02, 0);
+      expect(g).toBeLessThanOrEqual(1e-9);
+      expect(g).toBeGreaterThanOrEqual(-0.5);
+    }
+  });
+  it('walk and zoomies never put a paw below the line, with lean, stretch, flip and the bob', () => {
+    for (const kind of ['walk', 'trot', 'zoom'] as const) for (const flip of [1, -1]) for (let p = 0; p < 1; p += 0.02) {
+      const b = walkBody(p, H, gaitParams(kind));
+      const rot = lean(flip, 1, 0) - b.rot * flip;
+      expect(lowest(rot, flip, b.sx, b.sy, b.dy)).toBeLessThanOrEqual(1e-9);
+    }
+  });
+  it('an unlifted bob does sink below the line, so the lift is what keeps it up', () => {
+    const b = walkBody(1 / 8, H, gaitParams('zoom'));
+    expect(b.dy).toBeGreaterThan(1);
+    expect(floorLift(pts, FW, H, 1, b.sy, 0, b.dy)).toBeGreaterThan(1);
+  });
+});
+
+describe('footPoints', () => {
+  it('takes the lowest opaque pixel of each column bin, relative to the footY line', () => {
+    const w = 10, h = 10;
+    const a = new Uint8Array(w * h * 4);
+    for (const [x, y] of [[2, 9], [7, 8], [0, 3]] as const) a[(y * w + x) * 4] = 255;
+    const p = footPoints(a, w, h, 1, 10);
+    expect(p).toHaveLength(3);
+    expect(p[1]![0]).toBeCloseTo(-0.25);
+    expect(p[1]![1]).toBeCloseTo(0);
+    expect(p[2]![1]).toBeCloseTo(-0.1);
+    expect(p[0]![1]).toBeCloseTo(-0.6);
   });
 });
