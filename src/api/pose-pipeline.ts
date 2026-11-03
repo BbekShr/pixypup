@@ -109,6 +109,7 @@ export async function samCutout(client: MetaClient, png: Buffer, prompt: string,
   const top = Math.max(0, m.box.top);
   const w = Math.min(info.width, m.box.right) - left;
   const h = Math.min(info.height, m.box.bottom) - top;
+  if (w <= 0 || h <= 0) return null; // inverted or off-image box: same as no pet found
   const out = Buffer.alloc(w * h * 4);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {

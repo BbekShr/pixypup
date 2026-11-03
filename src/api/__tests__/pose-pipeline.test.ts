@@ -718,6 +718,11 @@ describe('generateSpritePack', () => {
     await expect(p).rejects.toBeInstanceOf(NoPetFoundError);
   });
 
+  it('treats an off-image SAM box as no pet found', async () => {
+    const { p } = await run({ sam: SAM_OUTPUT.replace('x1=211;y1=228;x2=270;y2=254;w=320;h=334', 'x1=400;y1=228;x2=450;y2=254;w=1000;h=1000')});
+    await expect(p).rejects.toBeInstanceOf(NoPetFoundError);
+  });
+
   it('keeps an existing pack when idle fails, and leaves no temp dir', async () => {
     await mkdir(out);
     await writeFile(join(out, 'keep.txt'), 'old');
