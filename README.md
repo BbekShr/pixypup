@@ -18,7 +18,7 @@
 
 <sub>☝️ All fourteen poses (including the 8-frame walk), drawn by Meta's models from <b>one</b> photo. No 3D artist was harmed.</sub>
 
-**Try it in 30 seconds:** open the [live site](https://bbekshr.github.io/pixypup/), pick Pakkun, Mochi or Kuma under the desk demo, then send them a message or ask for a trick. No download, no key.
+**Try it in 30 seconds:** open the [live site](https://bbekshr.github.io/pixypup/), pick Pakkun, Mochi or Kuma under the desk demo, then send them a message or ask for a trick (or zoomies). No download, no key.
 
 </div>
 
@@ -77,7 +77,7 @@ Mochi and Kuma were made by PixyPup's own pipeline from CC BY-SA 4.0 Wikimedia p
 | 🎨 **Muse Image** (`muse-image-1.0`) | Draws a consistent set of 3D poses from one photo, plus three candidate walk cycles of eight frames each. |
 | 🔍 **Muse Wonder** (`muse-wonder-1.0`) | Reviews every drawn pose (same pet, right pose, one tail) and sends misfits back to be redrawn; picks the most natural, even walk cycle. |
 | ⚡ **Muse Spark 1.3** (`muse-spark-1.3`) | Reads the failing test line (as quoted data, never as instructions), decides how to react, and writes his speech bubble and hints. |
-| 🎙️ **Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns "Pakkun, sit" into a trick, only while you hold ⌥ Space. |
+| 🎙️ **Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns "Pakkun, sit" into a trick, only after you press ⌥ Space. |
 
 <a id="privacy"></a>
 
