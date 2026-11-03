@@ -812,6 +812,12 @@ function finish(e: PointerEvent): void {
   } else go();
   const t = click || calm ? { vx: 0, vy: 0 } : releaseVelocity(path, e.timeStamp);
   if (lift < 0 || Math.abs(t.vx) > 60) { falling = true; vx = t.vx; vy = t.vy; if (Math.abs(vx) > 200) dir = Math.sign(vx); }
+  else if (greet) { // released at floor level during the drop-in: no settle will run, so land now
+    const g = greet;
+    greet = null;
+    if (handoff === 'drop') handoff = handoffNext(handoff, 'landed');
+    land(g);
+  }
   if (act?.kind === 'hide') { act.phase = 'go'; setState('walk', { target: act.spot }); } // poked out of hiding: go back
   // mouseleave was skipped mid-drag; without this the overlay would swallow every click.
   if (!img.matches(':hover')) { window.pixy.setClickThrough(true); pawHide(); }

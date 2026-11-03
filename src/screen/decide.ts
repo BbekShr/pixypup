@@ -23,16 +23,19 @@ const CALL_APPS = [
 ];
 export const isCallApp = (id: string) => CALL_APPS.some((p) => id === p || id.startsWith(p + '.'));
 
-const titleIsCall = (w: { owner: string; title: string }) =>
+const titleIsCall = (mediaKnown: boolean) => (w: { owner: string; title: string }) =>
   // Chrome's window title is only the front tab; Meet uses hyphen, en or em dash.
   /^Meet\s*[-–—]\s|meet\.google\.com|^Zoom Meeting( - Zoom)?$/i.test(w.title) ||
-  // Zoom's idle home window ("Zoom Workplace") must not hide; empty = titles redacted without Screen Recording.
-  (/zoom\.us|^zoom$/i.test(w.owner) && (w.title === '' || /^Zoom (Meeting|Webinar)\b/i.test(w.title))) ||
+  // Zoom's idle home window ("Zoom Workplace") must not hide; an empty title (redacted without Screen Recording) counts only
+  // when media is unknown, since with media known a real call shows up as mic/camera use.
+  (/zoom\.us|^zoom$/i.test(w.owner) && ((w.title === '' && !mediaKnown) || /^Zoom (Meeting|Webinar)\b/i.test(w.title))) ||
   (/^(Microsoft Teams|MSTeams)\b/i.test(w.owner) && /^(Meeting( with| in)?|Call with)\b/i.test(w.title)) ||
   /^(Meeting|Call)\b.*\|\s*Microsoft Teams$/.test(w.title);
 
 export function ruleDecide(obs: Observation): BehaviorDecision | null {
-  const call = obs.windows.some(titleIsCall) || !!obs.media?.camera || !!obs.media?.micApps.some(isCallApp);
+  // macOS < 14 reports an unattributed mic as 'unknown': media then can't name the app, so it isn't "known" for Zoom.
+  const known = !!obs.media && !obs.media.micApps.includes('unknown');
+  const call = obs.windows.some(titleIsCall(known)) || !!obs.media?.camera || !!obs.media?.micApps.some(isCallApp);
   if (call) return { action: 'hide', durationMs: 30000, reason: 'video call in progress' };
 
   if (obs.terminalError) {

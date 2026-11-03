@@ -6,7 +6,7 @@ import { createVoiceSession, type VoiceUi } from './voice-session';
 const loud = new Int16Array(960).fill(8000).buffer;
 const quiet = new Int16Array(960).buffer;
 
-function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFails?: boolean; prefill?: boolean } = {}) {
+function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFails?: boolean; blocked?: boolean; prefill?: boolean } = {}) {
   const log: string[] = [];
   const ui: VoiceUi[] = [];
   const cmds: string[] = [];
@@ -29,6 +29,7 @@ function rig(o: { key?: string; allowed?: boolean; transcript?: string; openFail
     open: async (_k, op) => {
       opened++;
       opts = op;
+      if (o.blocked) throw Object.assign(new Error('x'), { name: 'NetworkBlockedError' });
       if (o.openFails) throw new Error('x');
       return tr;
     },
@@ -44,6 +45,17 @@ const kinds = (ui: VoiceUi[]) => ui.map((u) => u.kind);
 
 beforeEach(() => void vi.useFakeTimers());
 afterEach(() => void vi.useRealTimers());
+
+describe('voice blocked mid-open', () => {
+  it('returns to idle so the next press listens again', async () => {
+    const r = rig({ blocked: true });
+    r.s.press();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(r.s.state()).toBe('idle');
+    r.s.press();
+    expect(r.opened()).toBe(2);
+  });
+});
 
 describe('voice session lifecycle', () => {
   function multi() {

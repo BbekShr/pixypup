@@ -72,7 +72,7 @@ export function createVoiceSession(d: VoiceDeps): { press(): void; chunk(b: Arra
       },
       (e: unknown) => {
         if (me !== id) return;
-        if (e instanceof Error && e.name === 'NetworkBlockedError') teardown(false); // voice was switched off meanwhile: stay quiet
+        if (e instanceof Error && e.name === 'NetworkBlockedError') { state = 'idle'; teardown(false); } // voice was switched off meanwhile: stay quiet
         else fire('error');
       },
     );

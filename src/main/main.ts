@@ -20,7 +20,7 @@ import { petMenuTemplate, trayMenuTemplate, type MenuItem } from './menu';
 import { isPlainName, listLibrary, loadPack, packCandidates, pickPackDir } from './pack';
 import { comeCommand } from '../overlay/call';
 import { headCrop } from './head-crop';
-import { addPet, MAX_PETS, nameFor, petList, pickWindow, removePet, rekeyWins, renamed, routeReaction, withName } from './pets';
+import { addPet, MAX_PETS, nameFor, petList, pickWindow, removePet, rekeyWins, takenSlug, renamed, routeReaction, withName } from './pets';
 import { setupOnboarding } from './onboarding';
 import { setupOverload } from './overload';
 import { commandToPatch, isSnoozed, wakeOnOpen, type Energy, type Prefs } from './prefs';
@@ -303,6 +303,7 @@ const petsFull = (): void => {
 
 /** A pet made in add mode: it joins the list and drops in. */
 function joinPet(slug: string): void {
+  if (takenSlug(petList(settings), slug)) return; // already here, not a full house
   const next = addPet(petList(settings), slug);
   if (!next) { petsFull(); return; } // the written pack stays on disk
   try {
@@ -359,7 +360,7 @@ function sendHome(slug: string): void {
 // Runs from launch but does nothing (no osascript, no helper, no network) until screen-aware is on and allowed.
 function startScreenAwareLoop(): void {
   const osa = (args: string[], timeoutMs: number): Promise<string | null> =>
-    new Promise((res) => execFile('osascript', args, { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, (err, out) => res(err ? null : out)));
+    new Promise((res) => execFile('osascript', args, { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 8 * 1024 * 1024 }, (err, out) => res(err ? null : out)));
   const fake = !app.isPackaged && process.env['PIXY_FAKE_SCREEN'] === '1';
   if (fake) fakeScreen = fakeReader(screen.getPrimaryDisplay().workArea);
   const reader = fakeScreen ?? createScreenReader({ run: makeRun(helperPath()), osa });
