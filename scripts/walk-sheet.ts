@@ -17,13 +17,14 @@ import { editImage } from '../src/api/muse-image.js';
 import { extractJson, parseResponseText, sparkRequestBody, type SparkResponse } from '../src/api/muse-spark.js';
 import { chromaKey, dataUrl, layoutFrames, MAGENTA, POSES, sheetFrames, SIDE_FRAMES, STYLE, validateManifest } from '../src/api/pose-pipeline.js';
 import { isStaticSheet } from '../src/api/static-sheet.js';
-import { JUDGE_MODEL, WALK_JUDGE, WALK_REVIEW } from '../src/api/walk-judge.js';
+import { hindLegBalance } from '../src/api/hind-legs.js';
+import { JUDGE_MODEL, pickWalkSheet, WALK_JUDGE, WALK_REVIEW, type WalkReview } from '../src/api/walk-judge.js';
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: { n: { type: 'string', default: '4' }, judge: { type: 'string', default: JUDGE_MODEL }, out: { type: 'string' } } });
 const dir = positionals[0];
 if (!dir) throw new Error('usage: npm run walk-sheet -- <packDir> [--n 4] [--judge <model>] [--out <dir>]');
 
-interface Review { sheets: { index: number; same_pet: number; consistent: number; cycle: number; legs: number; notes: string }[]; best: number; reason: string }
+type Review = WalkReview & { reason: string };
 
 async function main(): Promise<void> {
   const manifest: unknown = JSON.parse(await readFile(join(dir!, 'sprite-manifest.json'), 'utf8'));
@@ -62,9 +63,16 @@ async function main(): Promise<void> {
   const t1 = Date.now();
   const res = await client.postJson<SparkResponse>('/responses', { ...sparkRequestBody({ instructions: WALK_JUDGE, input, schema: WALK_REVIEW, name: 'walk_review', effort: 'medium' }), model: values.judge });
   const review = extractJson(parseResponseText(res)) as Review;
-  const best = Number.isInteger(review.best) && review.best >= 0 && review.best < ok.length ? review.best : 0;
-  await writeFile(`${log}/review.json`, JSON.stringify({ judge: values.judge, sheetFiles: ok.map((s) => `sheet-${s.i}.png`), ...review }, null, 2));
-  console.log(`${values.judge} picked sheet-${ok[best]!.i} in ${((Date.now() - t1) / 1000).toFixed(1)} s: ${review.reason}`);
+  const judged = Number.isInteger(review.best) && review.best >= 0 && review.best < ok.length ? review.best : 0;
+  // As the pipeline: the judge's pick unless its back legs barely step and another sheet's do.
+  const balance = await Promise.all(ok.map(async (s) => {
+    const laid = (await layoutFrames(Object.fromEntries([['idle_0', { png: idle }], ...s.frames.map((f, i) => [`f${i}`, f])]), 'idle_0')).frames;
+    return hindLegBalance(s.frames.map((_, i) => laid[`f${i}`]!));
+  }));
+  const best = pickWalkSheet({ ...review, best: judged, sheets: Array.isArray(review.sheets) ? review.sheets : [] }, balance);
+  await writeFile(`${log}/review.json`, JSON.stringify({ judge: values.judge, sheetFiles: ok.map((s) => `sheet-${s.i}.png`), hindLegBalance: balance, ...review }, null, 2));
+  console.log(`back/front leg balance: ${ok.map((s, k) => `sheet-${s.i} ${balance[k]?.toFixed(2) ?? '?'}`).join(', ')}`);
+  console.log(`${values.judge} picked sheet-${ok[judged]!.i} in ${((Date.now() - t1) / 1000).toFixed(1)} s: ${review.reason}; shipping sheet-${ok[best]!.i}`);
 
   const out = values.out ?? `${log}/pack`;
   await cp(dir!, out, { recursive: true });

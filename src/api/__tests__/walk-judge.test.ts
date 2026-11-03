@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MetaClient } from '../meta-client.js';
-import { JUDGE_MODEL, pickWalk, reviewWalks } from '../walk-judge.js';
+import { JUDGE_MODEL, pickWalk, pickWalkSheet, reviewWalks, type SheetReview } from '../walk-judge.js';
 
 type Body = { model: string; store: boolean; reasoning: { effort: string }; input: { content: { type: string; image_url?: string }[] }[]; text: { format: { name: string; strict: boolean } } };
 const reply = (best: unknown) => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ sheets: [], best, reason: 'steadiest' }) }] }] });
@@ -42,5 +42,21 @@ describe('reviewWalks sheets', () => {
     const r = await reviewWalks(fake(res), 'r', sheets);
     expect(r?.sheets.map((x) => x.index)).toEqual([0, 1, 2]);
     expect(r?.sheets.map((x) => x.notes)).toEqual(['', 'x'.repeat(300), '']);
+  });
+});
+
+describe('pickWalkSheet', () => {
+  const sheet = (index: number, score: number): SheetReview => ({ index, same_pet: score, consistent: score, cycle: score, even: score, legs: score, notes: '' });
+  const review = { best: 0, sheets: [sheet(0, 9), sheet(1, 6), sheet(2, 8)] };
+  it("keeps the judge's pick when its back legs step", () => {
+    expect(pickWalkSheet(review, [0.9, 0.9, 0.9])).toBe(0);
+    expect(pickWalkSheet(review, [null, 0.2, 0.2])).toBe(0); // unmeasurable counts as fine
+  });
+  it('swaps a front-legs-only pick for the best-scored balanced sheet', () => {
+    expect(pickWalkSheet(review, [0.5, 0.9, 0.8])).toBe(2);
+  });
+  it('falls back to the judge when no sheet is balanced, and to the first sheet unjudged', () => {
+    expect(pickWalkSheet(review, [0.5, 0.4, 0.3])).toBe(0);
+    expect(pickWalkSheet(null, [0.2])).toBe(0);
   });
 });
