@@ -96,6 +96,7 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
       webPreferences: { preload: join(here, '../preload/talk-preload.mjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
     });
     win = w;
+    w.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.destroy(); }); // a crashed page is a blank dead window: drop it so open() recreates
     history = [];
     localTurns = 0;
     ctl = new AbortController();

@@ -32,6 +32,7 @@ export function setupScreenExplainer(o: { getHideInShares: () => boolean; kind?:
         webPreferences: { preload: join(here, '../preload/screen-preload.mjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
       });
       win = w;
+      w.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.destroy(); }); // a crashed page is a blank dead window: drop it so open() recreates
       w.setAlwaysOnTop(true, 'floating');
       w.setContentProtection(o.getHideInShares());
       w.once('ready-to-show', () => w.show());

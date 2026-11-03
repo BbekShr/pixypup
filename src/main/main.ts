@@ -81,6 +81,14 @@ function createWindow(slug: string, enterDrop = false): void {
   wins.set(slug, win);
   // A crashed or hung page can't toggle click-through itself: until it recovers, nothing on screen may swallow clicks.
   for (const ev of ['render-process-gone', 'unresponsive'] as const) win.webContents.on(ev as 'render-process-gone', () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); });
+  const reloads: number[] = [];
+  win.webContents.on('render-process-gone', () => {
+    const now = Date.now();
+    while (reloads.length && now - reloads[0]! > 60_000) reloads.shift();
+    if (win.isDestroyed() || reloads.length >= 3) return; // crash loop: leave it
+    reloads.push(now);
+    win.webContents.reload();
+  });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (ev) => ev.preventDefault());
   senderSlug.set(win.webContents, slug);
@@ -227,7 +235,7 @@ function run(cmd: string, from?: BrowserWindow): void {
   }
   if (cmd === 'new-pet') {
     if (petList(settings).length >= MAX_PETS) {
-      void dialog.showMessageBox({ type: 'info', message: 'Four pets is a full house!', detail: 'Send one home first (right-click a pet, "Send … home"), then add another.' });
+      petsFull();
       return;
     }
     if (snoozed()) run('wake');
@@ -275,10 +283,14 @@ function run(cmd: string, from?: BrowserWindow): void {
   }
 }
 
+const petsFull = (): void => {
+  void dialog.showMessageBox({ type: 'info', message: 'Four pets is a full house!', detail: 'Send one home first (right-click a pet, "Send … home"), then add another.' });
+};
+
 /** A pet made in add mode: it joins the list and drops in. */
 function joinPet(slug: string): void {
   const next = addPet(petList(settings), slug);
-  if (!next) return;
+  if (!next) { petsFull(); return; } // the written pack stays on disk
   try {
     saveSettings({ pets: next });
   } catch {
@@ -376,6 +388,9 @@ async function fakeVoice(text: string, onTranscript: (t: { text: string; final: 
 
 app.dock?.hide();
 
+// Never log the error object: it can carry request data.
+process.on('unhandledRejection', (err) => { console.warn('PixyPup: unhandled rejection', (err as Error | null)?.name ?? typeof err); });
+
 void app.whenReady().then(async () => {
   onboarding = setupOnboarding({ getOverlay: primary, addPet: joinPet, getPets: () => petList(settings), onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
   overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
@@ -469,7 +484,7 @@ void app.whenReady().then(async () => {
   const userPet = isPlainName(settings.petName) && (await loadPack(join(app.getPath('userData'), 'pets', settings.petName))) !== null;
   if (!app.isPackaged) process.on('SIGUSR2', () => onboarding.open(true)); // dev hook: the native menu can't be driven over CDP
   if (!settings.onboarded && !userPet) setTimeout(() => onboarding.open(false), 1500);
-});
+}).catch((err) => { console.warn('PixyPup: startup failed', (err as Error | null)?.name); });
 
 app.on('will-quit', () => { voice?.abort(); globalShortcut.unregisterAll(); });
 app.on('window-all-closed', () => app.quit());
