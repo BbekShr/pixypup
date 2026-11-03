@@ -251,9 +251,9 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
       const area = screen.getDisplayMatching(o.getOverlay()?.getBounds() ?? screen.getPrimaryDisplay().bounds).workArea;
       win = new BrowserWindow({
         width: 480,
-        height: 560,
+        height: 620,
         x: Math.round(area.x + (area.width - 480) / 2),
-        y: Math.round(area.y + (area.height - 560) / 2),
+        y: Math.round(area.y + (area.height - 620) / 2),
         frame: false,
         transparent: true,
         hasShadow: false,

@@ -63,7 +63,8 @@ input[type="text"], input[type="password"] { width: 100%; max-width: 300px; box-
 input:focus { outline: none; border-color: var(--blush); box-shadow: 0 0 0 4px rgba(244, 166, 160, .3); }
 input::placeholder { color: rgba(59, 47, 42, .3); font-weight: 500; }
 .ask { margin: 4px 0 0; font: 800 15px var(--font); }
-.err { margin: 0; min-height: 1.4em; color: var(--ink-soft); }
+.err { margin: 0; color: var(--ink-soft); }
+.err:empty { display: none; }
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 320px; }
 .chip { font: 700 13px var(--font); color: var(--ink); background: var(--cream-deep); border: 0; border-radius: var(--pill); padding: 6px 14px; cursor: pointer; transition: background var(--fast), transform var(--fast) var(--pop); }
 .chip:hover { background: var(--honey); transform: scale(1.05); }
@@ -154,7 +155,7 @@ body.leaving .card { transform: scale(.14); transform-origin: 50% 100%; opacity:
 .perk .link { font-size: 12px; }
 .perk[hidden] { display: none; }
 
-/* Welcome is the tightest card at 480x560: a small hero, tight gaps; the step scrolls instead of clipping. */
+/* Welcome is the tightest card at 480x620: a small hero, tight gaps; the step scrolls instead of clipping. */
 [data-step="welcome"] { gap: 8px; }
 [data-step="welcome"] .hero { width: 96px; margin-bottom: 0; }
 [data-step="welcome"] .actions { margin-top: 4px; gap: 6px; max-width: 340px; }

@@ -28,7 +28,7 @@ header { cursor: default; }
 .bar textarea:focus { outline: none; border-color: var(--blush); box-shadow: 0 0 0 4px rgba(244, 166, 160, .3); }
 .bar textarea::placeholder { color: rgba(59, 47, 42, .3); font-weight: 500; }
 .send { padding: 0 20px; height: 46px; }
-.fine { margin: 6px 0 0; text-align: center; font-size: 11px; color: var(--ink-soft); flex: none; }
+.fine { margin: 6px 0 0; padding: 0 18px; text-align: center; font-size: 11px; color: var(--ink-soft); flex: none; }
 
 .banner { display: flex; align-items: center; gap: 8px; margin: 0 18px 6px; padding: 6px 10px; border-radius: 12px; background: rgba(255, 255, 255, .55); font-size: 12px; color: var(--ink-soft); flex: none; }
 .banner[hidden], .chip-key[hidden] { display: none; }
