@@ -406,7 +406,9 @@ export async function writePack(
   }
 }
 
-class BadOutputError extends Error {}
+class BadOutputError extends Error {
+  override name = 'BadOutputError';
+}
 
 /** Short, body-free reason for the UI; the API response body never leaves this file. */
 function reason(err: unknown, timedOut: boolean): string {

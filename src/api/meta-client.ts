@@ -36,7 +36,7 @@ export function assertStandardTier(model: string): void {
 export class MetaClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
-  private readonly fetchImpl: typeof fetch;
+  readonly fetchImpl: typeof fetch; // editImage downloads results with it too
 
   constructor(opts: MetaClientOptions) {
     if (!opts.apiKey) throw new Error('Meta API key is missing (set MODEL_API_KEY).');

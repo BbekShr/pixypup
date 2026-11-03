@@ -21,6 +21,15 @@ describe('strideFromFrames', () => {
     expect(strideFromFrames(sheet(20), W, H, 1)).toBe(20);
     expect(strideFromFrames(sheet(30, 3), W, H, 1)).toBe(30);
   });
+  it('ignores near-identical frame pairs instead of reading them as the shortest stride', () => {
+    // A wide foot that holds still for a pair, then steps 30 px: the held pairs still overlap at the 16 px floor.
+    const at = (xs: number[]): Uint8Array[] => xs.map((dx) => {
+      const a = new Uint8Array(W * H);
+      for (let y = 94; y < 100; y++) for (let x = 120 - dx; x < 180 - dx; x++) a[y * W + x] = 255;
+      return a;
+    });
+    expect(strideFromFrames(at([0, 0, 30, 30]), W, H, 1)).toBe(30);
+  });
   it('falls back when no foot lines up', () => {
     const blank = [new Uint8Array(W * H), new Uint8Array(W * H)];
     expect(strideFromFrames(blank, W, H, 1)).toBeCloseTo(FALLBACK_STRIDE * W, 6);

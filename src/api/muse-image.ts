@@ -39,7 +39,7 @@ export async function editImage(
     opts.signal,
   );
   if (!res.data?.length) throw new Error('Muse Image returned no images.');
-  const get = opts.fetchImpl ?? fetch;
+  const get = opts.fetchImpl ?? client.fetchImpl ?? fetch;
   return Promise.all(
     res.data.map(async (item) => {
       let buffer: Buffer;

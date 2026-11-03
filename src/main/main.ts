@@ -1,9 +1,9 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, powerMonitor, screen, Tray, type MenuItemConstructorOptions } from 'electron';
 import { devRendererUrl } from './dev-url';
 import { execFile } from 'node:child_process';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openClient } from '../api/gate';
+import { openClient, useFetch } from '../api/gate';
 import { openVoice, type Transcription } from '../api/voice';
 import { sniffBubble } from '../api/sniff-bubble';
 import { fixHint } from '../api/fix-hint';
@@ -396,6 +396,7 @@ app.dock?.hide();
 process.on('unhandledRejection', (err) => { console.warn('PixyPup: unhandled rejection', (err as Error | null)?.name ?? typeof err); });
 
 void app.whenReady().then(async () => {
+  useFetch(net.fetch as typeof fetch);
   onboarding = setupOnboarding({ getOverlay: primary, addPet: joinPet, getPets: () => petList(settings), onSettingsChanged: () => { settings = loadSettings(); sync(); }, getPetName: () => settings.petName, getHideInShares: () => settings.hideInShares, beforeReveal: () => { if (snoozed()) run('wake'); } });
   overload = setupOverload({ hideInShares: () => settings.hideInShares, onChange: sync });
   screenExplainer = setupScreenExplainer({ getHideInShares: () => settings.hideInShares });

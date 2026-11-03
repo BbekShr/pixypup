@@ -32,6 +32,8 @@ function bestShift(a: Uint8Array, b: Uint8Array, lo: number, hi: number): { d: n
  * Px (in the frames' own pixels) the body advances per walk frame: a planted foot moves back in the frame by exactly
  * that much from one frame to the next. Median over consecutive pairs (including the wrap), clamped to
  * [0.08, 0.4] x bodyW; FALLBACK_STRIDE x bodyW when no pair lines up. `stride` is the step between alpha samples.
+ * A pair whose best shift sits on the lower clamp is skipped: its feet barely moved (Muse Image often draws two
+ * near-identical steps), and counting it dragged a whole walk to the floor so the legs pedalled ~3x too fast (Milo).
  */
 export function strideFromFrames(alphas: ArrayLike<number>[], w: number, h: number, stride: number, bodyW = w): number {
   const lo = Math.ceil(0.08 * bodyW);
@@ -42,7 +44,7 @@ export function strideFromFrames(alphas: ArrayLike<number>[], w: number, h: numb
   const found: number[] = [];
   for (let i = 0; i < feet.length; i++) {
     const r = bestShift(feet[i]!, feet[(i + 1) % feet.length]!, lo, hi);
-    if (r.score >= MIN_SCORE) found.push(r.d);
+    if (r.score >= MIN_SCORE && r.d > lo) found.push(r.d);
   }
   if (found.length === 0) return fallback;
   found.sort((p, q) => p - q);

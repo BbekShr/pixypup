@@ -1,6 +1,6 @@
 import { SPECIES_RE } from '../api/profile-defaults';
 export type Step = 'welcome' | 'photo' | 'name' | 'key' | 'making' | 'failed' | 'done';
-export type Code = 'bad-key' | 'no-pet-found' | 'network' | 'generation-failed';
+export type Code = 'bad-key' | 'no-pet-found' | 'network' | 'limit' | 'generation-failed';
 
 export interface Flow {
   step: Step;

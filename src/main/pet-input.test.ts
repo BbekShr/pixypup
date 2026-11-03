@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MetaApiError } from '../api/meta-client';
 import { NoPetFoundError } from '../api/pose-pipeline';
-import { checkCreateArgs, checkKey, checkPhoto, errorCode, loadPhoto, MAX_PHOTO_BYTES, pickSlug, reuseOnboardingWindow, slugify } from './pet-input';
+import { checkCreateArgs, checkKey, checkPhoto, errorCode, errorDetail, loadPhoto, MAX_PHOTO_BYTES, pickSlug, reuseOnboardingWindow, slugify } from './pet-input';
 
 describe('slugify', () => {
   it.each([
@@ -98,6 +98,7 @@ describe('errorCode', () => {
     expect(errorCode(new MetaApiError(500, '', '/x'))).toBe('generation-failed');
     expect(errorCode(new NoPetFoundError('dog'))).toBe('no-pet-found');
     expect(errorCode(new TypeError('fetch failed'))).toBe('network');
+    expect(errorCode(new Error('net::ERR_PROXY_CONNECTION_FAILED'))).toBe('network'); // Electron net.fetch
     expect(errorCode(new TypeError('x', { cause: new Error('ENOTFOUND') }))).toBe('network');
     expect(errorCode(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toBe('network');
     expect(errorCode(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))).toBe('network'); // AbortSignal.timeout's reason
@@ -105,6 +106,13 @@ describe('errorCode', () => {
     expect(errorCode(new TypeError("Cannot read properties of undefined (reading 'x')"))).toBe('generation-failed');
     expect(errorCode(new Error('boom'))).toBe('generation-failed');
     expect(errorCode('weird')).toBe('generation-failed');
+    expect(errorCode(new MetaApiError(429, '', '/images/edits'))).toBe('limit'); // out of quota: retrying right away fails the same way
+  });
+  it('details name the endpoint and status, never the body', () => {
+    expect(errorDetail(new MetaApiError(429, 'secret body', '/images/edits'))).toBe('/images/edits HTTP 429');
+    expect(errorDetail(Object.assign(new Error('aborted'), { name: 'AbortError', timedOut: true }))).toBe('drawing timed out');
+    expect(errorDetail(Object.assign(new Error('degenerate pose'), { name: 'BadOutputError' }))).toBe('degenerate pose');
+    expect(errorDetail(new Error('secret message'))).toBe('Error');
   });
 });
 

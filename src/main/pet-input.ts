@@ -8,7 +8,7 @@ import { SPECIES_RE } from '../api/profile-defaults';
 export const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
 export const PHOTO_EXTS = ['jpg', 'jpeg', 'png', 'heic', 'webp'];
 export type PhotoCode = 'missing' | 'type' | 'size';
-export type ErrorCode = 'bad-key' | 'no-pet-found' | 'network' | 'generation-failed';
+export type ErrorCode = 'bad-key' | 'no-pet-found' | 'network' | 'limit' | 'generation-failed';
 
 /** Names with no Latin letters or digits get a short stable hash so two emoji pets never share a folder. */
 export const slugify = (name: string): string =>
@@ -66,11 +66,26 @@ export const checkKey = (k: unknown): k is string => typeof k === 'string' && /^
 export function errorCode(err: unknown): ErrorCode {
   if (err instanceof MetaApiError && (err.status === 401 || err.status === 403)) return 'bad-key';
   if (err instanceof NoPetFoundError) return 'no-pet-found';
+  // The key check only pings Spark, so a key can pass it and still be out of image quota: every retry then fails the same way.
+  if (err instanceof MetaApiError && err.status === 429) return 'limit';
   // pose-pipeline marks its own per-attempt timeout; the network is fine then, the generation was just too slow (no timeout code exists).
   if ((err as { timedOut?: boolean } | null)?.timedOut === true) return 'generation-failed';
   // fetch rejects with TypeError('fetch failed', {cause}) when offline; any other TypeError is our own bug.
+  // Electron's net.fetch rejects with Chromium's own codes (net::ERR_PROXY_CONNECTION_FAILED, ERR_CERT_AUTHORITY_INVALID, ...).
+  if (err instanceof Error && /^net::ERR_/.test(err.message)) return 'network';
   if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError' || (err instanceof TypeError && (err.cause != null || /fetch failed/i.test(err.message))))) return 'network';
   return 'generation-failed';
+}
+
+/**
+ * A short line for the failure screen so a user can say what broke: endpoint + status, our own timeout, or the error's
+ * name. Never a message or body (those can echo API content); BadOutputError messages are our own fixed strings.
+ */
+export function errorDetail(err: unknown): string {
+  if (err instanceof MetaApiError) return `${err.path} HTTP ${err.status}`;
+  if ((err as { timedOut?: boolean } | null)?.timedOut === true) return 'drawing timed out';
+  if (err instanceof Error) return err.name === 'BadOutputError' ? err.message : err.name;
+  return typeof err;
 }
 
 /** An open onboarding window is reused unless it was opened for a different mode and no create run is using it (a run keeps its own mode). */
