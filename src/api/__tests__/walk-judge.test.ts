@@ -58,5 +58,7 @@ describe('pickWalkSheet', () => {
   it('falls back to the judge when no sheet is balanced, and to the first sheet unjudged', () => {
     expect(pickWalkSheet(review, [0.5, 0.4, 0.3])).toBe(0);
     expect(pickWalkSheet(null, [0.2])).toBe(0);
+    expect(pickWalkSheet(null, [0.2, 0.3, 0.9])).toBe(2); // judge down: still skip tucked-leg sheets
+    expect(pickWalkSheet(null, [0.2, 0.3])).toBe(0);
   });
 });

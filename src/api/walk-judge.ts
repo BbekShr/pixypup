@@ -49,7 +49,7 @@ export const walkPasses = (s: SheetReview | undefined): boolean => !s || (s.even
  */
 export function pickWalkSheet(review: WalkReview | null, balance: (number | null)[], min = MIN_HIND_BALANCE): number {
   const ok = (i: number) => (balance[i] ?? 1) >= min;
-  if (!review) return 0;
+  if (!review) return Math.max(0, balance.findIndex((_, i) => ok(i)));
   if (ok(review.best)) return review.best;
   const total = (i: number) => { const s = review.sheets.find((x) => x.index === i); return s ? s.same_pet + s.consistent + s.cycle + s.even + s.legs : -1; };
   const fine = balance.map((_, i) => i).filter(ok).sort((a, b) => total(b) - total(a));
