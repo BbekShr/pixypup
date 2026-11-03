@@ -11,7 +11,7 @@ export default defineConfig({
   preload: {
     build: {
       outDir: 'dist/preload',
-      lib: { entry: { preload: resolve('src/main/preload.ts'), 'onboarding-preload': resolve('src/main/onboarding-preload.ts'), 'screen-preload': resolve('src/main/screen-preload.ts'), 'mic-preload': resolve('src/main/mic-preload.ts'), 'overload-preload': resolve('src/main/overload-preload.ts'), 'talk-preload': resolve('src/main/talk-preload.ts'), 'key-preload': resolve('src/main/key-preload.ts') } },
+      lib: { entry: { preload: resolve('src/main/preload.ts'), 'onboarding-preload': resolve('src/main/onboarding-preload.ts'), 'screen-preload': resolve('src/main/screen-preload.ts'), 'mic-preload': resolve('src/main/mic-preload.ts'), 'overload-preload': resolve('src/main/overload-preload.ts'), 'talk-preload': resolve('src/main/talk-preload.ts'), 'key-preload': resolve('src/main/key-preload.ts'), 'rename-preload': resolve('src/main/rename-preload.ts') } },
     },
   },
   renderer: {
@@ -28,6 +28,7 @@ export default defineConfig({
           overload: resolve('src/overlay/overload.html'),
           talk: resolve('src/onboarding/talk.html'),
           key: resolve('src/onboarding/key.html'),
+          rename: resolve('src/onboarding/rename.html'),
         },
       },
     },

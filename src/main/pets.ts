@@ -1,5 +1,15 @@
 // Pure rules for several pets, one overlay window each. Electron-free so vitest can run them.
+import type { SpriteManifest } from '../../contracts/types';
+
 export const MAX_PETS = 4;
+
+/** A pet's name, trimmed: 1–24 chars, no control characters. Shared by creating and renaming a pet. */
+export function checkPetName(name: unknown): string | null {
+  if (typeof name !== 'string') return null;
+  const n = name.trim();
+  const control = [...n].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
+  return n.length >= 1 && n.length <= 24 && !control ? n : null;
+}
 
 /** Every pet's slug, primary first. An empty or missing `pets` means just the primary. */
 export const petList = (s: { petName: string; pets?: string[] }): string[] => (s.pets && s.pets.length > 0 ? s.pets : [s.petName]);
@@ -32,4 +42,28 @@ export interface Reaction { seq: number; action: string }
 export function routeReaction<B extends Reaction>(slugs: string[], b: B): [string, B | { seq: number; action: 'perk_up'; reason: string }][] {
   if (b.action === 'hide' || b.action === 'perk_up') return slugs.map((s) => [s, b]);
   return slugs.map((s, i) => [s, i === 0 ? b : { seq: b.seq, action: 'perk_up' as const, reason: 'friend noticed something' }]);
+}
+
+/**
+ * Renames are display-only, keyed by lowercased slug (APFS folds case): the folder, `pets` and `petName` keep the slug,
+ * so a bundled pet in the read-only app can be renamed too.
+ */
+export type PetNames = Record<string, string>;
+
+export const nameFor = (names: PetNames | undefined, slug: string): string | undefined => names?.[slug.toLowerCase()];
+
+/** The map with `slug` called `name`; giving a pet back its own manifest name drops the entry. */
+export function withName(names: PetNames | undefined, slug: string, name: string, original: string): PetNames {
+  const next = { ...names };
+  if (name === original) delete next[slug.toLowerCase()];
+  else next[slug.toLowerCase()] = name;
+  return next;
+}
+
+/** The manifest as the user named it: `pet` and every personality line that says the old name ("Hi I'm Milo"). */
+export function renamed(m: SpriteManifest, name: string | undefined): SpriteManifest {
+  if (!name || name === m.pet) return m;
+  const old = new RegExp(`(?<![\\p{L}\\p{N}])${m.pet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'giu');
+  const personality = m.personality && { ...m.personality, lines: m.personality.lines.map((l) => l.replace(old, () => name)) };
+  return { ...m, pet: name, ...(personality && { personality }) };
 }

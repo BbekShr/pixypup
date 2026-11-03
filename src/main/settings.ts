@@ -2,7 +2,7 @@ import { app } from 'electron';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isPlainName } from './pack';
-import { MAX_PETS } from './pets';
+import { checkPetName, MAX_PETS, type PetNames } from './pets';
 import { isCallMode, isEnergy, isSize, type CallMode, type Energy, type Size } from './prefs';
 
 
@@ -13,6 +13,7 @@ export interface Settings {
   adminDisableScreenAware: boolean;
   petName: string; // the primary pet; also the only one when `pets` is absent or empty
   pets?: string[]; // every pet's folder slug, primary first, at most MAX_PETS
+  names?: PetNames; // lowercased slug -> the name the user renamed that pet to; display only, folders never move
   onboarded: boolean;
   size: Size;
   energy?: Energy; // only an explicit choice is stored; absent = the pet's own personality.energy
@@ -56,6 +57,8 @@ export function mergeSettings(
   return merged;
 }
 
+const MAX_NAMES = 64; // every pet ever renamed, bundled ones included: plenty, but bounded
+
 const BOOLEAN_KEYS = ['screenAware', 'voice', 'offline', 'adminDisableScreenAware', 'onboarded', 'hideInShares', 'openAtLogin'] as const;
 
 // null = file missing. Wrong-typed or unknown keys are dropped so e.g. "false" can't read as truthy.
@@ -91,6 +94,15 @@ export function parseSettingsFile(text: string | null | Error): {
   if ('pets' in obj) {
     if (Array.isArray(obj.pets)) values.pets = [...new Set(obj.pets.filter((n): n is string => typeof n === 'string' && isPlainName(n) && n.length <= 40))].slice(0, MAX_PETS);
     else invalid.push('pets');
+  }
+  if ('names' in obj) {
+    const n = obj.names;
+    if (typeof n === 'object' && n !== null && !Array.isArray(n)) {
+      values.names = Object.fromEntries(Object.entries(n).flatMap(([k, v]) => {
+        const name = checkPetName(v);
+        return isPlainName(k) && k.length <= 40 && k === k.toLowerCase() && name !== null ? [[k, name]] : [];
+      }).slice(0, MAX_NAMES));
+    } else invalid.push('names');
   }
   if ('size' in obj) {
     if (isSize(obj.size)) values.size = obj.size;

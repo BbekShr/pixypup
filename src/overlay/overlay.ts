@@ -24,7 +24,7 @@ declare global {
       onBehavior(cb: (b: unknown) => void): void;
       onDebug(cb: (d: unknown) => void): void;
       onVoice(cb: (m: unknown) => void): void;
-      onPackChanged(cb: (h: { x?: number }) => void): void;
+      onPackChanged(cb: (h: { x?: number; renamed?: boolean }) => void): void;
       getPack(): Promise<Pack | null>;
       askHint(): Promise<unknown>;
       showMenu(): void;
@@ -1224,6 +1224,8 @@ function say(text: string, ms: number): void {
   ).onfinish = () => b.remove();
 }
 window.pixy.onPackChanged((h) => {
+  // A rename keeps the same pet on screen: only the catchphrases that say its name change, no handoff.
+  if (h.renamed) { void window.pixy.getPack().then((p) => { if (p) lines = p.manifest.personality?.lines ?? []; }).catch(() => undefined); return; }
   void readPack().then((p) => p && swapPets(p, h.x)).catch(() => undefined);
 });
 

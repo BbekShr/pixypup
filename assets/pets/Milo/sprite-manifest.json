@@ -1,0 +1,151 @@
+{
+  "pet": "Milo",
+  "species": "Dog",
+  "profile": {
+    "locomotion": "quadruped",
+    "subject": "a small brown and white puppy",
+    "styleHints": "fluffy brown-white fur, floppy brown ears, big dark eyes, pink cheeks",
+    "gait": {
+      "cadenceHz": 2.2,
+      "strideBody": 0.9,
+      "bounce": 0.08,
+      "pitchDeg": 8,
+      "speedBody": 0.6
+    },
+    "cycle": {
+      "kind": "walk",
+      "prompt": "same small brown and white fluffy puppy in strict side profile facing right, one eye visible, trotting walk, 4 frames horizontal sprite sheet, same size every frame, 4 equal columns with wide magenta gaps"
+    },
+    "idlePrompt": "Pose: standing in side view facing right, four paws on ground, tail up wagging slightly, head up smiling",
+    "fidgets": [
+      "bob",
+      "groom",
+      "wave"
+    ],
+    "roles": {
+      "rest": {
+        "label": "Sit calmly",
+        "prompt": "Pose: sitting on hind legs with front paws straight together, tail curled at side, head up looking right",
+        "bubble": "ahh"
+      },
+      "sleep": {
+        "label": "Nap time",
+        "prompt": "Pose: curled up lying on side with paws tucked in, eyes closed, fluffy tail over nose",
+        "bubble": "Zzz"
+      },
+      "voice": {
+        "label": "Bark happily",
+        "prompt": "Pose: sitting upright mouth open barking, ears perked, tongue out, tail wagging high",
+        "bubble": "Woof!"
+      },
+      "trick": {
+        "label": "Beg for treat",
+        "prompt": "Pose: standing on hind legs with front paws lifted begging, tongue out, tail wagging high",
+        "bubble": "Yay!"
+      }
+    },
+    "energy": "playful"
+  },
+  "poses": {
+    "idle": {
+      "frames": [
+        "idle_0.png"
+      ],
+      "fps": 2,
+      "footY": 0.9946808510638298
+    },
+    "walk": {
+      "frames": [
+        "side_0.png",
+        "side_1.png",
+        "side_2.png",
+        "side_3.png",
+        "side_4.png",
+        "side_5.png",
+        "side_6.png",
+        "side_7.png"
+      ],
+      "fps": 8,
+      "footY": 0.9946808510638298,
+      "judge": "muse-wonder-1.0"
+    },
+    "turn": {
+      "frames": [
+        "turn_front.png",
+        "turn_front34.png",
+        "turn_side.png",
+        "turn_back34.png",
+        "turn_back.png"
+      ],
+      "fps": 1,
+      "footY": 0.9946808510638298
+    },
+    "sit": {
+      "frames": [
+        "sit.png"
+      ],
+      "fps": 1,
+      "footY": 0.9946808510638298
+    },
+    "sleep": {
+      "frames": [
+        "sleep.png"
+      ],
+      "fps": 1,
+      "footY": 0.9946808510638298
+    },
+    "bark": {
+      "frames": [
+        "bark.png"
+      ],
+      "fps": 4,
+      "footY": 0.9946808510638298
+    },
+    "roll": {
+      "frames": [
+        "roll.png"
+      ],
+      "fps": 2,
+      "footY": 0.9946808510638298
+    },
+    "blink": {
+      "frames": [
+        "idle_blink.png"
+      ],
+      "fps": 1,
+      "footY": 0.9946808510638298
+    }
+  },
+  "personality": {
+    "breed": "Cavalier King Charles Spaniel",
+    "coat": "Golden brown and creamy white",
+    "traits": [
+      "sweet",
+      "cuddly",
+      "cheerful"
+    ],
+    "energy": "playful",
+    "lines": [
+      "Hi I'm Milo, let's be besties!",
+      "My tail wags just for you!",
+      "Cuddle time is my fave time!",
+      "I saved you the sunny spot!",
+      "Giggles make my ears flop!",
+      "I'll play with you all day!"
+    ],
+    "facts": [
+      {
+        "text": "Cavaliers are playful and gentle dogs that love to cuddle.",
+        "source": "https://www.webmd.com/pets/dogs/what-to-know-about-cavalier-king-charles-spaniels"
+      },
+      {
+        "text": "They are good with kids and make great family pets.",
+        "source": "https://www.petmd.com/dog/breeds/cavalier-king-charles-spaniel"
+      },
+      {
+        "text": "They have a long silky coat with soft feathering.",
+        "source": "https://www.petful.com/dog-breeds/cavalier-king-charles-spaniel/"
+      }
+    ]
+  }
+}

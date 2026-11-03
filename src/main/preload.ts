@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('pixy', {
   devCommand: (cmd: string): void => ipcRenderer.send(CH.devCmd, cmd), // main ignores it in a packaged app
   getPack: (): Promise<unknown> => ipcRenderer.invoke(CH.getPack),
   askHint: (): Promise<unknown> => ipcRenderer.invoke(CH.askHint),
-  onPackChanged: (cb: (h: { x?: number }) => void): void => {
+  onPackChanged: (cb: (h: { x?: number; renamed?: boolean }) => void): void => {
     ipcRenderer.on(CH.packChanged, (_e, h: { x?: number }) => cb(h ?? {}));
   },
   onBehavior: (cb: (b: unknown) => void): void => {
