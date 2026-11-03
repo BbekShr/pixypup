@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG, zoomLegs, ZOOM_SPEEDUP } from './motion';
 import { energyParams } from '../main/prefs';
-import { displayWidth, contactDrop, contactExtents, FLOOR_PAD, footOffset } from './layout';
+import { displayWidth, floorLift, footPoints, footOffset, type FootPoint } from './layout';
 
 describe('layout', () => {
   it('puts the foot line at footY of the displayed height and keeps aspect', () => {
@@ -558,30 +558,54 @@ describe('zoomies', () => {
   });
 });
 
-describe('contactDrop', () => {
-  it('paws under the pivot do not lift when tilted', () => {
-    expect(contactDrop(-2, 2, 1, 4)).toBeCloseTo(2 * Math.sin((4 * Math.PI) / 180));
-    expect(contactDrop(-2, 2, 1, 4)).toBeLessThan(0.2);
+describe('floorLift', () => {
+  const H = 140, FW = 100, FOOT = 0.99;
+  const pts: FootPoint[] = [[-0.4, 0], [-0.1, -0.03], [0.1, -0.02], [0.4, -0.008]]; // paws at different heights, as in a real silhouette
+  // The browser's math: translate(O) * the petTransform string * translate(-O), applied to a point of the frame box.
+  const paint = (t: string, [u, v]: FootPoint): number => {
+    const n = (re: RegExp): number[] => t.match(re)!.slice(1).map(Number);
+    const [, ty] = n(/translate\(([-\d.e]+)px, ([-\d.e]+)px\)/);
+    const [deg] = n(/rotate\(([-\d.e]+)deg\)/);
+    const [sx, sy] = n(/scale\(([-\d.e]+), ([-\d.e]+)\)/);
+    const a = (deg! * Math.PI) / 180;
+    return ty! + Math.sin(a) * u * FW * sx! + Math.cos(a) * v * H * sy!;
+  };
+  const lowest = (rot: number, flip: number, sx: number, sy: number, dy: number): number => {
+    const lift = floorLift(pts, FW, H, sx * flip, sy, rot, dy);
+    const t = petTransform(0, dy - lift, rot, flip, sx, sy);
+    return Math.max(...pts.map((p) => paint(t, p))) - Math.max(...pts.map((p) => p[1] * H)); // 0 = where the level pet rests
+  };
+  it('a tilted sit keeps the lowest paw on the rest line, both tilts and both facings', () => {
+    for (const rot of [-4, -3, -1, 0, 1, 3, 4]) for (const flip of [1, -1]) {
+      const g = lowest(rot, flip, 1, 1.02, 0);
+      expect(g).toBeLessThanOrEqual(1e-9);
+      expect(g).toBeGreaterThanOrEqual(-0.5);
+    }
   });
-  it('wide contact points with stretch drop by u*sx*sin(rot) on the low side', () => {
-    const d = (70 * 1.2 * Math.sin((3.8 * Math.PI) / 180));
-    expect(contactDrop(-50, 70, 1.2, 3.8)).toBeCloseTo(d);
-    expect(contactDrop(-50, 70, 1.2, -3.8)).toBeCloseTo(50 * 1.2 * Math.sin((3.8 * Math.PI) / 180));
+  it('walk and zoomies never put a paw below the line, with lean, stretch, flip and the bob', () => {
+    for (const kind of ['walk', 'trot', 'zoom'] as const) for (const flip of [1, -1]) for (let p = 0; p < 1; p += 0.02) {
+      const b = walkBody(p, H, gaitParams(kind));
+      const rot = lean(flip, 1, 0) - b.rot * flip;
+      expect(lowest(rot, flip, b.sx, b.sy, b.dy)).toBeLessThanOrEqual(1e-9);
+    }
   });
-  it('flip swaps which paw is low and a level sprite never lifts', () => {
-    expect(contactDrop(-50, 70, -1, 3.8)).toBeCloseTo(50 * Math.sin((3.8 * Math.PI) / 180));
-    expect(contactDrop(-50, 70, 1, 0)).toBe(0);
-    expect(FLOOR_PAD).toBeGreaterThan(0);
+  it('an unlifted bob does sink below the line, so the lift is what keeps it up', () => {
+    const b = walkBody(1 / 8, H, gaitParams('zoom'));
+    expect(b.dy).toBeGreaterThan(1);
+    expect(floorLift(pts, FW, H, 1, b.sy, 0, b.dy)).toBeGreaterThan(1);
   });
 });
 
-describe('contactExtents', () => {
-  it('reads the leftmost/rightmost opaque x in the rows just above footY, as centre-relative fractions', () => {
+describe('footPoints', () => {
+  it('takes the lowest opaque pixel of each column bin, relative to the footY line', () => {
     const w = 10, h = 10;
     const a = new Uint8Array(w * h * 4);
-    for (const [x, y] of [[2, 9], [7, 9], [0, 3]] as const) a[(y * w + x) * 4] = 255; // (0,3) is above the band
-    const [l, r] = contactExtents(a, w, h, 1);
-    expect(l).toBeCloseTo(-0.3);
-    expect(r).toBeCloseTo(0.3);
+    for (const [x, y] of [[2, 9], [7, 8], [0, 3]] as const) a[(y * w + x) * 4] = 255;
+    const p = footPoints(a, w, h, 1, 10);
+    expect(p).toHaveLength(3);
+    expect(p[1]![0]).toBeCloseTo(-0.25);
+    expect(p[1]![1]).toBeCloseTo(0);
+    expect(p[2]![1]).toBeCloseTo(-0.1);
+    expect(p[0]![1]).toBeCloseTo(-0.6);
   });
 });

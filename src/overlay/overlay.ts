@@ -11,7 +11,7 @@ import { alreadyHere, comeTarget, comeX, commandMustWait, GREET_MS, isCome } fro
 import { alphaPlane as alpha, cleanFrame, walkTiming } from './frames';
 import { GAITS, bakeWalk, barkWord, legBand, rigFor } from './puppet';
 import { FALLBACK_STRIDE, strideFromFrames } from './stride';
-import { displayWidth, FLOOR_PAD, contactDrop, contactExtents, footOffset } from './layout';
+import { displayWidth, FLOOR_PAD, floorLift, footPoints, type FootPoint, footOffset } from './layout';
 import { CLICK_WIGGLE_MS, DOUBLE_BLINK_CHANCE, HOVER_TILT_DEG, WIGGLE_MS, YAWN_MS, blinkShut, detectPetting, perkPulse, stretch, wiggle, yawnSy, type Sample } from './micro';
 import { BLINK_MS, MAX_SPEED, SETTLE_MS, barkPose, boundGait, woofBurst, blinkDelay, airStep, breathe, dangle, envelope, gaitParams, headX, registersByHead, hop, landSquash, LAND_SQUASH_MS, pivotShift, lean, releaseVelocity, overlap, petTransform, pickTarget, rollAngle, settle, walkFrame, walkStep, hopTurn, mirrorProgress, mirrorScale, steer, turnFrame, usableTurn, walkBody, profileScale, TURN_FRONT, TURN_FRONT34, type GaitKind, type Mirror, WALK_ACCEL, zoomLegs } from './motion';
 import { dwellMs, isClick, next, onTimeout, release, resolveWalk, sitHoldMs, type PetEvent, type PetState } from './state';
@@ -77,7 +77,7 @@ let prefs: Prefs = { size: 'medium', energy: 'normal', snoozed: false };
 let footY = 1;
 let reg = new Map<string, number>(); // src -> natural px its head sits right of idle's
 let wagOk = false;
-let contact = new Map<string, [number, number]>(); // src -> lowest painted x extents, fractions of the frame width from centre
+let contact = new Map<string, FootPoint[]>(); // src -> underside points of the painted silhouette
 let widths = new Map<string, number>(); // src -> natural width; the profile walk is drawn wider than idle
 let strideFrac = STRIDE; // of the idle width the body advances per walk frame, measured from the pack's art
 type Rig = { kind: string; frames: number; bellyY: number; splitX: number; strideFrac: number; centroids: number[] } | { reason: string } | null;
@@ -97,7 +97,7 @@ let woofShown = -1; // the last burst that got one
 const query = new URLSearchParams(location.search);
 const chatty = import.meta.env.DEV && query.get('chatty') === '1';
 
-interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; bark: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number>; contact: Map<string, [number, number]>; rig: Rig }
+interface Prepared { name: string; strideFrac: number; bodyScale: { bounce: number; pitch: number }; comeBubble: string; bark: string; lines: string[]; poses: Record<string, PoseSet>; bitmaps: HTMLImageElement[]; nw: number; nh: number; footY: number; reg: Map<string, number>; wag: boolean; widths: Map<string, number>; contact: Map<string, FootPoint[]>; rig: Rig }
 
 const LYING = new Set(['sleep', 'roll']); // whole-body poses: nothing to line the head up with
 const STATIC_WALK_OVERLAP = 0.98;
@@ -227,7 +227,7 @@ async function readPack(): Promise<Prepared | null> {
     } else rig = { reason: 'no leg band found in idle' };
   }
   const { reg, wag } = register(poses, bitmaps, first);
-  return { name: pack.manifest.pet, strideFrac: strideFrac ?? walkStride(poses['walk'], bitmaps, first), bodyScale: body ?? profileScale(pack.manifest.profile?.gait), rig, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', bark: barkWord(pack.manifest.species), lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])), contact: new Map(bitmaps.flatMap((b) => { const a = alpha(b); return a ? [[b.src, contactExtents(a, b.naturalWidth, b.naturalHeight, pack.manifest.poses['idle']?.footY ?? 1)] as [string, [number, number]]] : []; })) };
+  return { name: pack.manifest.pet, strideFrac: strideFrac ?? walkStride(poses['walk'], bitmaps, first), bodyScale: body ?? profileScale(pack.manifest.profile?.gait), rig, comeBubble: pack.manifest.profile?.roles?.voice?.bubble ?? 'Here!', bark: barkWord(pack.manifest.species), lines: pack.manifest.personality?.lines ?? [], poses, bitmaps, nw: first.naturalWidth, nh: first.naturalHeight, footY: pack.manifest.poses['idle']?.footY ?? 1, reg, wag, widths: new Map(bitmaps.map((b) => [b.src, b.naturalWidth])), contact: new Map(bitmaps.flatMap((b) => { const a = alpha(b); return a ? [[b.src, footPoints(a, b.naturalWidth, b.naturalHeight, pack.manifest.poses['idle']?.footY ?? 1)] as [string, FootPoint[]]] : []; })) };
 }
 
 function applyPack(p: Prepared): void {
@@ -652,7 +652,7 @@ function frame(now: number): void {
   const swing = dang.angle ? -dang.angle : 0;
   if (dang.angle) { rot += swing; sy *= 1.03; }
   dx += (W - fw) / 2 - (reg.get(src) ?? 0) * px * flip; // centred, head where its reference's is
-  if (!swing && state !== 'roll') { const c = contact.get(src); if (c) dy -= contactDrop(c[0] * fw, c[1] * fw, sx * flip, rot); } // the far paw swings below the floor line otherwise
+  if (!swing && state !== 'roll') { const c = contact.get(src); if (c) dy -= floorLift(c, fw, H, sx * flip, sy, rot, dy); } // the low paw (tilt) or a downward bob would sink below the floor line otherwise
   if (state === 'roll') img.style.transformOrigin = '50% 50%';
   else img.style.transformOrigin = `50% ${footY * 100}%`;
   if (swing && state !== 'roll') { // rotate about the grab point: shift by what the origin-pivot rotation moved it

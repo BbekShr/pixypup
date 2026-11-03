@@ -9,21 +9,40 @@ export const displayWidth = (naturalW: number, naturalH: number, displayH = DISP
 /** Headroom so antialiased paws and sub-pixel rounding never clip at the window bottom. */
 export const FLOOR_PAD = 1;
 
-/** Lowest-painted rows' leftmost/rightmost opaque x as signed fractions of the frame width from its centre, over the bottom `band` of the footY line. */
-export function contactExtents(alpha: ArrayLike<number>, w: number, h: number, footY: number, band = 0.04): [number, number] {
-  const end = Math.min(h, Math.max(1, Math.round(h * footY)));
-  let l = w;
-  let r = -1;
-  for (let y = Math.max(0, end - Math.ceil(h * band)); y < end; y++) {
-    for (let x = 0; x < w; x++) {
-      if (alpha[(y * w + x) * 4]! > 127) { l = Math.min(l, x); r = Math.max(r, x + 1); }
+/** A painted foot point: x as a fraction of the frame width from its centre, y as a fraction of the frame height below the footY line (negative = above it). */
+export type FootPoint = [number, number];
+
+/** The lowest opaque pixel of each of `bins` columns: the silhouette's underside, which is what meets the floor once the sprite tilts. */
+export function footPoints(alpha: ArrayLike<number>, w: number, h: number, footY: number, bins = 48): FootPoint[] {
+  const out: FootPoint[] = [];
+  for (let b = 0; b < bins; b++) {
+    const x0 = Math.floor((b * w) / bins);
+    const x1 = Math.max(x0 + 1, Math.floor(((b + 1) * w) / bins));
+    let low = -1;
+    let lx = 0;
+    for (let x = x0; x < x1; x++) {
+      for (let y = h - 1; y > low; y--) {
+        if (alpha[(y * w + x) * 4]! > 127) { low = y; lx = x; break; }
+      }
     }
+    if (low >= 0) out.push([(lx + 0.5) / w - 0.5, (low + 1) / h - footY]);
   }
-  return r < 0 ? [0, 0] : [l / w - 0.5, r / w - 0.5];
+  return out;
 }
 
-/** How far the painted contact points (signed offsets left/right of the pivot, display px) drop below the pivot's floor line when rotated rotDeg about it; sx is the signed horizontal scale (flip included). */
-export const contactDrop = (left: number, right: number, sx: number, rotDeg: number): number => {
-  const k = sx * Math.sin((rotDeg * Math.PI) / 180);
-  return Math.max(0, left * k, right * k);
-};
+/**
+ * How far to raise the sprite so no painted point ends up lower than the unrotated lowest one. Each point is mapped
+ * exactly as CSS does (origin at the footY line on the frame's centre; scale by sx = signed horizontal scale incl. flip
+ * and sy, then rotate rotDeg, then the body's own dy), so tilt, stretch, flip and a downward bob are all covered.
+ */
+export function floorLift(points: readonly FootPoint[], fw: number, h: number, sx: number, sy: number, rotDeg: number, dy: number): number {
+  const s = Math.sin((rotDeg * Math.PI) / 180);
+  const c = Math.cos((rotDeg * Math.PI) / 180);
+  let rest = -Infinity;
+  let low = -Infinity;
+  for (const [u, v] of points) {
+    rest = Math.max(rest, v * h);
+    low = Math.max(low, s * u * fw * sx + c * v * h * sy + dy);
+  }
+  return Math.max(0, low - rest);
+}
