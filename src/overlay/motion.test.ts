@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG } from './motion';
+import { BLINK_MS, boundGait, MAX_SPEED, SETTLE_MS, barkPose, woofBurst, blinkDelay, envelope, airStep, dangle, headX, landSquash, pivotShift, releaseVelocity, lean, overlap, petTransform, settle, walkFrame, walkSpans, legChange, breathe, hop, pickTarget, rollAngle, squash, walkStep, turnScale, steer, mirrorScale, mirrorProgress, hopTurn, gaitParams, profileScale, walkBody, type Mirror, TURN_FLOOR, turnFrame, TURN_FRONT, TURN_FRONT34, TURN_SIDE, WALK_ACCEL, LEAN_DEG, zoomLegs, ZOOM_SPEEDUP } from './motion';
+import { energyParams } from '../main/prefs';
 import { displayWidth, footOffset } from './layout';
 
 describe('layout', () => {
@@ -533,5 +534,26 @@ describe('gaits', () => {
     expect(profileScale(undefined)).toEqual({ bounce: 1, pitch: 1 });
     expect(profileScale({ bounce: 0.15, pitchDeg: 40 })).toEqual({ bounce: 1.5, pitch: 1.5 });
     expect(profileScale({ bounce: 0, pitchDeg: 0 })).toEqual({ bounce: 0.3, pitch: 0 });
+  });
+});
+
+describe('zoomies', () => {
+  it('sprints to the edge farther from the pet, then back part of the way, always on screen', () => {
+    expect(zoomLegs(100, 200, 1000).far).toBe(800);
+    expect(zoomLegs(700, 200, 1000).far).toBe(0);
+    for (const x of [0, 100, 400, 800]) {
+      const { far, back } = zoomLegs(x, 200, 1000);
+      expect(back).toBeGreaterThanOrEqual(Math.min(far, x));
+      expect(back).toBeLessThanOrEqual(Math.max(far, x));
+    }
+    expect(zoomLegs(100, 200, 1000).back).toBeCloseTo(800 + (100 - 800) * 0.6);
+  });
+  it('a pet wider than the screen stays at 0', () => {
+    expect(zoomLegs(0, 1200, 1000)).toEqual({ far: 0, back: 0 });
+  });
+  it('the zoom gait is clearly faster than a trot, even at playful energy', () => {
+    expect(gaitParams('zoom').speed).toBe(ZOOM_SPEEDUP);
+    const play = energyParams('playful').speed;
+    expect(gaitParams('zoom').speed * play).toBeGreaterThan(gaitParams('trot').speed * play * 1.4);
   });
 });

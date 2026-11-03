@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actAfterCommand, behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
+import { actAfterCommand, actNeedsWalk, behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
 
 const sniff: Behavior = { seq: 1, action: 'sniff', target: { x: 10, y: 10 }, reason: 'r' };
 const free = { dragging: false, falling: false, resting: false, snoozed: false, handoff: null };
@@ -107,5 +107,18 @@ describe('talk act wedge', () => {
     expect(actAfterCommand({ kind: 'talk' })).toBeNull();
     expect(actAfterCommand({ kind: 'sniff' })).toEqual({ kind: 'sniff' });
     expect(actAfterCommand(null)).toBeNull();
+  });
+  it('a user command also ends a zoom act, whose only exit is its walk', () => {
+    expect(actAfterCommand({ kind: 'zoom' })).toBeNull();
+  });
+  it('actNeedsWalk is true only for walking phases of talk and zoom', () => {
+    expect(actNeedsWalk({ kind: 'talk', phase: 'go' })).toBe(true);
+    expect(actNeedsWalk({ kind: 'talk', phase: 'stay' })).toBe(false);
+    expect(actNeedsWalk({ kind: 'zoom', phase: 'out' })).toBe(true);
+    expect(actNeedsWalk({ kind: 'zoom', phase: 'back' })).toBe(true);
+    expect(actNeedsWalk({ kind: 'zoom', phase: 'bark' })).toBe(false);
+    expect(actNeedsWalk({ kind: 'hide', phase: 'go' })).toBe(false);
+    expect(actNeedsWalk({ kind: 'perk' })).toBe(false);
+    expect(actNeedsWalk(null)).toBe(false);
   });
 });

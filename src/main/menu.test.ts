@@ -11,12 +11,15 @@ const sub = (t: MenuItem[], label: string): MenuItem[] => {
 
 describe('petMenuTemplate', () => {
   it('has the agreed order, tricks first and Quit last', () => {
-    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', 'Talk to Pakkun…', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Add Meta key for the full experience…', 'Add another pet…', 'PixyPup Overload!', '-', 'Quit PixyPup']);
+    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', 'Do a trick', 'Zoomies!', 'Talk to Pakkun…', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Add Meta key for the full experience…', 'Add another pet…', 'PixyPup Overload!', '-', 'Quit PixyPup']);
     expect(petMenuTemplate(base).at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
   });
   it('maps the tricks to overlay command strings', () => {
     const cmds = petMenuTemplate(base).flatMap((i) => ('command' in i ? [[i.label, i.command]] : []));
-    expect(cmds.slice(0, 5)).toEqual([['Sit', 'sit'], ['Bark', 'bark'], ['Roll over', 'roll'], ['Nap', 'bed'], ['Come here', 'come']]);
+    expect(cmds.slice(0, 7)).toEqual([['Sit', 'sit'], ['Bark', 'bark'], ['Roll over', 'roll'], ['Nap', 'bed'], ['Come here', 'come'], ['Do a trick', 'trick'], ['Zoomies!', 'zoomies']]);
+    const tray = labels(trayMenuTemplate(base));
+    expect(tray).not.toContain('Do a trick');
+    expect(tray).not.toContain('Zoomies!');
   });
   it('the Meta key item invites a key until one is saved, then offers to change it, in both menus', () => {
     for (const make of [petMenuTemplate, trayMenuTemplate]) {

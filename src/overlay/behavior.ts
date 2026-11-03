@@ -94,5 +94,9 @@ export function talkPlan(mood: TalkAction, crisis: boolean): TalkPlan {
   }
 }
 
-/** A user command replaces a talk act (its walk/pose); every other act is handled by its own rules. */
-export const actAfterCommand = <A extends { kind: string }>(act: A | null): A | null => (act?.kind === 'talk' ? null : act);
+/** A user command replaces a talk or zoom act (its walk/pose); every other act is handled by its own rules. */
+export const actAfterCommand = <A extends { kind: string }>(act: A | null): A | null => (act?.kind === 'talk' || act?.kind === 'zoom' ? null : act);
+
+/** Acts whose only exit is the walk they started: if the pet leaves 'walk' (poke, drag, snooze) the act must be dropped. */
+export const actNeedsWalk = (a: { kind: string; phase?: string } | null): boolean =>
+  (a?.kind === 'talk' && a.phase === 'go') || (a?.kind === 'zoom' && (a.phase === 'out' || a.phase === 'back'));

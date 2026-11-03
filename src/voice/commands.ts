@@ -1,4 +1,4 @@
-export type Command = 'sit' | 'roll' | 'bed' | 'come' | 'bark';
+export type Command = 'sit' | 'roll' | 'bed' | 'come' | 'bark' | 'trick' | 'zoomies';
 
 const PATTERNS: [Command, RegExp][] = [
   ['sit', /\bsit\b/g],
@@ -6,6 +6,8 @@ const PATTERNS: [Command, RegExp][] = [
   ['bed', /\bgo\s+to\s+(your\s+)?bed\b|\bbed\b|\bnap\b/g],
   ['come', /\bcome(\s+here)?\b/g],
   ['bark', /\bbark\b|\bspeak\b/g],
+  ['trick', /\b(do\s+a\s+)?trick\b/g],
+  ['zoomies', /\bzoomies?\b/g],
 ];
 
 function distance(a: string, b: string): number {
