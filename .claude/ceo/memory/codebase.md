@@ -63,3 +63,6 @@ and that agents keep needing get promoted into CLAUDE.md (human-approved).
 - 2026-11-02 (deep-stable): `__pixyDebug.behave({action:'talk',mood:'listen'})` drives talk → stay (sit) with no target; `__pixyDebug.command(cmd)` is the same `command()` the menu IPC reaches (`src/overlay/overlay.ts`). Zoomies end = `act === null`, not a state.
 - 2026-11-02 (deep-stable): Spark never picks behaviours at runtime: rules in `src/screen/decide.ts` pick the action, Spark only writes bubbles/hints (doc drift vs RULES.md wording).
 - 2026-11-02 (deep-stable): `src/screen/reader.ts` is the only Dock-badge baseline owner; an empty map never replaces a non-empty baseline.
+
+## Dated facts
+- 2026-11-03 (F-menu-cursor): pet menu nests Tricks/Pets/Settings submenus (src/main/menu.ts:36-66); main's toNative recurses (src/main/main.ts:157). Menu emoji live in shared helpers SNOOZE/talkItem/overloadItem so the tray stays in sync. Overlay talk is driven via `__pixyDebug.pref('talk')` (overlay pref -> devCommand -> main run()), not `command('talk')`.
