@@ -15,7 +15,7 @@ export function makeRun(helperPath: string): Run {
         execFile(
           helperPath,
           args,
-          { timeout: opts?.timeoutMs ?? 4000, maxBuffer: 32 * 1024 * 1024, encoding: 'buffer' },
+          { timeout: opts?.timeoutMs ?? 4000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024, encoding: 'buffer' },
           (err, stdout, stderr) => {
             const code = err ? (typeof err.code === 'number' ? err.code : -1) : 0;
             resolve({ code, stdout: stdout ?? Buffer.alloc(0), stderr: (stderr ?? '').toString() });
