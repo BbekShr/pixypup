@@ -44,6 +44,7 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
     ] },
     { label: '👋 Come here', command: 'come' },
     talkItem(o.name),
+    overloadItem(o.overload),
     { type: 'separator' },
     o.snoozed ? { label: '☀️ Wake up', command: 'wake' } : SNOOZE,
     { label: '📌 Stay here', command: o.stay ? 'wander' : 'stay', checked: o.stay },
@@ -52,8 +53,6 @@ export function petMenuTemplate(o: MenuState): MenuItem[] {
       ...(o.self ? [{ label: `Rename ${o.self.name}…`, command: `rename:${o.self.slug}` }] : []),
       ...libraryMenu(o),
       ...sendHome(o.pets),
-      { type: 'separator' },
-      overloadItem(o.overload),
     ] },
     { label: '⚙️ Settings', submenu: [
       { label: 'Size', submenu: (Object.keys(SIZES) as Size[]).map((s) => ({ label: `${SIZE_LABELS[s]} ${SIZES[s]} px`, command: `size:${s}`, checked: o.size === s, radio: true })) },
