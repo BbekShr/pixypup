@@ -98,7 +98,9 @@ describe('ruleDecide', () => {
     for (const t of ['Zoom Workplace', 'Zoom', 'Settings', 'Zoom - Free Account']) expect(hides(w('zoom.us', t))).toBe(false);
     expect(hides(w('zoom.us', 'Zoom Meeting'))).toBe(true);
     expect(hides(w('zoom.us', 'Zoom Webinar'))).toBe(true);
-    expect(hides(w('zoom.us', ''))).toBe(true);
+    expect(hides(w('zoom.us', ''))).toBe(true); // media unknown
+    expect(hides({ ...w('zoom.us', ''), ...media(false, []) })).toBe(false); // media known: idle Zoom
+    expect(hides({ ...w('zoom.us', ''), ...media(false, ['us.zoom.xos']) })).toBe(true);
   });
   it('Teams: mic, meeting title; chat without mic does not hide', () => {
     expect(hides(media(false, ['com.microsoft.teams2']))).toBe(true);
