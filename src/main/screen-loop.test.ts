@@ -13,7 +13,7 @@ function setup(over: Partial<LoopDeps> = {}) {
   const sent: Behavior[] = [];
   let current = err;
   let key = 'k1';
-  const settings = { screenAware: true, adminDisableScreenAware: false, offline: false };
+  const settings = { screenAware: true, adminDisableScreenAware: false, offline: false, callMode: 'hide' as 'hide' | 'corner' };
   let snoozed = false;
   const reader = { tick: vi.fn(async () => ({ observation: current, debug: { terminalKey: key } })) };
   const decide = vi.fn(async (o: Observation) => ({
@@ -106,6 +106,15 @@ describe('startScreenLoop', () => {
     t.stop();
   });
 
+  it('carries callMode on every hide, so changing it mid-call reaches the overlay on the next tick', async () => {
+    const t = setup();
+    t.set(call, '');
+    await tick(1);
+    t.settings.callMode = 'corner';
+    await tick(1);
+    expect(t.sent.map((b) => b.mode)).toEqual(['hide', 'corner']);
+    t.stop();
+  });
   it('a failed window read (no windows) neither ends the hide nor counts as clear', async () => {
     let cur = call;
     let wins = 5;

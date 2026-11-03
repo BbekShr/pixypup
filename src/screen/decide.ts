@@ -1,4 +1,5 @@
 import type { BehaviorDecision } from '../../contracts/types';
+import type { Media } from './media';
 
 export type Box = { x: number; y: number; w: number; h: number };
 
@@ -8,16 +9,30 @@ export type Observation = {
   terminalError: { text: string; box?: Box; context?: string } | null;
   /** The newest test result in the front terminal is all green. */
   terminalPass?: boolean;
+  /** Camera / microphone use from the helper; null or absent when unknown. */
+  media?: Media | null;
 };
 
 const TERMINALS = ['terminal', 'iterm', 'iterm2', 'warp', 'ghostty', 'alacritty', 'kitty'];
 
+// Bundle-ID prefixes of apps that can host a call; PixyPup's own (dev.pixypup.app, com.github.Electron) are deliberately absent.
+const CALL_APPS = [
+  'com.google.Chrome', 'com.apple.Safari', 'com.apple.WebKit', 'company.thebrowser', 'com.microsoft.edgemac',
+  'com.brave.Browser', 'org.mozilla.firefox', 'com.operasoftware', 'com.vivaldi', 'us.zoom', 'com.microsoft.teams', 'com.microsoft.teams2',
+  'com.apple.FaceTime', 'com.tinyspeck.slackmacgap', 'com.hnc.Discord', 'com.cisco.webex', 'Cisco-Systems.Spark',
+];
+export const isCallApp = (id: string) => CALL_APPS.some((p) => id === p || id.startsWith(p + '.'));
+
+const titleIsCall = (w: { owner: string; title: string }) =>
+  // Chrome's window title is only the front tab; Meet uses hyphen, en or em dash.
+  /^Meet\s*[-–—]\s|meet\.google\.com|^Zoom Meeting( - Zoom)?$/i.test(w.title) ||
+  // Zoom's idle home window ("Zoom Workplace") must not hide; empty = titles redacted without Screen Recording.
+  (/zoom\.us|^zoom$/i.test(w.owner) && (w.title === '' || /^Zoom (Meeting|Webinar)\b/i.test(w.title))) ||
+  (/^(Microsoft Teams|MSTeams)\b/i.test(w.owner) && /^(Meeting( with| in)?|Call with)\b/i.test(w.title)) ||
+  /^(Meeting|Call)\b.*\|\s*Microsoft Teams$/.test(w.title);
+
 export function ruleDecide(obs: Observation): BehaviorDecision | null {
-  // Any "Meet - …" title counts: named calendar meetings use the event name, and a missed hide mid-call is worse than a doc titled "Meet - …".
-  const call = obs.windows.some(
-    (w) =>
-      /zoom\.us|^zoom$/i.test(w.owner) || /^Meet - |meet\.google\.com|^Zoom Meeting( - Zoom)?$/i.test(w.title),
-  );
+  const call = obs.windows.some(titleIsCall) || !!obs.media?.camera || !!obs.media?.micApps.some(isCallApp);
   if (call) return { action: 'hide', durationMs: 30000, reason: 'video call in progress' };
 
   if (obs.terminalError) {

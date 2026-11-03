@@ -4,6 +4,9 @@ export type Size = keyof typeof SIZES;
 export const ENERGIES = ['sleepy', 'normal', 'playful'] as const;
 export type Energy = (typeof ENERGIES)[number];
 
+export const CALL_MODES = ['hide', 'corner'] as const;
+export type CallMode = (typeof CALL_MODES)[number];
+export const isCallMode = (v: unknown): v is CallMode => (CALL_MODES as readonly unknown[]).includes(v);
 export const isSize = (v: unknown): v is Size => typeof v === 'string' && Object.hasOwn(SIZES, v);
 export const isEnergy = (v: unknown): v is Energy => (ENERGIES as readonly unknown[]).includes(v);
 
@@ -62,6 +65,7 @@ export function commandToPatch(cmd: string, now: Date): Record<string, unknown> 
     case 'wake': return { snoozeUntil: null };
     case 'size': return isSize(v) ? { size: v } : null;
     case 'energy': return isEnergy(v) ? { energy: v } : null;
+    case 'call': return isCallMode(v) ? { callMode: v } : null;
     case 'hide': return v === 'on' || v === 'off' ? { hideInShares: v === 'on' } : null;
     // 'yes' is the explainer's answer (screen and voice alike); the menu only ever sends on (which asks first) or off.
     case 'screen': return v === 'yes' || v === 'off' ? { screenAware: v === 'yes' } : null;

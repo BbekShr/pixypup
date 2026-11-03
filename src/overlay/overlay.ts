@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx, type Handoff } from './handoff';
-import { actAfterCommand, holdsLongPose, actNeedsWalk, behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
+import { actAfterCommand, holdsLongPose, actNeedsWalk, behaviorBusy, HINT_WINDOW_MS, cornerSpot, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
@@ -44,7 +44,7 @@ type Act =
   | { kind: 'celebrate'; until: number }
   | { kind: 'talk'; phase: 'go' | 'stay'; until: number; plan: TalkPlan; bubble: string }
   | { kind: 'zoom'; phase: 'out' | 'back' | 'bark'; until: number; back: number }
-  | { kind: 'hide'; phase: 'go' | 'away' | 'peek' | 'peeking'; until: number; side: -1 | 1; spot: number };
+  | { kind: 'hide'; mode: 'hide' | 'corner'; phase: 'go' | 'away' | 'peek' | 'peeking'; until: number; side: -1 | 1; spot: number };
 const LONG = 1e9; // a state dwell that never fires; the act ends it
 const BARK_MS = 3500;
 const ZOOM_BARK_MS = 1500;
@@ -698,7 +698,9 @@ img.addEventListener('mouseleave', () => {
 // Calm, idle, nobody else has the pet: only then do the little reactions run.
 const microOk = (): boolean => !calm && !busyNow() && !dragging && !act && !yawn && (state === 'idle' || state === 'sit');
 
+const hiding = (): boolean => act?.kind === 'hide' && (act.phase === 'go' || act.phase === 'away'); // a call is on: no bubbles or hearts
 function heart(): void {
+  if (hiding()) return;
   const h = document.createElement('div');
   h.textContent = '\u2665';
   h.style.cssText = 'position:absolute;left:0;top:0;font:700 14px var(--font);color:var(--blush);pointer-events:none';
@@ -956,14 +958,18 @@ function start(b: Behavior): void {
   lastInteraction = now;
   if (b.action === 'hide') {
     if (b.on) {
-      if (act?.kind === 'hide' && (act.phase === 'go' || act.phase === 'away')) return;
+      const mode = b.mode ?? 'hide';
+      if (act?.kind === 'hide' && (act.phase === 'go' || act.phase === 'away') && act.mode === mode) return;
       if (queuedBehavior?.action !== 'hide') queuedBehavior = null; // a sniff that waited is stale by the time the call ends
-      const h = hideSpot(x, W, window.innerWidth);
-      act = { kind: 'hide', phase: 'go', until: 0, ...h };
+      const h = mode === 'corner' ? cornerSpot(x, W, window.innerWidth) : hideSpot(x, W, window.innerWidth, 0);
+      act = { kind: 'hide', mode, phase: 'go', until: 0, ...h };
       setState('walk', { target: h.spot });
     } else if (!b.on && act?.kind === 'hide') {
-      act.phase = 'peek';
-      setState('walk', { target: peekOutX(act.side, W, window.innerWidth) });
+      if (act.mode === 'corner') { act = null; setState('idle'); } // lying in the corner: just get up
+      else {
+        act.phase = 'peek';
+        setState('walk', { target: peekOutX(act.side, W, window.innerWidth) });
+      }
     }
   } else if (b.action === 'sniff' && b.target) {
     hintUntil = 0;
@@ -1020,8 +1026,11 @@ function actArrive(now: number): void {
     setState('bark', { ms: ZOOM_BARK_MS }); // finite: a command nulls the act, and actTimeout would never end the bark
   } else if (act.kind === 'hide' && act.phase === 'go') {
     act.phase = 'away';
-    face(-act.side); // looks in from the edge
-    setState('idle', { ms: LONG });
+    if (act.mode === 'corner') setState('sleep', { ms: LONG });
+    else {
+      face(-act.side); // looks in from the edge
+      setState('idle', { ms: LONG });
+    }
   } else if (act.kind === 'hide' && act.phase === 'peek') {
     act.phase = 'peeking';
     act.until = now + 900;
@@ -1202,6 +1211,7 @@ function speakLine(): boolean {
 }
 const sayHi = (name: string): void => say(`Hi, I'm ${name}!`, 3600);
 function say(text: string, ms: number): void {
+  if (hiding()) return;
   const b = document.createElement('div');
   b.className = 'hi';
   b.textContent = text;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actAfterCommand, holdsLongPose, actNeedsWalk, behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
+import { actAfterCommand, holdsLongPose, actNeedsWalk, behaviorBusy, cornerSpot, CORNER_MARGIN, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
 
 const sniff: Behavior = { seq: 1, action: 'sniff', target: { x: 10, y: 10 }, reason: 'r' };
 const free = { dragging: false, falling: false, resting: false, snoozed: false, handoff: null };
@@ -64,6 +64,23 @@ describe('hide geometry', () => {
   it('leans out further than the peek', () => {
     expect(peekOutX(-1, 140, 1000)).toBeGreaterThan(hideSpot(0, 140, 1000).spot);
     expect(peekOutX(1, 140, 1000)).toBeLessThan(hideSpot(900, 140, 1000).spot);
+  });
+});
+
+describe('call modes', () => {
+  it('parses hide mode, defaulting unknown values to hide', () => {
+    expect(parseBehavior({ seq: 1, action: 'hide', on: true, mode: 'corner', reason: '' })?.mode).toBe('corner');
+    expect(parseBehavior({ seq: 2, action: 'hide', on: true, mode: 'weird', reason: '' })?.mode).toBe('hide');
+    expect(parseBehavior({ seq: 3, action: 'hide', on: true, reason: '' })?.mode).toBe('hide');
+  });
+  it('hides fully off-screen with a zero peek', () => {
+    expect(hideSpot(100, 140, 1000, 0)).toEqual({ side: -1, spot: -140 });
+    expect(hideSpot(800, 140, 1000, 0)).toEqual({ side: 1, spot: 1000 });
+  });
+  it('corner spot is fully inside the window at the nearer side', () => {
+    expect(cornerSpot(100, 140, 1000)).toEqual({ side: -1, spot: CORNER_MARGIN });
+    expect(cornerSpot(800, 140, 1000)).toEqual({ side: 1, spot: 1000 - 140 - CORNER_MARGIN });
+    expect(cornerSpot(0, 140, 100).spot).toBeGreaterThanOrEqual(0);
   });
 });
 

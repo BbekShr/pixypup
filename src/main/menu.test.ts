@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { petMenuTemplate, trayMenuTemplate, type MenuItem, type MenuState } from './menu';
 
-const base: MenuState = { stay: false, snoozed: false, size: 'medium', energy: 'normal', hideInShares: false, screenAware: false, voice: false, openAtLogin: false, name: 'Pakkun' };
+const base: MenuState = { stay: false, snoozed: false, size: 'medium', energy: 'normal', hideInShares: false, callMode: 'hide', screenAware: false, voice: false, openAtLogin: false, name: 'Pakkun' };
 const labels = (t: MenuItem[]): string[] => t.map((i) => ('type' in i ? '-' : i.label));
 const flat = (t: MenuItem[]): MenuItem[] => t.flatMap((i) => ('submenu' in i ? [i, ...flat(i.submenu)] : [i]));
 const find = (t: MenuItem[], l: string): MenuItem | undefined => flat(t).find((i) => 'label' in i && i.label === l);
@@ -20,8 +20,13 @@ describe('petMenuTemplate', () => {
   it('every command the long menu had is still reachable', () => {
     const t = petMenuTemplate({ ...base, library: [{ slug: 'Mochi', name: 'Mochi' }], pets: [{ slug: 'a', name: 'A' }, { slug: 'b', name: 'B' }] });
     const cmds = flat(t).flatMap((i) => ('command' in i ? [i.command] : []));
-    for (const c of ['sit', 'bark', 'roll', 'bed', 'come', 'trick', 'zoomies', 'talk', 'snooze:1h', 'snooze:tomorrow', 'stay', 'size:small', 'size:medium', 'size:large', 'energy:sleepy', 'energy:normal', 'energy:playful', 'hide:on', 'screen:on', 'voice:on', 'debug:on', 'login:on', 'key', 'new-pet', 'library:Mochi', 'home:a', 'home:b', 'overload']) expect(cmds).toContain(c);
+    for (const c of ['sit', 'bark', 'roll', 'bed', 'come', 'trick', 'zoomies', 'talk', 'snooze:1h', 'snooze:tomorrow', 'stay', 'size:small', 'size:medium', 'size:large', 'energy:sleepy', 'energy:normal', 'energy:playful', 'hide:on', 'screen:on', 'voice:on', 'debug:on', 'login:on', 'call:hide', 'call:corner', 'key', 'new-pet', 'library:Mochi', 'home:a', 'home:b', 'overload']) expect(cmds).toContain(c);
     expect(flat(petMenuTemplate({ ...base, snoozed: true })).some((i) => 'command' in i && i.command === 'wake')).toBe(true);
+  });
+  it('During calls radio follows callMode', () => {
+    const radio = (m: 'hide' | 'corner') => sub(petMenuTemplate({ ...base, callMode: m }).flatMap((i) => ('submenu' in i && i.label === '⚙️ Settings' ? i.submenu : [])), 'During calls').flatMap((i) => ('checked' in i && i.checked ? [i.label] : []));
+    expect(radio('hide')).toEqual(['Hide']);
+    expect(radio('corner')).toEqual(['Stay in the corner']);
   });
   it('maps the tricks to overlay command strings', () => {
     expect(sub(petMenuTemplate(base), '🎾 Tricks').flatMap((i) => ('command' in i ? [[i.label, i.command]] : []))).toEqual([['Sit', 'sit'], ['Bark', 'bark'], ['Roll over', 'roll'], ['Nap', 'bed'], ['Do a trick', 'trick'], ['Zoomies!', 'zoomies']]);
@@ -74,7 +79,7 @@ describe('petMenuTemplate', () => {
   });
   it('an admin-locked hide item is a checked, disabled entry that says why', () => {
     const t = petMenuTemplate({ ...base, hideInShares: true, hideLocked: true });
-    expect(flat(t).find((i) => 'label' in i && i.label.startsWith('Hide'))).toEqual({ label: 'Hide during screen sharing (set by your organisation)', command: 'hide:off', checked: true, enabled: false });
+    expect(flat(t).find((i) => 'label' in i && i.label.startsWith('Hide during'))).toEqual({ label: 'Hide during screen sharing (set by your organisation)', command: 'hide:off', checked: true, enabled: false });
   });
   it('while snoozed the Snooze submenu is replaced by Wake up', () => {
     const t = petMenuTemplate({ ...base, snoozed: true });
