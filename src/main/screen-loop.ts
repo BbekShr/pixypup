@@ -83,8 +83,11 @@ export function startScreenLoop(d: LoopDeps): () => void {
         /* still hidden: the overlay would drop it, so keep it pending */
       } else if (decision?.action === 'sniff' && decision.target && debug.terminalKey !== lastKey) {
         const bounds = d.overlay.bounds();
-        // A target on another display is skipped, not clamped to this display's edge.
-        if (bounds && inside(decision.target, bounds)) {
+        // Which display: judged by the failing line itself. The target sits 16 px left of it, outside the display for a window flush with the left edge.
+        const box = observation.terminalError?.box;
+        const probe = box ? { x: box.x + box.w / 2, y: box.y + box.h / 2 } : decision.target;
+        // A failure on another display is skipped; on this one the target is clamped into the overlay.
+        if (bounds && inside(probe, bounds)) {
           lastKey = debug.terminalKey;
           sniffed = true;
           const te = observation.terminalError;
