@@ -49,3 +49,12 @@ Entry format:
 - evidence: PixyPup deep-stable 2026-11-02, commits c19983b and 240fdee each carry 2-3 items.
 - proposed change: the Build step's brief template says "items sharing a file may share a commit; name every item in the message", or tells the CEO to dispatch shared-file items sequentially.
 - local workaround: line added to this skill's Build step.
+
+## 2026-11-03 backlog reconciliation verdicts trust UI side effects over state
+- status: new
+- agent-org version: 0.1.0
+- template: skills/org-init/templates/skills/ceo/SKILL.md (0b. Backlog reconciliation brief)
+- what happened: the haiku reconciler marked a stuck-state bug RESOLVED because the handler now called `ui('idle')`; the state variable stayed 'listening', so the bug was live. A parallel Explore read caught it.
+- evidence: PixyPup deep-stable-2 2026-11-03, B28, `src/main/voice-session.ts:75`, fixed in 7669283 with a test.
+- proposed change: the reconciliation brief says "for a stuck-state or state-machine item, trace the state variable to its next transition; a UI/log call is not evidence of RESOLVED; prefer CAN'T TELL over RESOLVED without a test".
+- local workaround: lesson added to learnings/_shared.md.

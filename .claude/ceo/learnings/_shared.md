@@ -10,28 +10,32 @@
 - Match window titles with anchored, product-specific patterns, never bare keywords: titles carry user paths and filenames (B1, `src/screen/decide.ts`).
 - Validating a policy file: a dropped invalid key is a failure, not a no-op. Never decide "missing" with `existsSync` (false on EACCES); read and treat only ENOENT as missing (B2/B3, `src/main/settings.ts`).
 - Fail-closed tests need an fs mock that can throw ENOENT and EACCES, or they only prove what the mock can express (B2/B3).
-- Muse Spark: use `strict: true` schemas (strict:false garbled keys live); with web_search on, extract the last JSON object from narrated text; JSON output carries no url_citation annotations, so ground sources against web_search_call results (F18).
-- The CSS transform origin is also the `scale(flip)` mirror axis: never move it to pivot; keep it and add a translation (`pivotShift`). A hard clamp that zeroes velocity reads as a wall: soften the dynamics, keep the clamp as a safety stop (F21).
 - Click-through (`setIgnoreMouseEvents`) can't be observed over CDP; judge a first-frame jump by translate minus pointer motion, not the raw delta (F21).
 - Briefs for editors in a shared tree: commit by explicit path, never `git add -A`; the worktree-isolation hook blocks writes outside the session's own worktree, and `isolation: worktree` agents start from origin/main (cherry-pick their commits) (F25).
-- Generated art is approximate: Muse drew ~4 distinct poses for an 8-phase prompt. Measure what the art does (stride from the planted foot) and let procedural motion carry the phases; cap model-driven scales (F28).
-- A keyword secret regex needs no leading `\b`: `_` is a word char, so `AWS_SECRET_ACCESS_KEY`/`GITHUB_TOKEN`/`client_secret` slip past `\bsecret`; test redactors on env-style names, JWTs and quoted values (deep 2026-11-01, `src/api/redact.ts`).
 - Before any `[^a-z0-9]` keyword filter, `normalize('NFKD')` and drop `\p{Cf}\p{M}`: zero-width chars otherwise become word breaks (NFKC recomposes accents, so use NFKD) (deep 2026-11-01, `src/api/pet-talk.ts` isCrisis).
 - An overlay act whose only exit is a specific state (talk 'go' needs `walk`) must be cleared by user commands BEFORE the queue check and when that state is left; a fixed deadline cuts legitimate long walks (deep 2026-11-01, `src/overlay/overlay.ts`).
 - A request timeout bounds the request only: clear it when the reply arrives, or local work after it gets aborted under load (deep 2026-11-01, `src/api/pose-pipeline.ts` attempt).
-- Tests that loop `expect()` per frame time out under full-suite load: collect violations and assert once (deep 2026-11-01, overload-choreo test).
 - UI diffs: green gates and state checks say nothing about clipping. Every touched window gets screenshots the CEO opens, plus an overflow probe that includes overflow:auto containers and visibility (`checkVisibility()`); measure spare as last visible child bottom minus container bottom (deep 2026-11-02: welcome, making and name steps, Talk input all shipped clipped past a GO).
 - Long-content cases are part of the check: a voice-prefilled sentence, a long pet name, a full chat log, error copy shown (deep 2026-11-02, Talk input).
 - When the UI hides a feature (offline/admin), the IPC handler must enforce the same rule; hiding is not a guard (deep 2026-11-02, obCheckKey).
 - A shared fallback that also serves crisis replies must pin crisis to a fixed neutral line (deep 2026-11-02, `src/api/pet-talk.ts` localReply).
-- A sprite rotating about its foot drops a paw by d·sinθ: the floor needs that headroom (deep 2026-11-02, sit tilt clipped 5 px).
 - Electron has no CDP `Browser.getWindowForTarget/setWindowBounds`: window-resize behaviour needs a unit-tested clamp or a manual resize. After `Page.crash` the target keeps its id: poll by URL and reconnect (deep-stable 2026-11-02).
 - Normalise model JSON at the parse boundary (strings capped, numbers finite) before it is reused in a prompt or a threshold (deep-stable 2026-11-02, walk-judge/pose-review).
 - A key-shape check is ASCII-printable `[\x21-\x7e]`, never `\S`, and the renderer's copy must match main's (deep-stable 2026-11-02, pet-input/key.ts).
 - Verify launches use an isolated `--user-data-dir` with `{"onboarded": true}` and `MODEL_API_KEY` unset: the maintainer's real profile has screen-aware and voice on, which breaks the zero-network check (request 2026-11-03).
 - Native `Menu.popup()` and the OS cursor can't be seen over CDP: proof is the `[menu] popup` log + no exception, unit tests on the template, and a by-eye check you say is still owed (request 2026-11-03).
 
+- Test helpers that each spread a `base` observation wipe each other's fields when combined (`{...w(), ...media()}` dropped `windows`): build combined fixtures explicitly or thread one into the other (deep-stable-2 2026-11-03, `src/screen/decide.test.ts`).
+- Reconciling a state-machine bug: trace the state variable to its next transition, not the UI side effect; B28 was marked resolved from a `ui('idle')` while `state` stayed 'listening' (deep-stable-2 2026-11-03).
+- Chain commit behind green gates with `&&`; a sequence that doesn't stop on failure commits red (deep-stable-2 2026-11-03).
+
 ## Archive
+- Muse Spark: use `strict: true` schemas (strict:false garbled keys live); with web_search on, extract the last JSON object from narrated text; JSON output carries no url_citation annotations, so ground sources against web_search_call results (F18).
+- The CSS transform origin is also the `scale(flip)` mirror axis: never move it to pivot; keep it and add a translation (`pivotShift`). A hard clamp that zeroes velocity reads as a wall: soften the dynamics, keep the clamp as a safety stop (F21).
+- Generated art is approximate: Muse drew ~4 distinct poses for an 8-phase prompt. Measure what the art does (stride from the planted foot) and let procedural motion carry the phases; cap model-driven scales (F28).
+- A keyword secret regex needs no leading `\b`: `_` is a word char, so `AWS_SECRET_ACCESS_KEY`/`GITHUB_TOKEN`/`client_secret` slip past `\bsecret`; test redactors on env-style names, JWTs and quoted values (deep 2026-11-01, `src/api/redact.ts`).
+- Tests that loop `expect()` per frame time out under full-suite load: collect violations and assert once (deep 2026-11-01, overload-choreo test).
+- A sprite rotating about its foot drops a paw by d·sinθ: the floor needs that headroom (deep 2026-11-02, sit tilt clipped 5 px).
 - Prefs that mirror OS settings (login item) write to the OS only on the explicit user action, never from a general sync (F16).
 - The admin file is a whitelist of privacy restrictions (`ADMIN_KEYS`); every new setting is user-owned unless deliberately added (F16).
 - WAAPI: an `easing` in the options applies to the whole animation; overshoot easings make later keyframes arrive early. Put pop easing on the first keyframe (F17).
