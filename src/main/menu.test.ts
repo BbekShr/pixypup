@@ -3,20 +3,28 @@ import { petMenuTemplate, trayMenuTemplate, type MenuItem, type MenuState } from
 
 const base: MenuState = { stay: false, snoozed: false, size: 'medium', energy: 'normal', hideInShares: false, screenAware: false, voice: false, openAtLogin: false, name: 'Pakkun' };
 const labels = (t: MenuItem[]): string[] => t.map((i) => ('type' in i ? '-' : i.label));
-const find = (t: MenuItem[], l: string): MenuItem | undefined => t.find((i) => 'label' in i && i.label === l);
+const flat = (t: MenuItem[]): MenuItem[] => t.flatMap((i) => ('submenu' in i ? [i, ...flat(i.submenu)] : [i]));
+const find = (t: MenuItem[], l: string): MenuItem | undefined => flat(t).find((i) => 'label' in i && i.label === l);
 const sub = (t: MenuItem[], label: string): MenuItem[] => {
-  const m = t.find((i) => 'submenu' in i && i.label === label);
+  const m = flat(t).find((i) => 'submenu' in i && i.label === label);
   return m && 'submenu' in m ? m.submenu : [];
 };
 
 describe('petMenuTemplate', () => {
-  it('has the agreed order, tricks first and Quit last', () => {
-    expect(labels(petMenuTemplate(base))).toEqual(['Sit', 'Bark', 'Roll over', 'Nap', 'Come here', 'Do a trick', 'Zoomies!', 'Talk to Pakkun…', '-', 'Snooze', 'Size', 'Energy', '-', 'Stay here', 'Hide during screen sharing', 'Notice my screen', 'Listen for my voice', 'Show what Pakkun sees', 'Open at login', 'Add Meta key for the full experience…', 'Add another pet…', 'PixyPup Overload!', '-', 'Quit PixyPup']);
-    expect(petMenuTemplate(base).at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
+  it('has the agreed top level, short, with Quit last', () => {
+    const t = petMenuTemplate(base);
+    expect(labels(t)).toEqual(['🎾 Tricks', '👋 Come here', '💬 Talk to Pakkun…', '-', '💤 Snooze', '📌 Stay here', '🐾 Pets', '⚙️ Settings', '-', 'Quit PixyPup']);
+    expect(t.length).toBeLessThanOrEqual(11);
+    expect(t.at(-1)).toEqual({ label: 'Quit PixyPup', quit: true });
+  });
+  it('every command the long menu had is still reachable', () => {
+    const t = petMenuTemplate({ ...base, library: [{ slug: 'Mochi', name: 'Mochi' }], pets: [{ slug: 'a', name: 'A' }, { slug: 'b', name: 'B' }] });
+    const cmds = flat(t).flatMap((i) => ('command' in i ? [i.command] : []));
+    for (const c of ['sit', 'bark', 'roll', 'bed', 'come', 'trick', 'zoomies', 'talk', 'snooze:1h', 'snooze:tomorrow', 'stay', 'size:small', 'size:medium', 'size:large', 'energy:sleepy', 'energy:normal', 'energy:playful', 'hide:on', 'screen:on', 'voice:on', 'debug:on', 'login:on', 'key', 'new-pet', 'library:Mochi', 'home:a', 'home:b', 'overload']) expect(cmds).toContain(c);
+    expect(flat(petMenuTemplate({ ...base, snoozed: true })).some((i) => 'command' in i && i.command === 'wake')).toBe(true);
   });
   it('maps the tricks to overlay command strings', () => {
-    const cmds = petMenuTemplate(base).flatMap((i) => ('command' in i ? [[i.label, i.command]] : []));
-    expect(cmds.slice(0, 7)).toEqual([['Sit', 'sit'], ['Bark', 'bark'], ['Roll over', 'roll'], ['Nap', 'bed'], ['Come here', 'come'], ['Do a trick', 'trick'], ['Zoomies!', 'zoomies']]);
+    expect(sub(petMenuTemplate(base), '🎾 Tricks').flatMap((i) => ('command' in i ? [[i.label, i.command]] : []))).toEqual([['Sit', 'sit'], ['Bark', 'bark'], ['Roll over', 'roll'], ['Nap', 'bed'], ['Do a trick', 'trick'], ['Zoomies!', 'zoomies']]);
     const tray = labels(trayMenuTemplate(base));
     expect(tray).not.toContain('Do a trick');
     expect(tray).not.toContain('Zoomies!');
@@ -28,15 +36,15 @@ describe('petMenuTemplate', () => {
     }
   });
   it('Talk to <name> sends the talk command from both menus', () => {
-    expect(find(petMenuTemplate(base), 'Talk to Pakkun…')).toEqual({ label: 'Talk to Pakkun…', command: 'talk' });
-    expect(find(trayMenuTemplate(base), 'Talk to Pakkun…')).toEqual({ label: 'Talk to Pakkun…', command: 'talk' });
+    expect(find(petMenuTemplate(base), '💬 Talk to Pakkun…')).toEqual({ label: '💬 Talk to Pakkun…', command: 'talk' });
+    expect(find(trayMenuTemplate(base), '💬 Talk to Pakkun…')).toEqual({ label: '💬 Talk to Pakkun…', command: 'talk' });
   });
   it('the stay checkbox reflects state and toggles back to wander', () => {
-    expect(petMenuTemplate({ ...base, stay: true }).find((i) => 'label' in i && i.label === 'Stay here')).toEqual({ label: 'Stay here', command: 'wander', checked: true });
-    expect(petMenuTemplate(base).find((i) => 'label' in i && i.label === 'Stay here')).toMatchObject({ checked: false, command: 'stay' });
+    expect(find(petMenuTemplate({ ...base, stay: true }), '📌 Stay here')).toEqual({ label: '📌 Stay here', command: 'wander', checked: true });
+    expect(find(petMenuTemplate(base), '📌 Stay here')).toMatchObject({ checked: false, command: 'stay' });
   });
   it('snooze submenu offers 1 hour and tomorrow', () => {
-    expect(sub(petMenuTemplate(base), 'Snooze')).toEqual([{ label: 'For 1 hour', command: 'snooze:1h' }, { label: 'Until 8 am', command: 'snooze:tomorrow' }]);
+    expect(sub(petMenuTemplate(base), '💤 Snooze')).toEqual([{ label: 'For 1 hour', command: 'snooze:1h' }, { label: 'Until 8 am', command: 'snooze:tomorrow' }]);
   });
   it('size and energy are radios with exactly the current one checked', () => {
     const t = petMenuTemplate({ ...base, size: 'large', energy: 'sleepy' });
@@ -66,34 +74,33 @@ describe('petMenuTemplate', () => {
   });
   it('an admin-locked hide item is a checked, disabled entry that says why', () => {
     const t = petMenuTemplate({ ...base, hideInShares: true, hideLocked: true });
-    expect(t.find((i) => 'label' in i && i.label.startsWith('Hide'))).toEqual({ label: 'Hide during screen sharing (set by your organisation)', command: 'hide:off', checked: true, enabled: false });
+    expect(flat(t).find((i) => 'label' in i && i.label.startsWith('Hide'))).toEqual({ label: 'Hide during screen sharing (set by your organisation)', command: 'hide:off', checked: true, enabled: false });
   });
   it('while snoozed the Snooze submenu is replaced by Wake up', () => {
     const t = petMenuTemplate({ ...base, snoozed: true });
-    expect(labels(t)).toContain('Wake up');
-    expect(labels(t)).not.toContain('Snooze');
-    expect(t.find((i) => 'label' in i && i.label === 'Wake up')).toEqual({ label: 'Wake up', command: 'wake' });
+    expect(labels(t)).not.toContain('💤 Snooze');
+    expect(find(t, '☀️ Wake up')).toEqual({ label: '☀️ Wake up', command: 'wake' });
   });
 });
 
 describe('trayMenuTemplate', () => {
   it('is Talk, Snooze, new pet, Quit; snoozed it says Wake up <name>', () => {
-    expect(labels(trayMenuTemplate(base))).toEqual(['Talk to Pakkun…', 'Snooze', 'PixyPup Overload!', 'Add another pet…', 'Add Meta key for the full experience…', '-', 'Quit PixyPup']);
-    expect(trayMenuTemplate({ snoozed: true, name: 'Rex' })[1]).toEqual({ label: 'Wake up Rex', command: 'wake' });
+    expect(labels(trayMenuTemplate(base))).toEqual(['💬 Talk to Pakkun…', '💤 Snooze', '🎉 PixyPup Overload!', 'Add another pet…', 'Add Meta key for the full experience…', '-', 'Quit PixyPup']);
+    expect(trayMenuTemplate({ snoozed: true, name: 'Rex' })[1]).toEqual({ label: '☀️ Wake up Rex', command: 'wake' });
   });
   it('both menus offer the overload, and the tray swaps it for End while it runs', () => {
-    expect(find(petMenuTemplate(base), 'PixyPup Overload!')).toEqual({ label: 'PixyPup Overload!', command: 'overload' });
-    expect(find(trayMenuTemplate(base), 'PixyPup Overload!')).toEqual({ label: 'PixyPup Overload!', command: 'overload' });
+    expect(find(petMenuTemplate(base), '🎉 PixyPup Overload!')).toEqual({ label: '🎉 PixyPup Overload!', command: 'overload' });
+    expect(find(trayMenuTemplate(base), '🎉 PixyPup Overload!')).toEqual({ label: '🎉 PixyPup Overload!', command: 'overload' });
     const running = trayMenuTemplate({ ...base, overload: true });
-    expect(find(running, 'End the overload')).toEqual({ label: 'End the overload', command: 'overload:end' });
-    expect(find(running, 'PixyPup Overload!')).toBeUndefined();
+    expect(find(running, '🎉 End the overload')).toEqual({ label: '🎉 End the overload', command: 'overload:end' });
+    expect(find(running, '🎉 PixyPup Overload!')).toBeUndefined();
   });
   it('offers "Send <name> home" per pet only when there is more than one', () => {
     const pets = [{ slug: 'pakkun', name: 'Pakkun' }, { slug: 'milo', name: 'Milo' }];
     expect(find(petMenuTemplate({ ...base, pets }), 'Send Milo home')).toEqual({ label: 'Send Milo home', command: 'home:milo' });
     expect(find(trayMenuTemplate({ ...base, pets }), 'Send Pakkun home')).toEqual({ label: 'Send Pakkun home', command: 'home:pakkun' });
-    expect(labels(petMenuTemplate({ ...base, pets: pets.slice(0, 1) })).some((l) => l.startsWith('Send'))).toBe(false);
-    expect(labels(petMenuTemplate(base)).some((l) => l.startsWith('Send'))).toBe(false);
+    expect(labels(flat(petMenuTemplate({ ...base, pets: pets.slice(0, 1) }))).some((l) => l.startsWith('Send'))).toBe(false);
+    expect(labels(flat(petMenuTemplate(base))).some((l) => l.startsWith('Send'))).toBe(false);
   });
 });
 
@@ -103,8 +110,8 @@ describe('Pet library submenu', () => {
   it('follows Add another pet… in both menus and lists pets not on screen, skipping taken slugs case-insensitively', () => {
     const want = [{ label: 'Mochi', command: 'library:Mochi' }, { label: 'Kuma', command: 'library:Kuma' }];
     for (const t of [petMenuTemplate({ ...base, pets, library }), trayMenuTemplate({ ...base, pets, library })]) {
-      const i = labels(t).indexOf('Add another pet…');
-      expect(labels(t)[i + 1]).toBe('Pet library');
+      const i = labels(flat(t)).indexOf('Add another pet…');
+      expect(labels(flat(t))[i + 1]).toBe('Pet library');
       expect(sub(t, 'Pet library')).toEqual(want);
     }
   });
