@@ -389,6 +389,7 @@ void app.whenReady().then(async () => {
     settings: loadSettings,
     getHideInShares: () => settings.hideInShares,
     avatar: () => petIcons.get(primarySlug())?.avatar,
+    openKey: () => keyWin?.open(),
     // The reply moves the pet beside the chat window; a snoozed pet stays asleep.
     act: (r, b) => {
       const w = primary();

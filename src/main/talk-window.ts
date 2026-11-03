@@ -7,6 +7,7 @@ import { isCrisis, localReply, MAX_USER, petTalk, type TalkReply, type Turn } fr
 import type { Settings } from './settings';
 import { IPC } from './ipc';
 import { settleReply } from './talk-history';
+import { shouldRegister } from '../voice/listen';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const W = 380;
@@ -20,6 +21,7 @@ export interface TalkDeps {
   getHideInShares(): boolean;
   avatar(): string | undefined;
   act(reply: TalkReply, bounds: Electron.Rectangle): void;
+  openKey(): void;
 }
 
 /**
@@ -54,7 +56,15 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
   }
 
   ipcMain.handle(IPC.talkSend, (e, raw: unknown) => (mine(e) && typeof raw === 'string' && raw.trim() ? reply(raw) : null));
-  ipcMain.handle(IPC.talkInfo, (e) => (mine(e) ? { name: d.name(), avatar: d.avatar() ?? null } : null));
+  const hasKey = (): boolean => {
+    try {
+      return !!d.key();
+    } catch {
+      return false;
+    }
+  };
+  ipcMain.handle(IPC.talkInfo, (e) => (mine(e) ? { name: d.name(), avatar: d.avatar() ?? null, hasKey: hasKey(), voice: shouldRegister(d.settings(), false) } : null));
+  ipcMain.on(IPC.talkOpenKey, (e) => { if (mine(e)) d.openKey(); });
   ipcMain.on(IPC.talkClose, (e) => { if (mine(e)) win?.close(); });
 
   function open(): void {

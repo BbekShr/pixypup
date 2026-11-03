@@ -9,13 +9,20 @@
     <main class="card chat">
       <header>
         <span class="who"><img id="face" alt="" /><span id="title">Talk</span></span>
+        <button class="chip-key" id="basic" hidden title="Basic mode: add a Meta key for real replies">🔑 basic</button>
         <button class="x" id="close" aria-label="Close" title="Close">&times;</button>
       </header>
+      <div class="banner" id="banner" hidden>
+        <span id="banner-t"></span>
+        <button class="link" id="addkey">Add key</button>
+        <button class="link dismiss" id="dismiss" aria-label="Hide this note" title="Hide">&times;</button>
+      </div>
       <div class="log" id="log" role="log" aria-live="polite"></div>
       <form class="bar" id="form" autocomplete="off">
         <input type="text" id="text" maxlength="500" aria-label="Your message" />
         <button class="btn primary send" id="send" type="submit">Send</button>
       </form>
+      <p class="fine" id="how"></p>
       <p class="fine">Sent to Meta only when you press Send. Nothing is saved.</p>
     </main>
     <script type="module" src="./talk.ts"></script>

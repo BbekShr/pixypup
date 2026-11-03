@@ -25,3 +25,10 @@ header { cursor: default; }
 .bar input[type="text"] { flex: 1; max-width: none; min-width: 0; text-align: left; font: 500 15px var(--font); padding: 11px 16px; }
 .send { padding: 0 20px; }
 .fine { margin: 6px 0 0; text-align: center; font-size: 11px; color: var(--ink-soft); flex: none; }
+
+.banner { display: flex; align-items: center; gap: 8px; margin: 0 18px 6px; padding: 6px 10px; border-radius: 12px; background: rgba(255, 255, 255, .55); font-size: 12px; color: var(--ink-soft); flex: none; }
+.banner[hidden], .chip-key[hidden] { display: none; }
+.banner span { flex: 1; }
+.banner .link { font-size: 12px; }
+.banner .dismiss { text-decoration: none; font-size: 16px; line-height: 1; }
+.chip-key { -webkit-app-region: no-drag; margin-left: auto; margin-right: 6px; border: 0; border-radius: var(--pill); padding: 3px 9px; background: rgba(255, 255, 255, .55); color: var(--ink-soft); font: 600 11px var(--font); cursor: pointer; }

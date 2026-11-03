@@ -6,7 +6,7 @@ import sitUrl from '../../assets/pets/Pakkun/sit.png';
 
 declare global {
   interface Window {
-    pixyTalk: { send(text: string): Promise<unknown>; info(): Promise<unknown>; close(): void; onPrefill(cb: (text: unknown) => void): void };
+    pixyTalk: { send(text: string): Promise<unknown>; info(): Promise<unknown>; openKey(): void; close(): void; onPrefill(cb: (text: unknown) => void): void };
   }
 }
 
@@ -70,13 +70,36 @@ window.pixyTalk.onPrefill((text) => {
 $('close').addEventListener('click', () => window.pixyTalk.close());
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.pixyTalk.close(); });
 
+const banner = $('banner');
+const basic = $('basic');
+let keyless = false;
+// A hidden note stays hidden for next time; the small chip in the header brings it back.
+const showBanner = (on: boolean): void => {
+  banner.hidden = !on;
+  basic.hidden = !keyless || on;
+  localStorage.setItem('talkBannerHidden', on ? '' : '1');
+};
+function refresh(): void {
+  void window.pixyTalk.info().then((m) => {
+    const o = (m ?? {}) as { name?: unknown; avatar?: unknown; hasKey?: unknown; voice?: unknown };
+    if (typeof o.name === 'string' && o.name) name = o.name;
+    if (typeof o.avatar === 'string' && o.avatar.startsWith('data:image/')) $('face').setAttribute('src', o.avatar);
+    $('title').textContent = `Talk to ${name}`;
+    input.placeholder = `Tell ${name} about your day…`;
+    if (!log.childElementCount) log.append(tag('p', 'hello', `${name} is here. Say anything.`));
+    $('how').textContent = o.voice === true
+      ? "Type and press Enter, or press ⌥ Space and say it; it's typed here for you to send."
+      : `Type and press Enter. Turn on “Listen for my voice” in ${name}'s menu to talk out loud.`;
+    keyless = o.hasKey === false;
+    $('banner-t').textContent = `${name} is using basic woofs. Add a Meta key and they'll really understand you.`;
+    if (keyless) showBanner(localStorage.getItem('talkBannerHidden') !== '1');
+    else { banner.hidden = true; basic.hidden = true; }
+  }).catch(() => undefined);
+}
+$('addkey').addEventListener('click', () => window.pixyTalk.openKey());
+$('dismiss').addEventListener('click', () => showBanner(false));
+basic.addEventListener('click', () => showBanner(true));
+window.addEventListener('focus', refresh); // a key saved in the other window clears the note
 $('face').setAttribute('src', sitUrl);
-void window.pixyTalk.info().then((m) => {
-  const o = (m ?? {}) as { name?: unknown; avatar?: unknown };
-  if (typeof o.name === 'string' && o.name) name = o.name;
-  if (typeof o.avatar === 'string' && o.avatar.startsWith('data:image/')) $('face').setAttribute('src', o.avatar);
-  $('title').textContent = `Talk to ${name}`;
-  input.placeholder = `Tell ${name} about your day…`;
-  log.append(tag('p', 'hello', `${name} is here. Say anything.`));
-}).catch(() => undefined);
+refresh();
 input.focus();
