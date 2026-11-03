@@ -2,6 +2,7 @@ import { ruleDecide, type Observation } from './decide';
 import { badgeBump, getBadges } from './dock-badge';
 import type { Run } from './helper';
 import { createTerminalReader, pickTerminal, type Decoded, type Osa } from './terminal';
+import { getMedia } from './media';
 import { listWindows } from './window-list';
 
 export type ScreenReaderDeps = {
@@ -21,9 +22,10 @@ export function createScreenReader(deps: ScreenReaderDeps) {
       debug: { titlesRedacted: boolean; windowCount: number; terminalKey: string };
     }> {
       const { windows, titlesRedacted } = await listWindows(deps.run);
-      const [badges, termRead] = await Promise.all([
+      const [badges, termRead, media] = await Promise.all([
         getBadges(deps.run),
         readTerminal({ ...deps, windows }),
+        getMedia(deps.run),
       ]);
       // The first read only seeds; a failed read keeps the last good one.
       const badge = badges && prevBadges ? badgeBump(prevBadges, badges) : null;
@@ -37,10 +39,11 @@ export function createScreenReader(deps: ScreenReaderDeps) {
       const observation: Observation = {
         windows: [...call, ...(term ? [term] : [])].map(({ owner, title, bounds }) => ({ owner, title, bounds })),
         badge,
+        media,
         terminalError: termRead.terminalError,
         terminalPass: termRead.terminalPass,
       };
-      const sig = JSON.stringify([call.length > 0, badge, termRead.key, termRead.terminalPass]);
+      const sig = JSON.stringify([call.length > 0, media, badge, termRead.key, termRead.terminalPass]);
       const changed = termRead.changed || sig !== prev;
       prev = sig;
       return {

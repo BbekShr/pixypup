@@ -394,7 +394,7 @@ describe('createScreenReader', () => {
     expect((await rd.tick()).observation.badge).toEqual({ app: 'Zoom', label: '1' });
   });
   it('leaves unrelated window titles out; keeps call windows', async () => {
-    const wins = [win('Terminal'), { ...win('Safari', 5), title: 'secret doc' }, { ...win('zoom.us', 6), title: 'x' }];
+    const wins = [win('Terminal'), { ...win('Safari', 5), title: 'secret doc' }, { ...win('zoom.us', 6), title: 'Zoom Meeting' }];
     const a = await createScreenReader({ run: mkRun(wins), osa }).tick();
     expect(a.observation.windows.map((w) => w.owner).sort()).toEqual(['Terminal', 'zoom.us']);
   });
