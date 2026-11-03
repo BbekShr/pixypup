@@ -306,11 +306,14 @@ const wready = (): boolean => /^\S{8,512}$/.test(wkey.value.trim());
 wkey.addEventListener('input', () => { wsave.disabled = !wready(); $('wmsg').textContent = ''; });
 wkey.addEventListener('keydown', (e) => { if (e.key === 'Enter' && wready()) wsave.click(); });
 $('wget').addEventListener('click', () => window.pixyOb.openKeyPage());
+const wlock = (on: boolean): void => { wkey.disabled = on; $<HTMLButtonElement>('start').disabled = on; };
 wsave.addEventListener('click', () => {
   wsave.disabled = true;
+  wlock(true);
   wsave.textContent = 'Checking…';
   void window.pixyOb.checkKey(wkey.value.trim()).then((r) => {
     wsave.textContent = 'Save key';
+    wlock(false);
     if (r === 'ok') {
       wkey.value = ''; // the key now lives in main only
       flow = { ...flow, needsKey: false }; // Make my pet skips the key step

@@ -7,7 +7,7 @@ import { isCrisis, localReply, MAX_USER, petTalk, type TalkReply, type Turn } fr
 import type { Settings } from './settings';
 import { IPC } from './ipc';
 import { settleReply } from './talk-history';
-import { shouldRegister } from '../voice/listen';
+import { voiceLockedByAdmin } from './settings';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const W = 380;
@@ -63,7 +63,13 @@ export function setupTalkWindow(d: TalkDeps): { open(): void; prefill(text: stri
       return false;
     }
   };
-  ipcMain.handle(IPC.talkInfo, (e) => (mine(e) ? { name: d.name(), avatar: d.avatar() ?? null, hasKey: hasKey(), voice: shouldRegister(d.settings(), false) } : null));
+  // 'usable' = ⌥ Space works now; 'can-enable' = the menu can turn it on; 'none' = admin-locked or offline.
+  const voiceState = (keyed: boolean): 'usable' | 'can-enable' | 'none' => {
+    const s = d.settings();
+    if (s.voice && !s.offline && keyed) return 'usable';
+    return s.offline || voiceLockedByAdmin() ? 'none' : 'can-enable';
+  };
+  ipcMain.handle(IPC.talkInfo, (e) => (mine(e) ? { name: d.name(), avatar: d.avatar() ?? null, hasKey: hasKey(), voice: voiceState(hasKey()) } : null));
   ipcMain.on(IPC.talkOpenKey, (e) => { if (mine(e)) d.openKey(); });
   ipcMain.on(IPC.talkClose, (e) => { if (mine(e)) win?.close(); });
 

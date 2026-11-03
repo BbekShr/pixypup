@@ -19,22 +19,22 @@
 
       <div class="stage">
         <section class="step" data-step="welcome">
-          <img class="hero bob" id="hero" alt="Pakkun, sitting" style="width: 120px" />
+          <img class="hero bob" id="hero" alt="Pakkun, sitting" />
           <h1>This is Pakkun.</h1>
-          <p class="lead">He'll keep you company.<br />Want your own pet?</p>
+          <p class="lead">He'll keep you company. Want your own pet?</p>
           <div class="actions col">
             <button class="btn primary" id="start">Make my pet</button>
-            <button class="btn ghost" id="keep">Or just keep Pakkun: no key needed</button>
-            <p class="small soft">Mochi and Kuma are in Pet library, in the pet's right-click menu.</p>
+            <button class="btn ghost" id="keep">Or just keep Pakkun</button>
+            <p class="small soft">No key needed. Mochi and Kuma are in Pet library.</p>
           </div>
           <div class="perk" id="perk" hidden>
-            <p class="small soft">Optional: add a Meta key to unlock the full PixyPup. Pets talk back in their own words, understand voice tricks, and explain a failing test.</p>
+            <p class="small soft">Optional: add a Meta key so pets talk back, understand voice tricks and explain failing tests.</p>
             <div class="perk-row">
               <input id="wkey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your API key" aria-label="Meta API key (optional)" />
               <button class="btn small" id="wsave" disabled>Save key</button>
             </div>
             <p class="note" id="wmsg" role="status" aria-live="polite"></p>
-            <p class="small soft">Checked with one tiny call to Meta, encrypted with your Mac's Keychain. <button class="link" id="wget">Get a key at dev.meta.ai</button></p>
+            <p class="small soft">Checked once with Meta, kept in your Keychain. <button class="link" id="wget">Get a key</button></p>
           </div>
         </section>
 

@@ -74,10 +74,15 @@ const banner = $('banner');
 const basic = $('basic');
 let keyless = false;
 // A hidden note stays hidden for next time; the small chip in the header brings it back.
+let dismissed = false; // in-memory twin, so dismiss still holds across refresh() when storage throws
 const showBanner = (on: boolean): void => {
+  dismissed = !on;
   banner.hidden = !on;
   basic.hidden = !keyless || on;
-  localStorage.setItem('talkBannerHidden', on ? '' : '1');
+  try { localStorage.setItem('talkBannerHidden', on ? '' : '1'); } catch { /* storage blocked: the choice lasts until the window closes */ }
+};
+const bannerHidden = (): boolean => {
+  try { return dismissed || localStorage.getItem('talkBannerHidden') === '1'; } catch { return dismissed; }
 };
 function refresh(): void {
   void window.pixyTalk.info().then((m) => {
@@ -87,12 +92,14 @@ function refresh(): void {
     $('title').textContent = `Talk to ${name}`;
     input.placeholder = `Tell ${name} about your day…`;
     if (!log.childElementCount) log.append(tag('p', 'hello', `${name} is here. Say anything.`));
-    $('how').textContent = o.voice === true
+    $('how').textContent = o.voice === 'usable'
       ? "Type and press Enter, or press ⌥ Space and say it; it's typed here for you to send."
-      : `Type and press Enter. Turn on “Listen for my voice” in ${name}'s menu to talk out loud.`;
+      : o.voice === 'can-enable'
+        ? `Type and press Enter. Turn on “Listen for my voice” in ${name}'s menu to talk out loud${o.hasKey === false ? ' (needs a Meta key)' : ''}.`
+        : 'Type and press Enter.';
     keyless = o.hasKey === false;
     $('banner-t').textContent = `${name} is using basic woofs. Add a Meta key and they'll really understand you.`;
-    if (keyless) showBanner(localStorage.getItem('talkBannerHidden') !== '1');
+    if (keyless) showBanner(!bannerHidden());
     else { banner.hidden = true; basic.hidden = true; }
   }).catch(() => undefined);
 }
