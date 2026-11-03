@@ -33,7 +33,9 @@ const titleIsCall = (mediaKnown: boolean) => (w: { owner: string; title: string 
   /^(Meeting|Call)\b.*\|\s*Microsoft Teams$/.test(w.title);
 
 export function ruleDecide(obs: Observation): BehaviorDecision | null {
-  const call = obs.windows.some(titleIsCall(!!obs.media)) || !!obs.media?.camera || !!obs.media?.micApps.some(isCallApp);
+  // macOS < 14 reports an unattributed mic as 'unknown': media then can't name the app, so it isn't "known" for Zoom.
+  const known = !!obs.media && !obs.media.micApps.includes('unknown');
+  const call = obs.windows.some(titleIsCall(known)) || !!obs.media?.camera || !!obs.media?.micApps.some(isCallApp);
   if (call) return { action: 'hide', durationMs: 30000, reason: 'video call in progress' };
 
   if (obs.terminalError) {
