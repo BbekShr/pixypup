@@ -10,6 +10,7 @@ import { MetaApiError } from '../api/meta-client';
 import { fakeCreate } from './fake-pipeline';
 import { IPC } from './ipc';
 import { checkCreateArgs, checkKey, errorCode, loadPhoto, PHOTO_EXTS, pickSlug, reuseOnboardingWindow, slugify, type ErrorCode } from './pet-input';
+import { storeKey } from './key-check';
 import { loadPack } from './pack';
 import { takenSlug } from './pets';
 import { factViews, finishRun, noRuns, record, recordFailed, recordInfo, sourceFor, startRun, walkFailed, type Progress, type Runs } from './run-state';
@@ -78,7 +79,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   ipcMain.handle(IPC.obState, (e) => {
     if (!ours(e)) return false;
     const c = runs.current;
-    return { needsKey: apiKey() === undefined, running: c && { ...c, facts: c.facts && factViews(c.facts), walkFailed: walkFailed(c) } };
+    return { needsKey: apiKey() === undefined, offline: loadSettings().offline, running: c && { ...c, facts: c.facts && factViews(c.facts), walkFailed: walkFailed(c) } };
   });
   ipcMain.on(IPC.obOpenSource, (e, index: unknown) => {
     const url = ours(e) ? sourceFor(runs, index) : null;
@@ -96,6 +97,16 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
     if (!ours(e) || !checkKey(key)) return false;
     pendingKey = key;
     return true;
+  });
+  // The welcome's optional key: same check-then-store as the key window; nothing leaves the Mac until the human presses Save.
+  ipcMain.handle(IPC.obCheckKey, async (e, key: unknown) => {
+    if (!ours(e) || !checkKey(key)) return 'bad-key' as const;
+    const v = await storeKey(key, loadSettings(), setApiKey);
+    if (v === 'ok') {
+      pendingKey = undefined;
+      o.onSettingsChanged(); // the menus flip to "Change Meta key…"
+    }
+    return v;
   });
   ipcMain.on(IPC.obOpenKeyPage, (e) => {
     if (ours(e)) void shell.openExternal('https://dev.meta.ai/');

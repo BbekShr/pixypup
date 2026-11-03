@@ -9,11 +9,12 @@ export type CreateResult = { ok: true; name: string; idle?: string } | { ok: fal
 
 // Narrow on purpose: no paths from the page except a dropped File (main re-validates), no raw errors back.
 contextBridge.exposeInMainWorld('pixyOb', {
-  state: (): Promise<{ needsKey: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[]; walkFailed: boolean }) | null }> => ipcRenderer.invoke(IPC.obState),
+  state: (): Promise<{ needsKey: boolean; offline: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[]; walkFailed: boolean }) | null }> => ipcRenderer.invoke(IPC.obState),
   pickPhoto: (): Promise<PhotoResult> => ipcRenderer.invoke(IPC.obPickPhoto),
   dropPhoto: (file: File): Promise<PhotoResult> => ipcRenderer.invoke(IPC.obDropPhoto, webUtils.getPathForFile(file)),
   devPhoto: (): Promise<PhotoResult> => ipcRenderer.invoke(IPC.obDevPhoto),
   saveKey: (key: string): Promise<boolean> => ipcRenderer.invoke(IPC.obSaveKey, key),
+  checkKey: (key: string): Promise<'ok' | 'bad-key' | 'network' | 'unsafe'> => ipcRenderer.invoke(IPC.obCheckKey, key),
   openKeyPage: (): void => ipcRenderer.send(IPC.obOpenKeyPage),
   createPet: (name: string, species: string): Promise<CreateResult> => ipcRenderer.invoke(IPC.createPet, { name, species }),
   onProgress: (cb: (p: Progress) => void): void => {

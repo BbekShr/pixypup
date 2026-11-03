@@ -1,7 +1,7 @@
 import '../ui/tokens.css';
 import './onboarding.css';
 import { copyLines, nextCopy, ribbonFraction } from './birth';
-import sitUrl from '../../assets/pets/Kuma/sit.png';
+import sitUrl from '../../assets/pets/Pakkun/sit.png';
 import type { CreateResult, FactView, Personality, PhotoResult, Progress } from '../main/onboarding-preload';
 import type { Run } from '../main/run-state';
 import { advance, initialFlow, speciesIssue, type Code, type Flow, type FlowEvent } from './flow';
@@ -9,13 +9,14 @@ import { advance, initialFlow, speciesIssue, type Code, type Flow, type FlowEven
 declare global {
   interface Window {
     pixyOb: {
-      state(): Promise<{ needsKey: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[]; walkFailed: boolean }) | null }>;
+      state(): Promise<{ needsKey: boolean; offline: boolean; running: (Omit<Run, 'facts'> & { facts?: FactView[]; walkFailed: boolean }) | null }>;
       onStepsFailed(cb: () => void): void;
       onFinished(cb: (r: CreateResult) => void): void;
       pickPhoto(): Promise<PhotoResult>;
       dropPhoto(file: File): Promise<PhotoResult>;
       devPhoto(): Promise<PhotoResult>;
       saveKey(key: string): Promise<boolean>;
+      checkKey(key: string): Promise<'ok' | 'bad-key' | 'network' | 'unsafe'>;
       openKeyPage(): void;
       createPet(name: string, species: string): Promise<CreateResult>;
       onProgress(cb: (p: Progress) => void): void;
@@ -44,7 +45,8 @@ const SAY: Record<Code | 'type' | 'size' | 'missing' | 'unreadable', string> = {
   unreadable: "I couldn't open that one. Try another?",
 };
 
-let flow: Flow = initialFlow(false, new URLSearchParams(location.search).get('from') === 'menu');
+const fromMenu = new URLSearchParams(location.search).get('from') === 'menu';
+let flow: Flow = initialFlow(false, fromMenu);
 let species = 'dog';
 let petName = '';
 let idleUrl = '';
@@ -238,8 +240,9 @@ window.pixyOb.onPersonality((p) => { if (flow.step === 'making') showPersonality
 window.pixyOb.onFacts((f) => { facts = f; });
 
 $('hero').setAttribute('src', sitUrl);
-// Closing the welcome is the same as "Keep Kuma for now": the app never nags.
-$('close').addEventListener('click', () => (flow.step === 'welcome' ? window.pixyOb.keep() : window.pixyOb.close()));
+// Closing at any step, when the window opened by itself, counts as "keep Pakkun": the app never nags.
+// A pet being made keeps going in main, so only a finished or idle window may keep.
+$('close').addEventListener('click', () => (!fromMenu && flow.step !== 'making' && flow.step !== 'done' ? window.pixyOb.keep() : window.pixyOb.close()));
 $('start').addEventListener('click', () => go({ t: 'start' }));
 $('keep').addEventListener('click', () => window.pixyOb.keep());
 $('choose').addEventListener('click', () => void window.pixyOb.pickPhoto().then(usePhoto));
@@ -296,8 +299,32 @@ $('savekey').addEventListener('click', () => {
 $('retry').addEventListener('click', () => go({ t: 'retry' }));
 $('otherphoto').addEventListener('click', () => { flow = { ...flow, step: 'name' }; go({ t: 'back' }); });
 
+const wkey = $<HTMLInputElement>('wkey');
+const wsave = $<HTMLButtonElement>('wsave');
+const WSAY = { 'bad-key': "Hmm, Meta didn't take that key. Want to try another?", network: "I couldn't reach Meta to check it. Try again in a moment?", unsafe: "I couldn't store that safely on this Mac, so I didn't keep it." };
+const wready = (): boolean => /^\S{8,512}$/.test(wkey.value.trim());
+wkey.addEventListener('input', () => { wsave.disabled = !wready(); $('wmsg').textContent = ''; });
+wkey.addEventListener('keydown', (e) => { if (e.key === 'Enter' && wready()) wsave.click(); });
+$('wget').addEventListener('click', () => window.pixyOb.openKeyPage());
+wsave.addEventListener('click', () => {
+  wsave.disabled = true;
+  wsave.textContent = 'Checking…';
+  void window.pixyOb.checkKey(wkey.value.trim()).then((r) => {
+    wsave.textContent = 'Save key';
+    if (r === 'ok') {
+      wkey.value = ''; // the key now lives in main only
+      flow = { ...flow, needsKey: false }; // Make my pet skips the key step
+      $('perk').hidden = true;
+      return;
+    }
+    $('wmsg').textContent = WSAY[r];
+    wsave.disabled = !wready();
+  });
+});
+
 void window.pixyOb.state().then((s) => {
   flow = { ...flow, needsKey: s.needsKey };
+  $('perk').hidden = !s.needsKey || s.offline;
   if (s.running) {
     // Reopened while a pet is still being made: pick the scene up where it is.
     petName = s.running.name;

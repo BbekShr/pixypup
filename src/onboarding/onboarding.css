@@ -144,3 +144,11 @@ body.leaving .card { transform: scale(.14); transform-origin: 50% 100%; opacity:
   .meet { transition-duration: 1ms !important; transform: none; }
   .ribbon i, .layer { transition-duration: 1ms !important; }
 }
+
+.perk { width: 100%; max-width: 360px; margin-top: 4px; padding: 10px 14px; border-radius: 16px; background: rgba(255, 255, 255, .5); display: flex; flex-direction: column; gap: 6px; }
+.perk-row { display: flex; gap: 8px; }
+.perk-row input { flex: 1; max-width: none; min-width: 0; font-size: 14px; padding: 8px 12px; }
+.btn.small { font-size: 13px; padding: 8px 14px; background: var(--honey); }
+.perk .note { min-height: 0; }
+.perk .link { font-size: 12px; }
+.perk[hidden] { display: none; }

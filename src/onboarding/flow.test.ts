@@ -12,6 +12,10 @@ describe('onboarding flow', () => {
     expect(run(true, [{ t: 'start' }, { t: 'photo' }, { t: 'named' }]).step).toBe('key');
     expect(run(true, [{ t: 'start' }, { t: 'photo' }, { t: 'named' }, { t: 'key-saved' }]).step).toBe('making');
   });
+  it('a key saved on the welcome makes a later Make my pet skip the key step', () => {
+    const evs: FlowEvent[] = [{ t: 'start' }, { t: 'photo' }, { t: 'named' }];
+    expect(evs.reduce(advance, { ...initialFlow(true, false), needsKey: false }).step).toBe('making');
+  });
   it('the menu entry skips the welcome', () => {
     expect(initialFlow(false, true).step).toBe('photo');
   });
