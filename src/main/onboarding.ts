@@ -53,6 +53,7 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
   };
 
   const ours = (e: IpcMainEvent | IpcMainInvokeEvent): boolean => !!win && !win.isDestroyed() && e.sender === win.webContents;
+  const thumbFailed = (err: unknown): void => { console.warn('PixyPup: thumbnail failed', (err as Error | null)?.name); }; // a missing preview must not fail a finished pack
   const toWin = (channel: string, payload: unknown): void => {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
   };
@@ -185,12 +186,12 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
           console.warn('PixyPup: could not store the API key');
         }
       }
-      if (ev.stage === 'pose' && ev.name === 'idle_0') settled.push(thumb(ev.png, 260).then((u) => { idle = u; }));
+      if (ev.stage === 'pose' && ev.name === 'idle_0') settled.push(thumb(ev.png, 260).then((u) => { idle = u; }, thumbFailed));
       settled.push(thumb(ev.png, ev.stage === 'cutout' ? 220 : 112).then((url) => {
         const p: Progress = { kind: ev.stage as 'cutout' | 'pose', name: ev.stage === 'pose' ? ev.name : 'cutout', url };
         runs = record(runs, id, p);
         toWin(IPC.obProgress, p);
-      }));
+      }, thumbFailed));
     };
     let result: { ok: true; name: string; idle?: string } | { ok: false; code: ErrorCode };
     try {
@@ -269,6 +270,12 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
         if (handoff && x !== undefined) handoff.x = x;
       });
       const w = win;
+      win.webContents.on('render-process-gone', () => {
+        if (w.isDestroyed()) return;
+        const x = centreX();
+        if (handoff && x !== undefined) handoff.x = x;
+        w.destroy();
+      });
       win.on('closed', () => {
         if (win === w) win = null;
         sendHandoff();

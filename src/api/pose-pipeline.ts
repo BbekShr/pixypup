@@ -568,7 +568,7 @@ export async function generateSpritePack(o: PackOptions): Promise<SpriteManifest
         // A limping or popping best sheet gets one more batch, told what was wrong; the judge then picks from all of them.
         const weak = review?.sheets.find((x) => x.index === review!.best);
         if (review && !walkPasses(weak)) {
-          const more = await drawGrids(`${weak!.notes} Frames 5 to 8 must lead with the other side's legs, and every frame must be a distinct, evenly spaced step.`);
+          const more = await drawGrids(`${weak?.notes ?? ''} Frames 5 to 8 must lead with the other side's legs, and every frame must be a distinct, evenly spaced step.`);
           if (more.length) {
             const all = [...grids, ...more];
             const again = await judge(all.map((g) => g.raw));

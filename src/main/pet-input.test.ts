@@ -87,7 +87,7 @@ describe('checkCreateArgs / checkKey', () => {
   });
   it('keys are one token of sane length', () => {
     expect(checkKey('abcd1234')).toBe(true);
-    for (const bad of ['short', 'has space1234', 'x'.repeat(513), '', 5, undefined]) expect(checkKey(bad)).toBe(false);
+    for (const bad of ['abcd\u200b1234', 'abcd\u20191234', 'short', 'has space1234', 'x'.repeat(513), '', 5, undefined]) expect(checkKey(bad)).toBe(false);
   });
 });
 

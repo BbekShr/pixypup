@@ -12,9 +12,6 @@
 - Fail-closed tests need an fs mock that can throw ENOENT and EACCES, or they only prove what the mock can express (B2/B3).
 - Muse Spark: use `strict: true` schemas (strict:false garbled keys live); with web_search on, extract the last JSON object from narrated text; JSON output carries no url_citation annotations, so ground sources against web_search_call results (F18).
 - Side tasks that must not outlive a pipeline share one AbortController aborted in a catch around the main stage; bound how long the main result waits for them (F18).
-- Prefs that mirror OS settings (login item) write to the OS only on the explicit user action, never from a general sync (F16).
-- The admin file is a whitelist of privacy restrictions (`ADMIN_KEYS`); every new setting is user-owned unless deliberately added (F16).
-- WAAPI: an `easing` in the options applies to the whole animation; overshoot easings make later keyframes arrive early. Put pop easing on the first keyframe (F17).
 - Live end-to-end runs with the real model find what unit tests can't (lost first word, name not boosted): every Meta-integrated feature gets one real-key run through the app path, not just the client (F8).
 - Reset per-session handles at the top of start(); attach abort listeners before awaiting a handshake (F8).
 - The CSS transform origin is also the `scale(flip)` mirror axis: never move it to pivot; keep it and add a translation (`pivotShift`). A hard clamp that zeroes velocity reads as a wall: soften the dynamics, keep the clamp as a safety stop (F21).
@@ -31,8 +28,14 @@
 - When the UI hides a feature (offline/admin), the IPC handler must enforce the same rule; hiding is not a guard (deep 2026-11-02, obCheckKey).
 - A shared fallback that also serves crisis replies must pin crisis to a fixed neutral line (deep 2026-11-02, `src/api/pet-talk.ts` localReply).
 - A sprite rotating about its foot drops a paw by d·sinθ: the floor needs that headroom (deep 2026-11-02, sit tilt clipped 5 px).
+- Electron has no CDP `Browser.getWindowForTarget/setWindowBounds`: window-resize behaviour needs a unit-tested clamp or a manual resize. After `Page.crash` the target keeps its id: poll by URL and reconnect (deep-stable 2026-11-02).
+- Normalise model JSON at the parse boundary (strings capped, numbers finite) before it is reused in a prompt or a threshold (deep-stable 2026-11-02, walk-judge/pose-review).
+- A key-shape check is ASCII-printable `[\x21-\x7e]`, never `\S`, and the renderer's copy must match main's (deep-stable 2026-11-02, pet-input/key.ts).
 
 ## Archive
+- Prefs that mirror OS settings (login item) write to the OS only on the explicit user action, never from a general sync (F16).
+- The admin file is a whitelist of privacy restrictions (`ADMIN_KEYS`); every new setting is user-owned unless deliberately added (F16).
+- WAAPI: an `easing` in the options applies to the whole animation; overshoot easings make later keyframes arrive early. Put pop easing on the first keyframe (F17).
 - Before a CDP runtime sample, check `ioreg -l | grep CGSSessionScreenIsLocked` and `document.visibilityState`: a locked Mac hides the overlay, pauses rAF and freezes the pet; report the gate blocked, not failed (walk-quality).
 - Don't shrink strideFromFrames' lower clamp by frame count: every pack collapses to the floor and feet skate ~4x body speed; a faster drawn walk is a deliberate foot-slide trade (walk-quality, dropped 94886a5).
 - When a PR changes walk or animation behaviour, grep README.md and docs/index.html for wag/rig/baked/model counts and re-copy `assets/pets/*/side_*` into `docs/img` (cmp) before closing: docs went stale within hours of #39.

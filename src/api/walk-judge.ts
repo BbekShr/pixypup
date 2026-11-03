@@ -41,6 +41,12 @@ export interface WalkReview { best: number; sheets: SheetReview[] }
 /** A sheet good enough to ship without asking for more: smooth, even and steady. */
 export const walkPasses = (s: SheetReview | undefined): boolean => !s || (s.even >= 7 && s.cycle >= 7 && s.consistent >= 7);
 
+/** Model output: keep only objects with an integer index, and make notes a short string (it is re-used in a prompt). */
+const cleanSheets = (v: unknown): SheetReview[] =>
+  Array.isArray(v)
+    ? v.filter((x) => x && typeof x === 'object' && Number.isInteger((x as SheetReview).index)).map((x) => ({ ...x, notes: typeof x.notes === 'string' ? x.notes.slice(0, 300) : '' }))
+    : [];
+
 /** The judge's whole review (best index in range), or null when it can't be had. Images are data URLs; nothing is logged. */
 export async function reviewWalks(client: MetaClient, reference: string, sheets: string[], signal?: AbortSignal): Promise<WalkReview | null> {
   try {
@@ -54,7 +60,7 @@ export async function reviewWalks(client: MetaClient, reference: string, sheets:
     const r = extractJson(parseResponseText(res)) as { best?: unknown; sheets?: unknown };
     const best = r.best;
     if (!(Number.isInteger(best) && (best as number) >= 0 && (best as number) < sheets.length)) return null;
-    return { best: best as number, sheets: Array.isArray(r.sheets) ? (r.sheets as SheetReview[]) : [] };
+    return { best: best as number, sheets: cleanSheets(r.sheets) };
   } catch {
     return null;
   }

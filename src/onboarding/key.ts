@@ -30,7 +30,7 @@ void window.pixyKey.info().then((i) => {
   }
 });
 
-const ready = (): boolean => /^\S{8,512}$/.test(keyEl.value.trim());
+const ready = (): boolean => /^[\x21-\x7e]{8,512}$/.test(keyEl.value.trim());
 keyEl.addEventListener('input', () => { save.disabled = !ready(); msg.textContent = ''; });
 keyEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && ready()) save.click(); });
 save.addEventListener('click', () => {

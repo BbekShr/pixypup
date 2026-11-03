@@ -94,6 +94,9 @@ export function talkPlan(mood: TalkAction, crisis: boolean): TalkPlan {
   }
 }
 
+/** A talk act in its stay phase holds a LONG sit/sleep/roll pose that only the act's own timer ends. */
+export const holdsLongPose = (act: { kind: string; phase?: string } | null): boolean => act?.kind === 'talk' && act.phase === 'stay';
+
 /** A user command replaces a talk or zoom act (its walk/pose); every other act is handled by its own rules. */
 export const actAfterCommand = <A extends { kind: string }>(act: A | null): A | null => (act?.kind === 'talk' || act?.kind === 'zoom' ? null : act);
 

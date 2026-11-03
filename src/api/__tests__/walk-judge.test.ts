@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MetaClient } from '../meta-client.js';
-import { JUDGE_MODEL, pickWalk } from '../walk-judge.js';
+import { JUDGE_MODEL, pickWalk, reviewWalks } from '../walk-judge.js';
 
 type Body = { model: string; store: boolean; reasoning: { effort: string }; input: { content: { type: string; image_url?: string }[] }[]; text: { format: { name: string; strict: boolean } } };
 const reply = (best: unknown) => ({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ sheets: [], best, reason: 'steadiest' }) }] }] });
@@ -32,5 +32,15 @@ describe('pickWalk', () => {
     expect(await pickWalk(fake({ error: 'x' }, [], 500), 'r', sheets)).toBeNull();
     expect(await pickWalk(fake({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'no json' }] }] }), 'r', sheets)).toBeNull();
     expect(await pickWalk(fake({ status: 'incomplete' }), 'r', sheets)).toBeNull();
+  });
+});
+
+describe('reviewWalks sheets', () => {
+  it('drops malformed sheets and gives every kept sheet a capped string notes', async () => {
+    const text = JSON.stringify({ best: 1, sheets: [{ index: 0 }, { index: 1, notes: 'x'.repeat(900) }, { index: 'a', notes: 'n' }, null, 7, { index: 2, notes: 5 }] });
+    const res = { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text }] }] };
+    const r = await reviewWalks(fake(res), 'r', sheets);
+    expect(r?.sheets.map((x) => x.index)).toEqual([0, 1, 2]);
+    expect(r?.sheets.map((x) => x.notes)).toEqual(['', 'x'.repeat(300), '']);
   });
 });

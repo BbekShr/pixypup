@@ -60,7 +60,7 @@ export function checkCreateArgs(a: unknown): { name: string; species: string } |
   return n.length >= 1 && n.length <= 24 && !control && SPECIES_RE.test(sp) ? { name: n, species: sp } : null;
 }
 
-export const checkKey = (k: unknown): k is string => typeof k === 'string' && /^\S{8,512}$/.test(k);
+export const checkKey = (k: unknown): k is string => typeof k === 'string' && /^[\x21-\x7e]{8,512}$/.test(k);
 
 /** Only these codes reach the UI; raw error messages (which can echo API bodies) never do. */
 export function errorCode(err: unknown): ErrorCode {
