@@ -92,7 +92,7 @@ export function startScreenLoop(d: LoopDeps): () => void {
           sniffed = true;
           const te = observation.terminalError;
           d.onFailure?.(te ? te.context || te.text : null);
-          send({ action: 'sniff', target: toOverlayPoint(decision.target, bounds), bubble: decision.bubble, reason: decision.reason, ...(d.canHint?.() ? { hint: true } : {}) });
+          send({ action: 'sniff', target: toOverlayPoint(decision.target, bounds), bubble: decision.bubble ?? (lastSniff?.key === debug.terminalKey ? lastSniff.bubble : undefined), reason: decision.reason, ...(d.canHint?.() ? { hint: true } : {}) });
         }
       } else if (sniffed && !observation.terminalError && observation.terminalPass) {
         sniffed = false;

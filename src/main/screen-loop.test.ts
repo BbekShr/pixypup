@@ -148,6 +148,22 @@ describe('startScreenLoop', () => {
     t.stop();
   });
 
+  it('keeps the Spark bubble for a failure whose sniff was held back by a call', async () => {
+    let step = 0;
+    const decide = async () => {
+      step++;
+      if (step === 1) return { decision: { action: 'hide' as const, durationMs: 1, reason: 'call' } };
+      const bubble = step === 2 ? 'Spark words' : undefined;
+      return { decision: { action: 'sniff' as const, target: { x: 700, y: 308 }, durationMs: 1, reason: 'err', ...(bubble ? { bubble } : {}) } };
+    };
+    const t = setup({ decider: { decide } });
+    await tick(3);
+    const sniff = t.sent.filter((b) => b.action === 'sniff');
+    expect(sniff).toHaveLength(1);
+    expect(sniff[0]!.bubble).toBe('Spark words');
+    t.stop();
+  });
+
   it('snoozing during a call lifts the hide, and the call re-hides on wake', async () => {
     const t = setup();
     t.set(call, '');
