@@ -559,7 +559,7 @@ describe('zoomies', () => {
 });
 
 describe('floorLift', () => {
-  const H = 140, FW = 100, FOOT = 0.99;
+  const H = 140, FW = 100;
   const pts: FootPoint[] = [[-0.4, 0], [-0.1, -0.03], [0.1, -0.02], [0.4, -0.008]]; // paws at different heights, as in a real silhouette
   // The browser's math: translate(O) * the petTransform string * translate(-O), applied to a point of the frame box.
   const paint = (t: string, [u, v]: FootPoint): number => {
