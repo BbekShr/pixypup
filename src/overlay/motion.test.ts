@@ -580,6 +580,8 @@ describe('contactExtents', () => {
     const w = 10, h = 10;
     const a = new Uint8Array(w * h * 4);
     for (const [x, y] of [[2, 9], [7, 9], [0, 3]] as const) a[(y * w + x) * 4] = 255; // (0,3) is above the band
-    expect(contactExtents(a, w, h, 1)).toEqual([-0.3, 0.3]);
+    const [l, r] = contactExtents(a, w, h, 1);
+    expect(l).toBeCloseTo(-0.3);
+    expect(r).toBeCloseTo(0.3);
   });
 });
