@@ -2,7 +2,7 @@ import '../ui/tokens.css';
 import pupUrl from '../../assets/placeholder/pup.png';
 import type { Pack } from '../main/pack';
 import { dropLeft, flushCommand, handoffBusy, handoffNext, handoffStart, routeCommand, trotTarget, validCx, type Handoff } from './handoff';
-import { actAfterCommand, actNeedsWalk, behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
+import { actAfterCommand, holdsLongPose, actNeedsWalk, behaviorBusy, HINT_WINDOW_MS, hideSpot, parseBehavior, parseHint, peekOutX, routeBehavior, SNIFF_MS, sniffPose, talkPlan, type Behavior, type TalkPlan } from './behavior';
 import { canSpeak, clickSays, LINE_MS, nextSayAt, pickLine, quiet } from './chatter';
 import { energyParams, parsePrefs, SIZES, sizeScale, type Prefs } from '../main/prefs';
 import { createDebugPanel } from './debug-panel';
@@ -259,6 +259,8 @@ function layout(): void {
   x = Math.min(x, Math.max(0, window.innerWidth - W));
   target = Math.min(target, Math.max(0, window.innerWidth - W));
 }
+
+window.addEventListener('resize', layout); // the window shrinks on a display change: keep the pet inside it
 
 function sizeImg(): void {
   img.style.width = `${W}px`;
@@ -833,6 +835,7 @@ function command(raw: string): void {
     else if (cmd === 'wander') stay = false;
     return;
   }
+  if (holdsLongPose(act)) setState('idle'); // dropping the act would strand its LONG pose; a state-setting command below still wins
   act = actAfterCommand(act); // before queuing: a command that waits out a hop-turn must not then wait for the whole talk act
   if (act?.kind === 'sniff' || commandMustWait({ falling, dragging, turning: state === 'walk' && performance.now() < turnUntil })) { queuedCmd = cmd; return; } // waits for the sniff, the fall, the hand or the hop-turn to finish
   lastInteraction = performance.now();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actAfterCommand, actNeedsWalk, behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
+import { actAfterCommand, holdsLongPose, actNeedsWalk, behaviorBusy, hideSpot, parseBehavior, parseHint, peekOutX, PEEK_PX, routeBehavior, sniffPose, talkPlan, toOverlayPoint, type Behavior } from './behavior';
 
 const sniff: Behavior = { seq: 1, action: 'sniff', target: { x: 10, y: 10 }, reason: 'r' };
 const free = { dragging: false, falling: false, resting: false, snoozed: false, handoff: null };
@@ -120,5 +120,12 @@ describe('talk act wedge', () => {
     expect(actNeedsWalk({ kind: 'hide', phase: 'go' })).toBe(false);
     expect(actNeedsWalk({ kind: 'perk' })).toBe(false);
     expect(actNeedsWalk(null)).toBe(false);
+  });
+});
+
+describe('holdsLongPose', () => {
+  it('is true only for a talk act in its stay phase', () => {
+    expect(holdsLongPose({ kind: 'talk', phase: 'stay' })).toBe(true);
+    expect([{ kind: 'talk', phase: 'go' }, { kind: 'zoom', phase: 'stay' }, { kind: 'sniff', phase: 'stay' }, null].map(holdsLongPose)).toEqual([false, false, false, false]);
   });
 });
