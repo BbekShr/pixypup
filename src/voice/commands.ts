@@ -6,7 +6,7 @@ const PATTERNS: [Command, RegExp][] = [
   ['bed', /\bgo\s+to\s+(your\s+)?bed\b|\bbed\b|\bnap\b/g],
   ['come', /\bcome(\s+here)?\b/g],
   ['bark', /\bbark\b|\bspeak\b/g],
-  ['trick', /\b(do\s+a\s+)?trick\b/g],
+  ['trick', /\bdo\s+a\s+trick\b|^\s*(\S+\s+)?trick\s*$/g], // bare "trick" only as the whole command; "the trick to rebasing" is chat
   ['zoomies', /\bzoomies?\b/g],
 ];
 

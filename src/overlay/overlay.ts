@@ -994,7 +994,7 @@ function actArrive(now: number): void {
     act.phase = 'bark';
     act.until = now + ZOOM_BARK_MS;
     say('Again?', ZOOM_BARK_MS);
-    setState('bark', { ms: LONG });
+    setState('bark', { ms: ZOOM_BARK_MS }); // finite: a command nulls the act, and actTimeout would never end the bark
   } else if (act.kind === 'hide' && act.phase === 'go') {
     act.phase = 'away';
     face(-act.side); // looks in from the edge
