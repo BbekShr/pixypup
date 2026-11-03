@@ -1,16 +1,6 @@
 # Shared lessons (every agent)
 
 ## Active
-- Before a CDP runtime sample, check `ioreg -l | grep CGSSessionScreenIsLocked` and `document.visibilityState`: a locked Mac hides the overlay, pauses rAF and freezes the pet; report the gate blocked, not failed (walk-quality).
-- Don't shrink strideFromFrames' lower clamp by frame count: every pack collapses to the floor and feet skate ~4x body speed; a faster drawn walk is a deliberate foot-slide trade (walk-quality, dropped 94886a5).
-- When a PR changes walk or animation behaviour, grep README.md and docs/index.html for wag/rig/baked/model counts and re-copy `assets/pets/*/side_*` into `docs/img` (cmp) before closing: docs went stale within hours of #39.
-- A generated bundle committed under `docs/` must be regenerated from the real source (`npm run site-js`), never hand-ported: the site's walk drifted from the app once already (docs-latest).
-- After scripting inline JS into `docs/index.html`, extract it and `node --check` it: one redeclaration silently kills the whole page (docs-latest).
-- A "never sent" promise covers every later-turn buffer (history, retries), not just the first request: F31 crisis text leaked via chat history on the next turn (`src/main/talk-history.ts`).
-- A route that forwards voice transcripts to a second model widens consent: prefill the UI and let the human press Send instead (F31 `prefill`).
-- Never `git commit --amend` on a branch another agent shares: it rewrites whatever HEAD is now. Make a new fixup commit (F31).
-- Prove a reply came from the model by comparing it with the fixed local fallback, not by sampling sockets (sub-second calls slip past lsof) (F31).
-- Before a runtime check, look for another worktree's dev instance on 5173/9333; vite falls through to 5174 by itself, so pick a free CDP port such as 9444 (F31).
 - Resolve every `.claude/...` path against the repo root in your brief, never against your home directory.
 - Never `git stash`, `checkout`, `switch`, `reset` or `rebase`: other agents share this tree.
 - Every finding needs a failure scenario (input/state → wrong outcome) with file:line.
@@ -36,8 +26,23 @@
 - An overlay act whose only exit is a specific state (talk 'go' needs `walk`) must be cleared by user commands BEFORE the queue check and when that state is left; a fixed deadline cuts legitimate long walks (deep 2026-11-01, `src/overlay/overlay.ts`).
 - A request timeout bounds the request only: clear it when the reply arrives, or local work after it gets aborted under load (deep 2026-11-01, `src/api/pose-pipeline.ts` attempt).
 - Tests that loop `expect()` per frame time out under full-suite load: collect violations and assert once (deep 2026-11-01, overload-choreo test).
+- UI diffs: green gates and state checks say nothing about clipping. Every touched window gets screenshots the CEO opens, plus an overflow probe that includes overflow:auto containers and visibility (`checkVisibility()`); measure spare as last visible child bottom minus container bottom (deep 2026-11-02: welcome, making and name steps, Talk input all shipped clipped past a GO).
+- Long-content cases are part of the check: a voice-prefilled sentence, a long pet name, a full chat log, error copy shown (deep 2026-11-02, Talk input).
+- When the UI hides a feature (offline/admin), the IPC handler must enforce the same rule; hiding is not a guard (deep 2026-11-02, obCheckKey).
+- A shared fallback that also serves crisis replies must pin crisis to a fixed neutral line (deep 2026-11-02, `src/api/pet-talk.ts` localReply).
+- A sprite rotating about its foot drops a paw by d·sinθ: the floor needs that headroom (deep 2026-11-02, sit tilt clipped 5 px).
 
 ## Archive
+- Before a CDP runtime sample, check `ioreg -l | grep CGSSessionScreenIsLocked` and `document.visibilityState`: a locked Mac hides the overlay, pauses rAF and freezes the pet; report the gate blocked, not failed (walk-quality).
+- Don't shrink strideFromFrames' lower clamp by frame count: every pack collapses to the floor and feet skate ~4x body speed; a faster drawn walk is a deliberate foot-slide trade (walk-quality, dropped 94886a5).
+- When a PR changes walk or animation behaviour, grep README.md and docs/index.html for wag/rig/baked/model counts and re-copy `assets/pets/*/side_*` into `docs/img` (cmp) before closing: docs went stale within hours of #39.
+- A generated bundle committed under `docs/` must be regenerated from the real source (`npm run site-js`), never hand-ported: the site's walk drifted from the app once already (docs-latest).
+- After scripting inline JS into `docs/index.html`, extract it and `node --check` it: one redeclaration silently kills the whole page (docs-latest).
+- A "never sent" promise covers every later-turn buffer (history, retries), not just the first request: F31 crisis text leaked via chat history on the next turn (`src/main/talk-history.ts`).
+- A route that forwards voice transcripts to a second model widens consent: prefill the UI and let the human press Send instead (F31 `prefill`).
+- Never `git commit --amend` on a branch another agent shares: it rewrites whatever HEAD is now. Make a new fixup commit (F31).
+- Prove a reply came from the model by comparing it with the fixed local fallback, not by sampling sockets (sub-second calls slip past lsof) (F31).
+- Before a runtime check, look for another worktree's dev instance on 5173/9333; vite falls through to 5174 by itself, so pick a free CDP port such as 9444 (F31).
 - Image work is verified by looking at the real output (render the frames at true scale), not by tests alone: F3's tests passed while live frames showed clipping and a wrong-eared pose.
 - Muse Image draws past its canvas edge and drifts on identity: prompts must ask for margins and pin ears/face; reject edge-touching output and retry (F3).
 - Import shared validators from a leaf module; importing from `pose-pipeline.ts` pulled sharp into the Electron main bundle (F4).

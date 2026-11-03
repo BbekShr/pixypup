@@ -31,3 +31,12 @@ Entry format:
 - evidence: smoke run on org/bootstrap-2026-10-31 @13fd86a, gates 1-4 green, verdict NO-GO-WITH-GAP.
 - proposed change: add NO-GO-WITH-GAP to the Verdict list (or change the paragraph to GO-WITH-GAP) so the two sections agree.
 - local workaround: eval case pixypup-4 expects NO-GO-WITH-GAP.
+
+## 2026-11-02 verify skill and release-manager checks have no visual/overflow step for UI projects
+- status: new
+- agent-org version: 0.1.0
+- template: skills/org-init/templates/skills/verify/SKILL.md and templates/agents/release-manager.md
+- what happened: for a desktop app the generated verify skill drives state over CDP and screenshots only for animation, so the release manager returned GO while three windows were visibly clipped (onboarding card, generation step, a chat input truncating its value). The maintainer found each one from screenshots.
+- evidence: PixyPup deep 2026-11-02: RM GO at 9fff607; the maintainer's screenshots then showed clipping; the probe measured scrollHeight 483 > clientHeight 464 and a bottom of 585 > innerHeight 560.
+- proposed change: for any org whose kind has a UI, generate a "Window/UI changes" step: screenshot every touched view in each state for the CEO to open, plus an overflow probe (visible elements outside the viewport, overflow:auto containers with scrollHeight > clientHeight, truncated inputs, spare ≥ 12 px).
+- local workaround: added that step to .claude/skills/pixypup-verify/SKILL.md.
