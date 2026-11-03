@@ -66,7 +66,7 @@ export async function reviewPoses(
     const list = (extractJson(parseResponseText(res)) as { poses?: unknown }).poses;
     if (!Array.isArray(list)) return null;
     const out = new Map<string, PoseVerdict>();
-    for (const v of list as PoseVerdict[]) if (v && poses.some((p) => p.name === v.name) && [v.same_pet, v.pose_matches, v.anatomy, v.tails].every(Number.isInteger)) out.set(v.name, v);
+    for (const v of list as PoseVerdict[]) if (v && poses.some((p) => p.name === v.name) && [v.same_pet, v.pose_matches, v.anatomy, v.tails].every(Number.isInteger)) out.set(v.name, { ...v, issue: typeof v.issue === 'string' ? v.issue.slice(0, 300) : '' });
     return out;
   } catch {
     return null;
