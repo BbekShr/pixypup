@@ -81,27 +81,31 @@ function createWindow(slug: string, enterDrop = false): void {
   wins.set(slug, win);
   // A crashed or hung page can't toggle click-through itself: until it recovers, nothing on screen may swallow clicks.
   for (const ev of ['render-process-gone', 'unresponsive'] as const) win.webContents.on(ev as 'render-process-gone', () => { if (!win.isDestroyed()) win.setIgnoreMouseEvents(true, { forward: true }); });
+  const load = (drop: boolean): void => {
+    const devUrl = devRendererUrl();
+    // Dev rehearsal only: PIXY_CHATTY=1 makes the pet speak every ~5 s.
+    const q = new URLSearchParams({ pet: slug });
+    if (!app.isPackaged && process.env['PIXY_CHATTY'] === '1') q.set('chatty', '1');
+    if (drop) q.set('enter', 'drop');
+    const search = `?${q.toString()}`;
+    if (devUrl) void win.loadURL(`${devUrl}/overlay/index.html${search}`);
+    else void win.loadFile(join(here, '../renderer/overlay/index.html'), { search });
+  };
   const reloads: number[] = [];
-  win.webContents.on('render-process-gone', () => {
+  win.webContents.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit') return;
     const now = Date.now();
     while (reloads.length && now - reloads[0]! > 60_000) reloads.shift();
     if (win.isDestroyed() || reloads.length >= 3) return; // crash loop: leave it
     reloads.push(now);
-    win.webContents.reload();
+    load(false); // not reload(): that would replay ?enter=drop
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (ev) => ev.preventDefault());
   senderSlug.set(win.webContents, slug);
   win.on('closed', () => { if (wins.get(slug) === win) wins.delete(slug); });
 
-  const devUrl = devRendererUrl();
-  // Dev rehearsal only: PIXY_CHATTY=1 makes the pet speak every ~5 s.
-  const q = new URLSearchParams({ pet: slug });
-  if (!app.isPackaged && process.env['PIXY_CHATTY'] === '1') q.set('chatty', '1');
-  if (enterDrop) q.set('enter', 'drop');
-  const search = `?${q.toString()}`;
-  if (devUrl) void win.loadURL(`${devUrl}/overlay/index.html${search}`);
-  else void win.loadFile(join(here, '../renderer/overlay/index.html'), { search });
+  load(enterDrop);
 }
 
 const TRAY_H = 18;

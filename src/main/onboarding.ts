@@ -270,7 +270,12 @@ export function setupOnboarding(o: { getOverlay: () => BrowserWindow | null; add
         if (handoff && x !== undefined) handoff.x = x;
       });
       const w = win;
-      win.webContents.on('render-process-gone', () => { if (!w.isDestroyed()) w.destroy(); });
+      win.webContents.on('render-process-gone', () => {
+        if (w.isDestroyed()) return;
+        const x = centreX();
+        if (handoff && x !== undefined) handoff.x = x;
+        w.destroy();
+      });
       win.on('closed', () => {
         if (win === w) win = null;
         sendHandoff();

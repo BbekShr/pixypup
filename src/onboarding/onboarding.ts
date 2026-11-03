@@ -282,7 +282,7 @@ $('named').addEventListener('click', () => {
   go({ t: 'named' });
 });
 
-keyEl.addEventListener('input', () => { ($('savekey') as HTMLButtonElement).disabled = !/^\S{8,512}$/.test(keyEl.value.trim()); });
+keyEl.addEventListener('input', () => { ($('savekey') as HTMLButtonElement).disabled = !/^[\x21-\x7e]{8,512}$/.test(keyEl.value.trim()); });
 keyEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('savekey').click(); });
 $('getkey').addEventListener('click', () => window.pixyOb.openKeyPage());
 $('savekey').addEventListener('click', () => {
@@ -302,7 +302,7 @@ $('otherphoto').addEventListener('click', () => { flow = { ...flow, step: 'name'
 const wkey = $<HTMLInputElement>('wkey');
 const wsave = $<HTMLButtonElement>('wsave');
 const WSAY = { 'bad-key': "Hmm, Meta didn't take that key. Want to try another?", network: "I couldn't reach Meta to check it. Try again in a moment?", unsafe: "I couldn't store that safely on this Mac, so I didn't keep it." };
-const wready = (): boolean => /^\S{8,512}$/.test(wkey.value.trim());
+const wready = (): boolean => /^[\x21-\x7e]{8,512}$/.test(wkey.value.trim());
 wkey.addEventListener('input', () => { wsave.disabled = !wready(); $('wmsg').textContent = ''; });
 wkey.addEventListener('keydown', (e) => { if (e.key === 'Enter' && wready()) wsave.click(); });
 $('wget').addEventListener('click', () => window.pixyOb.openKeyPage());
