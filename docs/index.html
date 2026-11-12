@@ -563,6 +563,7 @@ footer a { color: var(--ink-2); }
           <button class="chip pick" data-pet="0" aria-pressed="true"><img src="img/pakkun/idle_0.webp" alt="">Pakkun</button>
           <button class="chip pick" data-pet="1" aria-pressed="false"><img src="img/mochi/idle_0.webp" alt="">Mochi</button>
           <button class="chip pick" data-pet="2" aria-pressed="false"><img src="img/kuma/idle_0.webp" alt="">Kuma</button>
+          <button class="chip pick" data-pet="3" aria-pressed="false"><img src="img/milo/idle_0.webp" alt="">Milo</button>
         </div>
         <span class="sep" aria-hidden="true"></span>
         <div role="group" aria-label="Try a reaction" style="display:contents">
@@ -850,6 +851,7 @@ themeBtn.addEventListener('click', () => {
     { n: 'Pakkun', d: P, poses: POSES, as: 'a cream golden retriever pup', pr: 'him', say: 'Woof woof!', hi: 'Woof!' },
     { n: 'Mochi', d: 'img/mochi/', poses: POSES, as: 'a cat', pr: 'her', say: 'Mrrp~ mew!', hi: 'Mew!' },
     { n: 'Kuma', d: 'img/kuma/', poses: POSES, as: 'a red shiba inu pup', pr: 'him', say: 'Woof woof!', hi: 'Woof!' },
+    { n: 'Milo', d: 'img/milo/', poses: POSES, as: 'a brown and white puppy', pr: 'him', say: 'Arf arf!', hi: 'Arf!' },
   ];
   let cur = PETS[0];
   const F = { idle: 'idle_0', blink: 'idle_blink', sit: 'sit', bark: 'bark', roll: 'roll', sleep: 'sleep', walk: [0, 1, 2, 3, 4, 5, 6, 7].map(i => 'side_' + i) };
@@ -1016,8 +1018,8 @@ themeBtn.addEventListener('click', () => {
     const pups = [], vw = innerWidth, N = reduce ? 8 : 24;
     for (let i = 0; i < N; i++) {
       const im = new Image(); const h = 70 + Math.random() * 110;
-      im.style.height = h + 'px'; im.style.width = (h * 1.03) + 'px'; im.style.scale = boost(PETS[i % 3].d + 'idle_0'); im.style.transformOrigin = '50% 100%';
-      const p = { im, x: Math.random() * vw, dir: Math.random() < .5 ? -1 : 1, v: 40 + Math.random() * 120, y: innerHeight + Math.random() * 300, vy: 0, f: Math.floor(Math.random() * 8), pose: null, delay: i * 90, pet: PETS[i % 3], walked: 0, h };
+      im.style.height = h + 'px'; im.style.width = (h * 1.03) + 'px'; im.style.scale = boost(PETS[i % PETS.length].d + 'idle_0'); im.style.transformOrigin = '50% 100%';
+      const p = { im, x: Math.random() * vw, dir: Math.random() < .5 ? -1 : 1, v: 40 + Math.random() * 120, y: innerHeight + Math.random() * 300, vy: 0, f: Math.floor(Math.random() * 8), pose: null, delay: i * 90, pet: PETS[i % PETS.length], walked: 0, h };
       rain.append(im); pups.push(p);
     }
     const start = performance.now(); let last = start;
